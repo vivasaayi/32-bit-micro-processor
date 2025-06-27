@@ -1,4 +1,0 @@
-; Machine code for 8-bit microprocessor
-; Generated from corrected assembler
-
-:8000 42 00 42 05 46 00 04 46 01 01 10 00 50 06 80 64

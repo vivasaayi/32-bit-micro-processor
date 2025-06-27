@@ -1,0 +1,189 @@
+# HDL Project .gitignore
+# For 8-bit Microprocessor Design Project
+
+# =============================================================================
+# Compiled Simulation Files
+# =============================================================================
+# Icarus Verilog compiled files
+*.vvp
+
+# Simulation waveform output files
+*.vcd
+*.fst
+*.ghw
+
+# =============================================================================
+# Assembled/Compiled Programs
+# =============================================================================
+# Assembled machine code files (can be regenerated from .asm sources)
+*.hex
+
+# Exception: Keep important reference hex files if needed
+# !important_reference.hex
+
+# =============================================================================
+# Compiled Executables and Binaries
+# =============================================================================
+# Compiled testbench executables (no extension, generated from .v files)
+alu_demo
+array_sort_final
+bubble_sort
+comprehensive_final_sim
+corrected_simple_test
+debug_instructions
+sort_demo
+sort_simple
+basic_test
+cpu_test
+mem_test
+alu_test
+reg_test
+
+# Any other compiled executables
+*.exe
+*.bin
+*.out
+
+# =============================================================================
+# Build and Temporary Files
+# =============================================================================
+# Build artifacts
+build/
+obj/
+*.o
+*.obj
+
+# Temporary files
+*.tmp
+*.temp
+*~
+.#*
+\#*#
+
+# =============================================================================
+# IDE and Editor Files
+# =============================================================================
+# VS Code
+.vscode/
+*.code-workspace
+
+# Vim
+*.swp
+*.swo
+*~
+
+# Emacs
+*~
+\#*\#
+.\#*
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# =============================================================================
+# System Files
+# =============================================================================
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+.Spotlight-V100
+.Trashes
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+
+# =============================================================================
+# Log Files and Debug Output
+# =============================================================================
+# Simulation logs
+*.log
+*.rpt
+*.txt
+
+# Exception: Keep important documentation
+!README.txt
+!INSTALL.txt
+!CHANGELOG.txt
+
+# =============================================================================
+# Synthesis and Implementation Files (if using FPGA tools)
+# =============================================================================
+# Xilinx Vivado
+*.jou
+*.str
+*.xpr
+.Xil/
+*.hw
+*.ip_user_files/
+*.cache/
+*.runs/
+*.sim/
+
+# Altera Quartus
+*.qpf
+*.qsf
+*.qws
+*.rpt
+*.summary
+*.pin
+*.sof
+*.pof
+db/
+incremental_db/
+output_files/
+
+# =============================================================================
+# Documentation Build Files
+# =============================================================================
+# LaTeX
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.synctex.gz
+*.toc
+
+# =============================================================================
+# Archive and Backup Files
+# =============================================================================
+*.tar.gz
+*.zip
+*.rar
+*.7z
+*.bak
+*.orig
+
+# =============================================================================
+# Project Specific
+# =============================================================================
+# Custom build outputs
+/build_output/
+/simulation_results/
+
+# Large test files that shouldn't be in repo
+*_large_test.*
+benchmark_*.dat
+
+# =============================================================================
+# Keep Important Files (Examples of exceptions)
+# =============================================================================
+# Uncomment and modify as needed:
+# !tools/assembler.py
+# !examples/*.asm
+# !docs/*.md
+# !Makefile
+# !build.sh
