@@ -187,3 +187,4 @@ benchmark_*.dat
 # !docs/*.md
 # !Makefile
 # !build.sh
+temp
