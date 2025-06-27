@@ -1,0 +1,32 @@
+# Makefile for HDL Tools
+
+CC = gcc
+CFLAGS = -Wall -Wextra -std=c99 -O2
+ASSEMBLER_TARGET = ../temp/assembler
+COMPILER_TARGET = c_compiler
+ASSEMBLER_SOURCE = assembler.c
+COMPILER_SOURCE = c_compiler.c
+
+.PHONY: all clean test
+
+all: $(ASSEMBLER_TARGET) $(COMPILER_TARGET)
+
+$(ASSEMBLER_TARGET): $(ASSEMBLER_SOURCE)
+	mkdir -p ../temp
+	$(CC) $(CFLAGS) -o $(ASSEMBLER_TARGET) $(ASSEMBLER_SOURCE)
+
+$(COMPILER_TARGET): $(COMPILER_SOURCE)
+	$(CC) $(CFLAGS) -o $(COMPILER_TARGET) $(COMPILER_SOURCE)
+
+clean:
+	rm -f $(ASSEMBLER_TARGET) $(COMPILER_TARGET)
+
+test: $(ASSEMBLER_TARGET)
+	@echo "Testing assembler..."
+	@echo "LOADI R1, #42" > test.asm
+	@echo "LOADI R2, #10" >> test.asm
+	@echo "ADD R3, R1, R2" >> test.asm
+	@echo "HALT" >> test.asm
+	./$(ASSEMBLER_TARGET) test.asm test.hex
+	@echo "Assembly test completed"
+	@rm -f test.asm test.hex

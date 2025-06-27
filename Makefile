@@ -6,23 +6,25 @@ VVP = vvp
 GTKWAVE = gtkwave
 
 # Directories  
-SRC_DIR = .
-CPU_DIR = cpu
-MEM_DIR = memory
-IO_DIR = io
-TB_DIR = testbench
+PROC_DIR = processor
+CPU_DIR = processor/cpu
+MEM_DIR = processor/memory
+IO_DIR = processor/io
+TB_DIR = processor/testbench
 
 # Source files
-CPU_SOURCES = cpu/cpu_core.v cpu/alu.v cpu/register_file.v
-SYSTEM_SOURCES = microprocessor_system.v
-ALL_SOURCES = $(CPU_SOURCES) $(SYSTEM_SOURCES)
+CPU_SOURCES = processor/cpu/cpu_core.v processor/cpu/alu.v processor/cpu/register_file.v
+MEM_SOURCES = processor/memory/memory_controller.v processor/memory/mmu.v
+IO_SOURCES = processor/io/uart.v processor/io/timer.v processor/io/interrupt_controller.v
+SYSTEM_SOURCES = processor/microprocessor_system.v
+ALL_SOURCES = $(CPU_SOURCES) $(MEM_SOURCES) $(IO_SOURCES) $(SYSTEM_SOURCES)
 
 # Testbench files
-TB_SOURCES = testbench/tb_microprocessor_system.v
+TB_SOURCES = processor/testbench/tb_microprocessor_system.v
 
 # Output files
-VVP_FILE = testbench/microprocessor_system.vvp
-VCD_FILE = testbench/microprocessor_system.vcd
+VVP_FILE = processor/testbench/microprocessor_system.vvp
+VCD_FILE = processor/testbench/microprocessor_system.vcd
 
 # Default target - 32-bit simulation
 all: sim
@@ -42,10 +44,12 @@ wave: $(VCD_FILE)
 # Clean files
 clean:
 	rm -f $(VVP_FILE) $(VCD_FILE)
+	rm -rf temp/
+	$(MAKE) -C tools clean
 
-# Assemble programs
-assemble:
-	python3 tools/assembler.py examples/simple_sort.asm testbench/simple_sort.hex
+# Run the C-to-assembly test pipeline (preferred)
+ctest:
+	python3 c_test_runner.py .
 
 # Test ALU
 test-alu:

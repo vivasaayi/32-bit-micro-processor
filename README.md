@@ -1,48 +1,43 @@
-# 32-Bit HDL Microprocessor
+# Custom 32-bit RISC Processor Project
 
-A complete 32-bit microprocessor implementation in Verilog, ready for FPGA deployment.
-
-## Features
-
-- **32-bit Architecture**: 4GB address space with 32-bit data path
-- **RISC-like Instruction Set**: Clean, orthogonal instruction set with 32-bit instructions
-- **16 32-bit Registers**: General-purpose register file (R0-R15)
-- **Advanced ALU**: 32-bit arithmetic and logic operations with flag generation
-- **Memory System**: 64KB internal memory with external expansion capability
-- **Pipeline Design**: 5-stage state machine for efficient execution
-- **FPGA Ready**: Standard Verilog with proper synchronous design
+A complete hardware description language (HDL) implementation of a custom 32-bit RISC processor with full C toolchain support.
 
 ## Quick Start
 
 ```bash
-# Build and run simulation
-make sim
+# 1. Build the toolchain
+cd tools
+make
 
-# Assemble a program
-make assemble
+# 2. Test a C program
+./temp/c_compiler test_programs/c/basic_test.c
+mv test_programs/c/basic_test.asm temp/
+./temp/assembler temp/basic_test.asm temp/basic_test.hex
 
-# View waveforms (requires GTKWave)
-make wave
-
-# Clean build files
-make clean
+# 3. Run comprehensive tests
+./run_tests.sh
 ```
 
 ## Project Structure
 
 ```
 hdl/
-├── cpu/                    # CPU components
-│   ├── cpu_core.v             # Main CPU core
-│   ├── alu.v                  # 32-bit ALU
-│   └── register_file.v        # 32-bit register file
-├── examples/               # Assembly programs
-│   └── simple_sort.asm        # Bubble sort demonstration
-├── testbench/              # Test benches
-│   └── tb_microprocessor_system.v # System testbench
-├── tools/                  # Development tools
-│   └── assembler.py           # Assembler
-├── microprocessor_system.v # Top-level system
+├── tools/                    # Toolchain source and build system
+├── temp/                     # Built tools and generated files  
+├── test_programs/           # Test programs and examples
+│   ├── c/                   # C programs
+│   └── assembly/            # Assembly programs
+├── processor/               # Complete processor HDL implementation
+│   ├── cpu/                 # CPU core modules
+│   │   ├── cpu_core.v      # Main CPU core
+│   │   ├── alu.v           # 32-bit ALU
+│   │   └── register_file.v # 32-bit register file
+│   ├── memory/             # Memory system modules
+│   ├── io/                 # I/O and peripheral modules
+│   ├── testbench/          # Simulation testbenches
+│   └── microprocessor_system.v # Top-level processor system
+├── docs/                   # Documentation
+├── run_tests.sh           # Test runner
 ├── Makefile               # Build system
 └── legacy_8bit/           # Previous 8-bit implementation
 ```
