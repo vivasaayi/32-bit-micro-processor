@@ -52,6 +52,14 @@ test-alu:
 	$(IVERILOG) -o alu_test.vvp $(CPU_DIR)/alu.v testbench/tb_alu.v 2>/dev/null || echo "ALU testbench not found"
 	$(VVP) alu_test.vvp 2>/dev/null || echo "ALU test skipped"
 
+# Run all test cases
+test-all:
+	./run_all_tests.sh
+
+# Run comprehensive test suite
+test-comprehensive:
+	python3 test_all_asm.py
+
 # Synthesis (placeholder - would need actual synthesis tools)
 synth:
 	@echo "Synthesis would require tools like Yosys, Vivado, or Quartus"
@@ -72,4 +80,4 @@ install-deps:
 	brew install icarus-verilog
 	brew install gtkwave
 
-.PHONY: all sim wave clean test-alu assemble synth lint docs install-deps
+.PHONY: all sim wave clean test-alu test-all test-comprehensive assemble synth lint docs install-deps
