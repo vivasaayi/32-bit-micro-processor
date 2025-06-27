@@ -116,8 +116,9 @@ module microprocessor_system (
         end
     end
     
-    // Memory data bus handling - provide data for both reads and instruction fetch
-    assign cpu_data_bus = accessing_internal_mem ? mem_data_out_reg : ext_data;
+    // Memory data bus handling - only drive during reads
+    assign cpu_data_bus = (cpu_mem_read && accessing_internal_mem) ? mem_data_out_reg : 
+                         (cpu_mem_read && accessing_external_mem) ? ext_data : 32'hZZZZZZZZ;
     
     // External memory interface
     assign ext_addr = cpu_addr_bus;

@@ -35,49 +35,58 @@ module alu (
     localparam ALU_ROL  = 4'hA;
     localparam ALU_ROR  = 4'hB;
     localparam ALU_CMP  = 4'hC;
-    localparam ALU_PASS = 4'hD; // Pass A through
-    localparam ALU_INC  = 4'hE; // Increment A
-    localparam ALU_DEC  = 4'hF; // Decrement A
-    
+    localparam ALU_PASS = 4'hD;
+    localparam ALU_INC  = 4'hE;
+    localparam ALU_DEC  = 4'hF;
+
     // Flag bit positions
     localparam FLAG_CARRY     = 0;
     localparam FLAG_ZERO      = 1;
     localparam FLAG_NEGATIVE  = 2;
     localparam FLAG_OVERFLOW  = 3;
-    localparam FLAG_INTERRUPT = 4;
-    localparam FLAG_USER      = 5;
     
-    // Internal signals
+    // Internal signals for proper arithmetic
     reg [32:0] temp_result;  // 33-bit for carry detection
     reg carry_in;
+    reg [31:0] operand_a;
+    reg [31:0] operand_b;
+    
+    // Debug signals
+    reg [3:0] debug_op;
     
     always @(*) begin
         // Initialize
+        operand_a = a;
+        operand_b = b;
         temp_result = 33'h0;
         flags_out = flags_in;
         carry_in = flags_in[FLAG_CARRY];
+        debug_op = op;
         
         case (op)
             ALU_ADD: begin
-                temp_result = {1'b0, a} + {1'b0, b};
+                temp_result = {1'b0, operand_a} + {1'b0, operand_b};
                 result = temp_result[31:0];
                 flags_out[FLAG_CARRY] = temp_result[32];
+                flags_out[FLAG_OVERFLOW] = (operand_a[31] == operand_b[31]) && (result[31] != operand_a[31]);
+                $display("DEBUG ALU ADD: a=%0d b=%0d result=%0d", operand_a, operand_b, result);
             end
             
             ALU_SUB: begin
-                temp_result = {1'b0, a} - {1'b0, b};
+                temp_result = {1'b0, operand_a} - {1'b0, operand_b};
                 result = temp_result[31:0];
-                flags_out[FLAG_CARRY] = temp_result[32]; // Borrow
+                flags_out[FLAG_CARRY] = temp_result[32];
+                flags_out[FLAG_OVERFLOW] = (operand_a[31] != operand_b[31]) && (result[31] != operand_a[31]);
             end
             
             ALU_ADC: begin
-                temp_result = {1'b0, a} + {1'b0, b} + {32'h0, carry_in};
+                temp_result = {1'b0, operand_a} + {1'b0, operand_b} + {32'h0, carry_in};
                 result = temp_result[31:0];
                 flags_out[FLAG_CARRY] = temp_result[32];
             end
             
             ALU_SBC: begin
-                temp_result = {1'b0, a} - {1'b0, b} - {32'h0, carry_in};
+                temp_result = {1'b0, operand_a} - {1'b0, operand_b} - {32'h0, carry_in};
                 result = temp_result[31:0];
                 flags_out[FLAG_CARRY] = temp_result[32]; // Borrow
             end
@@ -124,7 +133,7 @@ module alu (
             end
             
             ALU_CMP: begin
-                temp_result = {1'b0, a} - {1'b0, b};
+                temp_result = {1'b0, operand_a} - {1'b0, operand_b};
                 result = a; // CMP doesn't change the operand
                 flags_out[FLAG_CARRY] = temp_result[32]; // Borrow
             end
@@ -135,13 +144,13 @@ module alu (
             end
             
             ALU_INC: begin
-                temp_result = {1'b0, a} + 33'h1;
+                temp_result = {1'b0, operand_a} + 33'h1;
                 result = temp_result[31:0];
                 flags_out[FLAG_CARRY] = temp_result[32];
             end
             
             ALU_DEC: begin
-                temp_result = {1'b0, a} - 33'h1;
+                temp_result = {1'b0, operand_a} - 33'h1;
                 result = temp_result[31:0];
                 flags_out[FLAG_CARRY] = temp_result[32]; // Borrow
             end
@@ -155,19 +164,6 @@ module alu (
         // Update other flags
         flags_out[FLAG_ZERO] = (result == 32'h0);
         flags_out[FLAG_NEGATIVE] = result[31];
-        
-        // Overflow detection for addition/subtraction
-        case (op)
-            ALU_ADD, ALU_ADC: begin
-                flags_out[FLAG_OVERFLOW] = (a[31] == b[31]) && (result[31] != a[31]);
-            end
-            ALU_SUB, ALU_SBC, ALU_CMP: begin
-                flags_out[FLAG_OVERFLOW] = (a[31] != b[31]) && (result[31] != a[31]);
-            end
-            default: begin
-                // Keep existing overflow flag for other operations
-            end
-        endcase
     end
 
 endmodule

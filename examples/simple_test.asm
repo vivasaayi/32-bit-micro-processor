@@ -5,12 +5,12 @@
 
 main:
     ; Load immediate values
-    LOADI R0, #42000    ; R0 = 42000
+    LOADI R3, #42000    ; R3 = 42000 (was R0, but R0 is zero register)
     LOADI R1, #10000    ; R1 = 10000
     
     ; Basic arithmetic
-    ADD R2, R0, R1      ; R2 = R0 + R1 = 52000
-    SUB R3, R0, R1      ; R3 = R0 - R1 = 32000
+    ADD R2, R3, R1      ; R2 = R3 + R1 = 52000
+    SUB R4, R3, R1      ; R4 = R3 - R1 = 32000 (was R3)
     
     ; Test memory operations
     STORE R2, #0x2000   ; Store R2 (52000) at address 0x2000

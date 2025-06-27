@@ -119,13 +119,23 @@ module cpu_core (
                     if (opcode == 5'h1F) begin // HALT
                         halted_reg <= 1'b1;
                     end
+                    // Debug output for ALU operations
+                    if (opcode == 5'h04 || opcode == 5'h05) begin // ADD/ADDI
+                        $display("DEBUG ALU: ADD/ADDI - op=%s R%d = R%d + %s%d => %d", 
+                                (opcode == 5'h04) ? "ADD" : "ADDI",
+                                rd, rs1, 
+                                (opcode == 5'h04) ? "R" : "#",
+                                (opcode == 5'h04) ? rs2 : immediate,
+                                alu_result);
+                    end
                 end
                 
                 MEMORY: begin
                     if (is_load_store && opcode == 5'h02) begin // LOAD
                         memory_data_reg <= data_bus;
+                        $display("DEBUG CPU: LOAD from addr=0x%x, data=%d", immediate, data_bus);
                     end
-                    if (opcode == 5'h03) begin // STORE - debug
+                    if (opcode == 5'h03) begin // STORE
                         $display("DEBUG CPU: STORE R%d=%d to addr=0x%x, mem_write=%b, data_bus=0x%x", 
                                 rd, reg_data_a, immediate, mem_write, data_bus);
                     end
@@ -153,7 +163,7 @@ module cpu_core (
     // Instruction decode
     assign opcode = instruction_reg[31:27];
     assign rd = instruction_reg[23:20];
-    assign rs1 = instruction_reg[19:16];
+    assign rs1 = instruction_reg[19:16];  
     assign rs2 = instruction_reg[15:12];
     assign imm20 = instruction_reg[19:0];
     assign imm12 = instruction_reg[11:0];
@@ -163,10 +173,11 @@ module cpu_core (
     assign is_load_store = (opcode == 5'h02) || (opcode == 5'h03);
     assign is_branch_jump = (opcode >= 5'h0E) && (opcode <= 5'h12);
     
-    // Immediate value selection - don't sign extend addresses for LOAD/STORE
-    assign immediate = (is_load_store) ? {12'h000, imm20} : // Zero-extend for addresses
-                      is_immediate_inst ? {{12{imm20[19]}}, imm20} : // Sign-extend for arithmetic
-                      {{20{imm12[11]}}, imm12};
+    // Immediate value selection
+    assign immediate = (is_load_store) ? {12'h000, imm20} :           // Zero-extend for addresses
+                      (opcode == 5'h01) ? {12'h000, imm20} :       // Zero-extend for LOADI
+                      ((opcode == 5'h05) || (opcode == 5'h07)) ? {{12{imm20[19]}}, imm20} : // Sign-extend for ADDI/SUBI
+                      {{20{imm12[11]}}, imm12};                     // Sign-extend based on imm12 for other ops
     
     // ALU connections
     assign alu_a = reg_data_a;
@@ -182,22 +193,43 @@ module cpu_core (
     assign flags_in = 8'h00; // Simplified
     
     // Register file connections
-    assign reg_addr_a = (opcode == 5'h03) ? rd : rs1; // For STORE, use rd field as source reg
+    assign reg_addr_a = (opcode == 5'h03) ? rd : rs1;
     assign reg_addr_b = rs2;
     assign reg_addr_w = rd;
     assign reg_data_w = (state == WRITEBACK) ? 
                        ((opcode == 5'h02) ? memory_data_reg : alu_result_reg) : 32'h0;
     assign reg_write_en = (state == WRITEBACK) && 
                          !(opcode == 5'h03) && !(opcode == 5'h1F) && !is_branch_jump;
-    
-    // Memory interface
+
+    // Memory interface with debug
     assign addr_bus = (state == FETCH) ? pc_reg : 
-                     (state == MEMORY && is_load_store) ? immediate : // Use immediate for address
+                     (state == MEMORY && is_load_store) ? immediate : 
                      pc_reg;
     
-    assign data_bus = (state == MEMORY && opcode == 5'h03 && mem_write) ? reg_data_a : 32'hZZZZZZZZ; // Store reg_data_a
-    assign mem_read = (state == MEMORY && opcode == 5'h02) ? 1'b1 : 1'b0;
+    assign data_bus = (state == MEMORY && opcode == 5'h03 && mem_write) ? reg_data_a : 32'hZZZZZZZZ;
+    
+    assign mem_read = (state == FETCH) ? 1'b1 : 
+                     (state == MEMORY && opcode == 5'h02) ? 1'b1 : 1'b0;
+    
     assign mem_write = (state == MEMORY && opcode == 5'h03) ? 1'b1 : 1'b0;
+    
+    // Debug outputs
+    always @(posedge clk) begin
+        if (!rst_n) begin
+            // Reset debug state
+        end else if (state == EXECUTE) begin
+            $display("DEBUG CPU Execute: PC=0x%x, Opcode=%h, rd=%d, rs1=%d, rs2=%d, imm=%h",
+                    pc_reg, opcode, rd, rs1, rs2, immediate);
+            if (opcode == 5'h04 || opcode == 5'h05) begin
+                $display("DEBUG CPU ALU: %s rd=%d, rs1=%d, val2=%d, result=%d",
+                        opcode == 5'h04 ? "ADD" : "ADDI",
+                        rd, rs1, opcode == 5'h04 ? reg_data_b : immediate,
+                        alu_result);
+            end
+        end else if (state == WRITEBACK && reg_write_en) begin
+            $display("DEBUG CPU Writeback: Writing %d to R%d", reg_data_w, reg_addr_w);
+        end
+    end
     
     // I/O interface (simplified)
     assign interrupt_ack = 1'b0;

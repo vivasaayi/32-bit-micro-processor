@@ -5,23 +5,22 @@
 
 main:
     ; Test immediate loading with large 32-bit values
-    LOADI R0, #100000    ; R0 = 100000 (0x186A0)
+    LOADI R4, #100000    ; R4 = 100000 (0x186A0) - was R0, but R0 is zero register
     LOADI R1, #50000     ; R1 = 50000 (0xC350)
     
     ; Test arithmetic operations
-    ADD R2, R0, R1       ; R2 = 150000 (0x249F0)
-    SUB R3, R0, R1       ; R3 = 50000
+    ADD R2, R4, R1       ; R2 = 150000 (0x249F0)
+    SUB R3, R4, R1       ; R3 = 50000
     
     ; Test memory operations
-    LOADI R10, #0x3000   ; Memory base address
-    STORE R2, [R10 + 0]  ; Store 150000 at 0x3000
+    STORE R2, #0x3000    ; Store 150000 at 0x3000
     
-    LOADI R11, #1200000  ; Large value
-    STORE R11, [R10 + 4] ; Store 1200000 at 0x3004
+    LOADI R11, #900000   ; Large value (was 1200000, but that exceeds 20-bit limit)
+    STORE R11, #0x3004   ; Store 900000 at 0x3004
     
     ; Load values back from memory
-    LOAD R12, [R10 + 0]  ; R12 = 150000 (from 0x3000)
-    LOAD R13, [R10 + 4]  ; R13 = 1200000 (from 0x3004)
+    LOAD R12, #0x3000    ; R12 = 150000 (from 0x3000)
+    LOAD R13, #0x3004    ; R13 = 900000 (from 0x3004)
     
     ; Test immediate arithmetic
     ADDI R14, R12, #5000 ; R14 = 150000 + 5000 = 155000

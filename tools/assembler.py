@@ -93,6 +93,9 @@ class Assembler32:
             if not line or line.startswith(';'):
                 continue
             
+            print(f"First pass processing line {line_num}: {line}")
+            print(f"Current address: {address}")
+            
             # Handle .org directive
             if line.startswith('.org'):
                 parts = line.split()
@@ -135,6 +138,8 @@ class Assembler32:
                 continue
             
             try:
+                print(f"Processing line {line_num}: {original_line}")
+                
                 # Handle .org directive
                 if line.startswith('.org'):
                     parts = line.split()
@@ -178,6 +183,8 @@ class Assembler32:
                 opcode = self.opcodes[mnemonic]
                 machine_code = 0
                 
+                print(f"Parsed mnemonic: {mnemonic}, opcode: {opcode}")
+                
                 # Handle different instruction types
                 if mnemonic == 'HALT':
                     machine_code = self.assemble_instruction(opcode)
@@ -203,6 +210,7 @@ class Assembler32:
                         rd = self.parse_register(parts[1].rstrip(','))
                         rs1 = self.parse_register(parts[2].rstrip(','))
                         immediate = self.parse_immediate(parts[3])
+                        # Correct: encode rs1 in its field, not just rd and immediate
                         machine_code = self.assemble_instruction(opcode, rd, rs1, 0, immediate)
                 
                 elif mnemonic == 'LOAD':
@@ -219,6 +227,11 @@ class Assembler32:
                             else:
                                 rs1 = self.parse_register(addr_part.strip())
                                 offset = 0
+                            machine_code = self.assemble_instruction(opcode, rd, rs1, 0, offset)
+                        elif parts[2].startswith('R'):
+                            # LOAD Rd, Rbase, #offset
+                            rs1 = self.parse_register(parts[2].rstrip(','))
+                            offset = self.parse_immediate(parts[3]) if len(parts) > 3 else 0
                             machine_code = self.assemble_instruction(opcode, rd, rs1, 0, offset)
                         else:
                             # Direct addressing
@@ -239,6 +252,11 @@ class Assembler32:
                             else:
                                 rd = self.parse_register(addr_part.strip())
                                 offset = 0
+                            machine_code = self.assemble_instruction(opcode, rd, rs, 0, offset)
+                        elif parts[2].startswith('R'):
+                            # STORE Rs, Rbase, #offset
+                            rd = self.parse_register(parts[2].rstrip(','))
+                            offset = self.parse_immediate(parts[3]) if len(parts) > 3 else 0
                             machine_code = self.assemble_instruction(opcode, rd, rs, 0, offset)
                         else:
                             # Direct addressing
@@ -271,6 +289,8 @@ class Assembler32:
         try:
             with open(input_file, 'r') as f:
                 lines = f.readlines()
+            
+            print(f"Input file content: {lines}")
             
             # Two-pass assembly
             self.first_pass(lines)

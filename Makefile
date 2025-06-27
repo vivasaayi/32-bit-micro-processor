@@ -60,10 +60,11 @@ test-all:
 test-comprehensive:
 	python3 test_all_asm.py
 
-# Synthesis (placeholder - would need actual synthesis tools)
-synth:
-	@echo "Synthesis would require tools like Yosys, Vivado, or Quartus"
-	@echo "This is a placeholder for synthesis commands"
+# Synthesis using Yosys
+synth: $(ALL_SOURCES)
+	@echo "Running Yosys synthesis..."
+	@yosys -p "read_verilog $(ALL_SOURCES); synth; stat; write_verilog synth_out.v" \
+	   && echo "Synthesis complete: output in synth_out.v"
 
 # Lint check (placeholder)
 lint:
