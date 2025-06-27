@@ -1,52 +1,51 @@
-# 8-Bit Microprocessor Design
+# 32-Bit HDL Microprocessor
 
-## Overview
-This project implements an 8-bit microprocessor capable of running a basic Linux-like system. The processor features:
+A complete 32-bit microprocessor implementation in Verilog, ready for FPGA deployment.
 
-- 8-bit data bus
-- 16-bit address bus (64KB addressable memory)
-- RISC-like instruction set
-- Von Neumann architecture
-- Basic I/O capabilities
-- Memory management unit (MMU) for virtual memory
-- Interrupt handling
+## Features
 
-## Architecture Components
+- **32-bit Architecture**: 4GB address space with 32-bit data path
+- **RISC-like Instruction Set**: Clean, orthogonal instruction set with 32-bit instructions
+- **16 32-bit Registers**: General-purpose register file (R0-R15)
+- **Advanced ALU**: 32-bit arithmetic and logic operations with flag generation
+- **Memory System**: 64KB internal memory with external expansion capability
+- **Pipeline Design**: 5-stage state machine for efficient execution
+- **FPGA Ready**: Standard Verilog with proper synchronous design
 
-### Core Components
-- **CPU Core** (`cpu/cpu_core.v`) - Main processing unit
-- **ALU** (`cpu/alu.v`) - Arithmetic and Logic Unit
-- **Register File** (`cpu/register_file.v`) - General purpose registers
-- **Control Unit** (`cpu/control_unit.v`) - Instruction decode and control
-- **Memory Interface** (`memory/memory_controller.v`) - Memory access controller
-- **MMU** (`memory/mmu.v`) - Memory Management Unit
-- **Cache** (`memory/cache.v`) - Simple cache implementation
+## Quick Start
 
-### I/O and Peripherals
-- **UART** (`io/uart.v`) - Serial communication
-- **Timer** (`io/timer.v`) - System timer
-- **Interrupt Controller** (`io/interrupt_controller.v`) - Handles interrupts
-- **GPIO** (`io/gpio.v`) - General purpose I/O
+```bash
+# Build and run simulation
+make sim
 
-### System Components
-- **Bus Controller** (`system/bus_controller.v`) - System bus management
-- **Clock Manager** (`system/clock_manager.v`) - Clock generation and management
+# Assemble a program
+make assemble
 
-## Instruction Set Architecture (ISA)
+# View waveforms (requires GTKWave)
+make wave
 
-### Registers
-- **R0-R7**: General purpose registers (8-bit each)
-- **SP**: Stack Pointer (16-bit)
-- **PC**: Program Counter (16-bit)
-- **FLAGS**: Status flags (8-bit)
+# Clean build files
+make clean
+```
 
-### Instruction Format
-- **Type 1**: `[OPCODE:4][REG:3][IMM:1]` - Register/Immediate operations
-- **Type 2**: `[OPCODE:4][REG1:2][REG2:2]` - Register-to-register operations
-- **Type 3**: `[OPCODE:8]` - Control flow operations
+## Project Structure
 
-### Instruction Set
-See `docs/instruction_set.md` for complete ISA documentation.
+```
+hdl/
+├── cpu/                    # 32-bit CPU components
+│   ├── cpu_core_32_simple.v   # Main CPU core
+│   ├── alu_32.v               # 32-bit ALU
+│   └── register_file_32.v     # 32-bit register file
+├── examples_32/            # 32-bit assembly programs
+│   └── simple_sort_32.asm     # Bubble sort demonstration
+├── testbench_32/          # 32-bit test benches
+│   └── tb_microprocessor_32.v # System testbench
+├── tools/                  # Development tools
+│   └── assembler_32.py        # 32-bit assembler
+├── microprocessor_system_32.v # Top-level system
+├── Makefile               # Build system
+└── legacy_8bit/           # Previous 8-bit implementation
+```
 
 ## Memory Map
 - `0x0000-0x7FFF`: User space (32KB)
