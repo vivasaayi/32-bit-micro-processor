@@ -12,7 +12,7 @@
  * - R0 is hardwired to zero (common RISC convention)
  */
 
-module register_file_32 (
+module register_file (
     input wire clk,
     input wire rst_n,
     

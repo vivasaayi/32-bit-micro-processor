@@ -32,17 +32,17 @@ make clean
 
 ```
 hdl/
-├── cpu/                    # 32-bit CPU components
-│   ├── cpu_core_32_simple.v   # Main CPU core
-│   ├── alu_32.v               # 32-bit ALU
-│   └── register_file_32.v     # 32-bit register file
-├── examples_32/            # 32-bit assembly programs
-│   └── simple_sort_32.asm     # Bubble sort demonstration
-├── testbench_32/          # 32-bit test benches
-│   └── tb_microprocessor_32.v # System testbench
+├── cpu/                    # CPU components
+│   ├── cpu_core.v             # Main CPU core
+│   ├── alu.v                  # 32-bit ALU
+│   └── register_file.v        # 32-bit register file
+├── examples/               # Assembly programs
+│   └── simple_sort.asm        # Bubble sort demonstration
+├── testbench/              # Test benches
+│   └── tb_microprocessor_system.v # System testbench
 ├── tools/                  # Development tools
-│   └── assembler_32.py        # 32-bit assembler
-├── microprocessor_system_32.v # Top-level system
+│   └── assembler.py           # Assembler
+├── microprocessor_system.v # Top-level system
 ├── Makefile               # Build system
 └── legacy_8bit/           # Previous 8-bit implementation
 ```

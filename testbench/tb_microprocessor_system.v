@@ -7,7 +7,7 @@
 
 `timescale 1ns / 1ps
 
-module tb_microprocessor_32;
+module tb_microprocessor_system;
 
     // Clock and reset
     reg clk;
@@ -40,7 +40,7 @@ module tb_microprocessor_32;
     integer max_cycles = 10000;
     
     // Instantiate the 32-bit microprocessor
-    microprocessor_system_32 uut (
+    microprocessor_system uut (
         .clk(clk),
         .rst_n(rst_n),
         .ext_addr(ext_addr),
@@ -65,7 +65,7 @@ module tb_microprocessor_32;
     // Load program into memory
     initial begin
         // Load the assembled program
-        $readmemh("testbench_32/simple_sort_32.hex", uut.internal_memory);
+        $readmemh("testbench/simple_sort.hex", uut.internal_memory);
     end
     
     // Main test sequence
@@ -80,7 +80,7 @@ module tb_microprocessor_32;
         // Reset sequence
         #10 rst_n = 1;
         
-        $display("=== 32-bit Microprocessor Test ===");
+        $display("    === 32-bit Microprocessor Test ===");
         $display("Starting program execution...");
         
         // Wait for program completion or timeout

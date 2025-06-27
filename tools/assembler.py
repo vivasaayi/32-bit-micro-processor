@@ -1,374 +1,310 @@
 #!/usr/bin/env python3
 """
-Simple Assembler for 8-bit Microprocessor
+32-bit Assembler for 32-bit Microprocessor
+Converts assembly language to 32-bit machine code
 
-Converts assembly language to machine code for the 8-bit microprocessor.
-Supports all instructions defined in the ISA.
+Instruction Format (32-bit):
+- Bits 31-27: Opcode (5 bits)
+- Bits 26-24: Function/Subopcode (3 bits)  
+- Bits 23-20: Destination Register (4 bits)
+- Bits 19-16: Source Register 1 (4 bits)
+- Bits 15-12: Source Register 2 (4 bits)
+- Bits 11-0:  Immediate/Offset (12 bits, sign-extended)
 
-Usage: pyth            if            if line and not line.startswith(';'):
-                # Remove inline comments
-                if ';' in line:
-                    line = line.split(';')[0].strip()
-                
-                # Parse instruction
-                parts = line.split()
-                if not parts:  # Skip if line becomes empty after removing comments
-                    continue
-                    
-                mnemonic = parts[0].upper()
-                operands = []
-                if len(parts) > 1:
-                    operand_str = ' '.join(parts[1:])
-                    operands = [op.strip() for op in operand_str.split(',')]d not line.startswith(';'):
-                # Remove inline comments
-                if ';' in line:
-                    line = line.split(';')[0].strip()
-                
-                # Parse instruction
-                parts = line.split()
-                if not parts:  # Skip if line becomes empty after removing comments
-                    continue
-                    
-                mnemonic = parts[0].upper()
-                operands = []
-                if len(parts) > 1:
-                    operand_str = ' '.join(parts[1:])
-                    operands = [op.strip() for op in operand_str.split(',')]mbler.py input.asm output.hex
+For large immediates:
+- Bits 31-27: Opcode
+- Bits 26-20: Destination Register (4 bits)
+- Bits 19-0:  20-bit Immediate (sign-extended to 32-bit)
 """
 
 import sys
 import re
+from pathlib import Path
 
-class Assembler:
+class Assembler32:
     def __init__(self):
-        # Instruction opcodes
+        # 32-bit instruction opcodes (5-bit)
         self.opcodes = {
-            # Arithmetic (0x0X)
-            'ADD': 0x00, 'SUB': 0x01, 'ADC': 0x02, 'SBC': 0x03,
-            'ADDI': 0x04, 'SUBI': 0x05,
-            
-            # Logic (0x1X) 
-            'AND': 0x10, 'OR': 0x11, 'XOR': 0x12, 'NOT': 0x13,
-            'ANDI': 0x14, 'ORI': 0x15,
-            
-            # Shift (0x2X)
-            'SHL': 0x20, 'SHR': 0x21, 'ROL': 0x22, 'ROR': 0x23,
-            
-            # Memory (0x3X)
-            'LOAD': 0x30, 'STORE': 0x31, 'LOADI': 0x32,
-            'LOADR': 0x33, 'STORER': 0x34,
-            
-            # Branch (0x4X)
-            'JMP': 0x40, 'JEQ': 0x41, 'JNE': 0x42, 'JLT': 0x43,
-            'JGE': 0x44, 'JCS': 0x45, 'JCC': 0x46,
-            
-            # Subroutine (0x5X)
-            'CALL': 0x50, 'RET': 0x51, 'PUSH': 0x52, 'POP': 0x53,
-            
-            # System (0x6X)
-            'SYSCALL': 0x60, 'IRET': 0x61, 'EI': 0x62, 'DI': 0x63,
-            'HALT': 0x64, 'NOP': 0x65,
-            
-            # I/O (0x7X)
-            'IN': 0x70, 'OUT': 0x71,
-            
-            # Compare (0x8X)
-            'CMP': 0x80, 'CMPI': 0x81
+            'LOADI': 0x01,    # Load immediate (20-bit immediate)
+            'LOAD':  0x02,    # Load from memory
+            'STORE': 0x03,    # Store to memory
+            'ADD':   0x04,    # Add registers
+            'ADDI':  0x05,    # Add immediate
+            'SUB':   0x06,    # Subtract registers
+            'SUBI':  0x07,    # Subtract immediate
+            'AND':   0x08,    # Logical AND
+            'OR':    0x09,    # Logical OR
+            'XOR':   0x0A,    # Logical XOR
+            'SHL':   0x0B,    # Shift left
+            'SHR':   0x0C,    # Shift right
+            'CMP':   0x0D,    # Compare
+            'JMP':   0x0E,    # Unconditional jump
+            'JZ':    0x0F,    # Jump if zero
+            'JNZ':   0x10,    # Jump if not zero
+            'JC':    0x11,    # Jump if carry
+            'JNC':   0x12,    # Jump if no carry
+            'HALT':  0x1F,    # Halt processor
         }
         
+        # Register mapping (R0-R15)
+        self.registers = {f'R{i}': i for i in range(16)}
+        
         self.labels = {}
-        self.machine_code = []
-        self.address = 0
+        self.current_address = 0
+        self.instructions = []
         
     def parse_register(self, reg_str):
-        """Parse register name (R0-R7) to register number"""
-        if reg_str.startswith('R') and len(reg_str) == 2:
-            reg_num = int(reg_str[1])
-            if 0 <= reg_num <= 7:
-                return reg_num
-        raise ValueError(f"Invalid register: {reg_str}")
+        """Parse register string to register number"""
+        reg_str = reg_str.strip().upper()
+        if reg_str in self.registers:
+            return self.registers[reg_str]
+        else:
+            raise ValueError(f"Invalid register: {reg_str}")
     
     def parse_immediate(self, imm_str):
-        """Parse immediate value (#123, #0xFF, etc.)"""
+        """Parse immediate value (decimal or hex)"""
+        imm_str = imm_str.strip()
         if imm_str.startswith('#'):
-            value_str = imm_str[1:]
-            # Remove any comments
-            if ';' in value_str:
-                value_str = value_str.split(';')[0].strip()
-            if value_str.startswith('0x') or value_str.startswith('0X'):
-                return int(value_str, 16)
-            else:
-                return int(value_str)
-        raise ValueError(f"Invalid immediate: {imm_str}")
-    
-    def parse_address(self, addr_str):
-        """Parse address (0x1000, label, etc.)"""
-        if addr_str.startswith('0x') or addr_str.startswith('0X'):
-            return int(addr_str, 16)
-        elif addr_str.isdigit():
-            return int(addr_str)
-        elif addr_str in self.labels:
-            return self.labels[addr_str]
+            imm_str = imm_str[1:]
+        
+        if imm_str.startswith('0x') or imm_str.startswith('0X'):
+            return int(imm_str, 16)
         else:
-            # Forward reference - will be resolved in second pass
-            return 0
+            return int(imm_str)
     
-    def assemble_instruction(self, mnemonic, operands):
-        """Assemble a single instruction"""
-        if mnemonic not in self.opcodes:
-            raise ValueError(f"Unknown instruction: {mnemonic}")
-        
-        opcode = self.opcodes[mnemonic]
-        
-        # Handle different instruction formats
-        if mnemonic in ['ADD', 'SUB', 'ADC', 'SBC', 'AND', 'OR', 'XOR', 'CMP']:
-            # Register-register format
-            reg1 = self.parse_register(operands[0])
-            reg2 = self.parse_register(operands[1])
-            instruction = (opcode << 4) | (reg1 << 1) | (reg2 >> 1)
-            return [instruction]
-        
-        elif mnemonic in ['ADDI', 'SUBI', 'ANDI', 'ORI', 'CMPI']:
-            # Register-immediate format
-            reg1 = self.parse_register(operands[0])
-            immediate = self.parse_immediate(operands[1])
-            instruction = (opcode << 4) | (reg1 << 1) | 1  # Set immediate flag
-            return [instruction, immediate & 0xFF]
-        
-        elif mnemonic in ['SHL', 'SHR', 'ROL', 'ROR', 'NOT']:
-            # Single register format
-            reg1 = self.parse_register(operands[0])
-            instruction = (opcode << 4) | (reg1 << 1)
-            return [instruction]
-        
-        elif mnemonic in ['LOAD', 'STORE']:
-            # Memory operations with address
-            reg1 = self.parse_register(operands[0])
-            address = self.parse_address(operands[1])
-            instruction = (opcode << 4) | (reg1 << 1)
-            return [instruction, address & 0xFF, (address >> 8) & 0xFF]
-        
-        elif mnemonic == 'LOADI':
-            # Load immediate
-            reg1 = self.parse_register(operands[0])
-            immediate = self.parse_immediate(operands[1])
-            instruction = (opcode << 4) | (reg1 << 1)
-            return [instruction, immediate & 0xFF]
-        
-        elif mnemonic in ['LOADR', 'STORER']:
-            # Register indirect
-            reg1 = self.parse_register(operands[0])
-            reg2 = self.parse_register(operands[1])
-            instruction = (opcode << 4) | (reg1 << 1) | (reg2 >> 1)
-            return [instruction]
-        
-        elif mnemonic in ['JMP', 'JEQ', 'JNE', 'JLT', 'JGE', 'JCS', 'JCC', 'CALL']:
-            # Branch/call with address
-            address = self.parse_address(operands[0])
-            return [opcode, address & 0xFF, (address >> 8) & 0xFF]
-        
-        elif mnemonic in ['PUSH', 'POP']:
-            # Stack operations
-            reg1 = self.parse_register(operands[0])
-            instruction = (opcode << 4) | (reg1 << 1)
-            return [instruction]
-        
-        elif mnemonic == 'SYSCALL':
-            # System call
-            syscall_num = self.parse_immediate(operands[0])
-            return [opcode, syscall_num & 0xFF]
-        
-        elif mnemonic in ['IN', 'OUT']:
-            # I/O operations
-            reg1 = self.parse_register(operands[0])
-            port = self.parse_immediate(operands[1])
-            instruction = (opcode << 4) | (reg1 << 1)
-            return [instruction, port & 0xFF]
-        
-        elif mnemonic in ['RET', 'IRET', 'EI', 'DI', 'HALT', 'NOP']:
-            # No operand instructions
-            return [opcode]
-        
-        else:
-            raise ValueError(f"Unsupported instruction format: {mnemonic}")
+    def assemble_instruction(self, opcode, rd=0, rs1=0, rs2=0, immediate=0):
+        """Assemble a 32-bit instruction"""
+        # Standard format: opcode(5) | func(3) | rd(4) | rs1(4) | rs2(4) | imm(12)
+        instruction = (opcode << 27) | (rd << 20) | (rs1 << 16) | (rs2 << 12) | (immediate & 0xFFF)
+        return instruction & 0xFFFFFFFF
+    
+    def assemble_immediate_instruction(self, opcode, rd=0, immediate=0):
+        """Assemble instruction with large immediate (20-bit)"""
+        # Format: opcode(5) | rd(4) | reserved(3) | immediate(20)
+        instruction = (opcode << 27) | (rd << 20) | (immediate & 0xFFFFF)
+        return instruction & 0xFFFFFFFF
     
     def first_pass(self, lines):
         """First pass: collect labels and calculate addresses"""
-        self.address = 0
+        address = 0
         
-        for line in lines:
+        for line_num, line in enumerate(lines, 1):
             line = line.strip()
             if not line or line.startswith(';'):
                 continue
             
-            # Handle assembler directives
+            # Handle .org directive
             if line.startswith('.org'):
                 parts = line.split()
-                if len(parts) > 1:
-                    self.address = self.parse_address(parts[1])
-                continue
-            elif line.startswith('.db'):
-                # Data bytes directive
-                data_str = line[3:].strip()
-                if data_str.startswith('"') and data_str.endswith('"'):
-                    # String data
-                    string_data = data_str[1:-1]
-                    self.address += len(string_data)
-                else:
-                    # Numeric data
-                    values = [v.strip() for v in data_str.split(',')]
-                    self.address += len(values)
+                if len(parts) == 2:
+                    address = self.parse_immediate(parts[1])
+                    self.current_address = address
                 continue
             
-            # Check for label
+            # Handle labels
             if ':' in line:
-                parts = line.split(':', 1)
-                label = parts[0].strip()
-                self.labels[label] = self.address
-                line = parts[1].strip() if len(parts) > 1 else ''
+                label = line.split(':')[0].strip()
+                self.labels[label] = address
+                # Check if there's an instruction on the same line
+                after_colon = line.split(':', 1)[1].strip()
+                if after_colon and not after_colon.startswith(';'):
+                    address += 4  # 32-bit instructions are 4 bytes
+                continue
             
+            # Handle data directives
+            if line.startswith('.word'):
+                address += 4  # 32-bit word
+                continue
+            elif line.startswith('.byte'):
+                address += 1  # Still support 8-bit bytes
+                continue
+            
+            # Regular instruction
             if line and not line.startswith(';'):
-                # Parse instruction to calculate size
-                parts = line.split()
-                mnemonic = parts[0].upper()
-                operands = []
-                if len(parts) > 1:
-                    operand_str = ' '.join(parts[1:])
-                    operands = [op.strip() for op in operand_str.split(',')]
-                
-                # Estimate instruction size
-                if mnemonic in ['LOAD', 'STORE', 'JMP', 'JEQ', 'JNE', 'JLT', 'JGE', 'JCS', 'JCC', 'CALL']:
-                    self.address += 3  # Instruction + 16-bit address
-                elif mnemonic in ['ADDI', 'SUBI', 'ANDI', 'ORI', 'CMPI', 'LOADI', 'SYSCALL', 'IN', 'OUT']:
-                    self.address += 2  # Instruction + 8-bit immediate
-                else:
-                    self.address += 1  # Single byte instruction
+                address += 4  # 32-bit instructions
     
     def second_pass(self, lines):
         """Second pass: generate machine code"""
-        self.machine_code = []
-        self.address = 0
+        address = 0
         
-        for line in lines:
+        for line_num, line in enumerate(lines, 1):
+            original_line = line
             line = line.strip()
+            
             if not line or line.startswith(';'):
                 continue
             
-            # Handle assembler directives
-            if line.startswith('.org'):
-                parts = line.split()
-                if len(parts) > 1:
-                    self.address = self.parse_address(parts[1])
-                    # Pad machine code to reach the new address
-                    while len(self.machine_code) < self.address:
-                        self.machine_code.append(0x00)
-                continue
-            elif line.startswith('.db'):
-                # Data bytes directive
-                data_str = line[3:].strip()
-                if data_str.startswith('"'):
-                    # String data with escape sequences
-                    string_data = data_str[1:-1]
-                    string_data = string_data.replace('\\n', '\n').replace('\\r', '\r')
-                    for char in string_data:
-                        self.machine_code.append(ord(char))
-                        self.address += 1
-                    # Handle additional values after string
-                    if ',' in data_str:
-                        remaining = data_str.split(',', 1)[1]
-                        values = [v.strip() for v in remaining.split(',')]
-                        for val in values:
-                            if val.startswith('0x'):
-                                self.machine_code.append(int(val, 16))
-                            else:
-                                self.machine_code.append(int(val))
-                            self.address += 1
-                else:
-                    # Numeric data
-                    values = [v.strip() for v in data_str.split(',')]
-                    for val in values:
-                        if val.startswith('0x'):
-                            self.machine_code.append(int(val, 16))
-                        else:
-                            self.machine_code.append(int(val))
-                        self.address += 1
-                continue
-            
-            # Skip label part
-            if ':' in line:
-                parts = line.split(':', 1)
-                line = parts[1].strip() if len(parts) > 1 else ''
-            
-            if line and not line.startswith(';'):
-                # Remove inline comments
-                if ';' in line:
-                    line = line.split(';')[0].strip()
+            try:
+                # Handle .org directive
+                if line.startswith('.org'):
+                    parts = line.split()
+                    if len(parts) == 2:
+                        address = self.parse_immediate(parts[1])
+                    continue
+                
+                # Handle labels
+                if ':' in line:
+                    after_colon = line.split(':', 1)[1].strip()
+                    if not after_colon or after_colon.startswith(';'):
+                        continue
+                    line = after_colon
+                
+                # Handle data directives
+                if line.startswith('.word'):
+                    parts = line.split()
+                    if len(parts) >= 2:
+                        value = self.parse_immediate(parts[1])
+                        self.instructions.append((address, value, original_line))
+                        address += 4
+                    continue
+                elif line.startswith('.byte'):
+                    parts = line.split()
+                    if len(parts) >= 2:
+                        value = self.parse_immediate(parts[1]) & 0xFF
+                        self.instructions.append((address, value, original_line))
+                        address += 1
+                    continue
                 
                 # Parse instruction
                 parts = line.split()
-                if not parts:  # Skip if line becomes empty after removing comments
+                if not parts:
                     continue
-                    
-                mnemonic = parts[0].upper()
-                operands = []
-                if len(parts) > 1:
-                    operand_str = ' '.join(parts[1:])
-                    operands = [op.strip() for op in operand_str.split(',')]
                 
-                # Generate machine code
-                try:
-                    machine_code = self.assemble_instruction(mnemonic, operands)
-                    self.machine_code.extend(machine_code)
-                    self.address += len(machine_code)
-                except Exception as e:
-                    print(f"Error assembling '{line}': {e}")
-                    sys.exit(1)
+                mnemonic = parts[0].upper()
+                if mnemonic not in self.opcodes:
+                    print(f"Warning: Unknown instruction '{mnemonic}' on line {line_num}")
+                    continue
+                
+                opcode = self.opcodes[mnemonic]
+                machine_code = 0
+                
+                # Handle different instruction types
+                if mnemonic == 'HALT':
+                    machine_code = self.assemble_instruction(opcode)
+                
+                elif mnemonic == 'LOADI':
+                    # LOADI Rd, #immediate
+                    if len(parts) >= 3:
+                        rd = self.parse_register(parts[1].rstrip(','))
+                        immediate = self.parse_immediate(parts[2])
+                        machine_code = self.assemble_immediate_instruction(opcode, rd, immediate)
+                
+                elif mnemonic in ['ADD', 'SUB', 'AND', 'OR', 'XOR']:
+                    # ADD Rd, Rs1, Rs2
+                    if len(parts) >= 4:
+                        rd = self.parse_register(parts[1].rstrip(','))
+                        rs1 = self.parse_register(parts[2].rstrip(','))
+                        rs2 = self.parse_register(parts[3])
+                        machine_code = self.assemble_instruction(opcode, rd, rs1, rs2)
+                
+                elif mnemonic in ['ADDI', 'SUBI']:
+                    # ADDI Rd, Rs1, #immediate
+                    if len(parts) >= 4:
+                        rd = self.parse_register(parts[1].rstrip(','))
+                        rs1 = self.parse_register(parts[2].rstrip(','))
+                        immediate = self.parse_immediate(parts[3])
+                        machine_code = self.assemble_instruction(opcode, rd, rs1, 0, immediate)
+                
+                elif mnemonic == 'LOAD':
+                    # LOAD Rd, [Rs1 + offset] or LOAD Rd, #address
+                    if len(parts) >= 3:
+                        rd = self.parse_register(parts[1].rstrip(','))
+                        if parts[2].startswith('[') and parts[2].endswith(']'):
+                            # Memory addressing [Rs1 + offset]
+                            addr_part = parts[2][1:-1]  # Remove brackets
+                            if '+' in addr_part:
+                                reg_part, offset_part = addr_part.split('+')
+                                rs1 = self.parse_register(reg_part.strip())
+                                offset = self.parse_immediate(offset_part.strip())
+                            else:
+                                rs1 = self.parse_register(addr_part.strip())
+                                offset = 0
+                            machine_code = self.assemble_instruction(opcode, rd, rs1, 0, offset)
+                        else:
+                            # Direct addressing
+                            address_val = self.parse_immediate(parts[2])
+                            machine_code = self.assemble_immediate_instruction(opcode, rd, address_val)
+                
+                elif mnemonic == 'STORE':
+                    # STORE Rs, [Rd + offset] or STORE Rs, #address
+                    if len(parts) >= 3:
+                        rs = self.parse_register(parts[1].rstrip(','))
+                        if parts[2].startswith('[') and parts[2].endswith(']'):
+                            # Memory addressing [Rd + offset]
+                            addr_part = parts[2][1:-1]  # Remove brackets
+                            if '+' in addr_part:
+                                reg_part, offset_part = addr_part.split('+')
+                                rd = self.parse_register(reg_part.strip())
+                                offset = self.parse_immediate(offset_part.strip())
+                            else:
+                                rd = self.parse_register(addr_part.strip())
+                                offset = 0
+                            machine_code = self.assemble_instruction(opcode, rd, rs, 0, offset)
+                        else:
+                            # Direct addressing
+                            address_val = self.parse_immediate(parts[2])
+                            machine_code = self.assemble_immediate_instruction(opcode, rs, address_val)
+                
+                elif mnemonic in ['JMP', 'JZ', 'JNZ', 'JC', 'JNC']:
+                    # JMP label or JMP #address
+                    if len(parts) >= 2:
+                        target = parts[1]
+                        if target in self.labels:
+                            target_addr = self.labels[target]
+                            # Calculate relative offset
+                            offset = target_addr - (address + 4)
+                            machine_code = self.assemble_instruction(opcode, 0, 0, 0, offset & 0xFFF)
+                        else:
+                            target_addr = self.parse_immediate(target)
+                            machine_code = self.assemble_immediate_instruction(opcode, 0, target_addr)
+                
+                self.instructions.append((address, machine_code, original_line))
+                address += 4
+                
+            except Exception as e:
+                print(f"Error on line {line_num}: {e}")
+                print(f"Line: {original_line}")
+                continue
     
-    def assemble(self, source_lines):
-        """Assemble source code to machine code"""
-        self.first_pass(source_lines)
-        self.second_pass(source_lines)
-        return self.machine_code
+    def assemble(self, input_file, output_file):
+        """Main assembly function"""
+        try:
+            with open(input_file, 'r') as f:
+                lines = f.readlines()
+            
+            # Two-pass assembly
+            self.first_pass(lines)
+            self.second_pass(lines)
+            
+            # Sort instructions by address
+            self.instructions.sort(key=lambda x: x[0])
+            
+            # Write output
+            with open(output_file, 'w') as f:
+                for addr, code, line in self.instructions:
+                    f.write(f"{code:08X}\n")
+            
+            print(f"Assembly successful: {input_file} -> {output_file}")
+            print(f"Generated {len(self.instructions)} instructions")
+            
+            return True
+            
+        except Exception as e:
+            print(f"Assembly failed: {e}")
+            return False
 
 def main():
     if len(sys.argv) != 3:
-        print("Usage: python3 assembler.py input.asm output.hex")
+        print("Usage: python assembler_32.py <input.asm> <output.hex>")
         sys.exit(1)
     
     input_file = sys.argv[1]
     output_file = sys.argv[2]
     
-    try:
-        with open(input_file, 'r') as f:
-            source_lines = f.readlines()
-        
-        assembler = Assembler()
-        machine_code = assembler.assemble(source_lines)
-        
-        # Write output in Intel HEX format
-        with open(output_file, 'w') as f:
-            f.write("; Machine code for 8-bit microprocessor\\n")
-            f.write("; Generated from: {}\\n".format(input_file))
-            f.write("\\n")
-            
-            for i, byte in enumerate(machine_code):
-                if i % 16 == 0:
-                    f.write(f":{i:04X} ")
-                f.write(f"{byte:02X} ")
-                if (i + 1) % 16 == 0:
-                    f.write("\\n")
-            
-            if len(machine_code) % 16 != 0:
-                f.write("\\n")
-        
-        print(f"Assembly successful: {len(machine_code)} bytes generated")
-        print(f"Output written to: {output_file}")
-        
-    except FileNotFoundError:
-        print(f"Error: Input file '{input_file}' not found")
-        sys.exit(1)
-    except Exception as e:
-        print(f"Error: {e}")
+    assembler = Assembler32()
+    if assembler.assemble(input_file, output_file):
+        sys.exit(0)
+    else:
         sys.exit(1)
 
 if __name__ == "__main__":

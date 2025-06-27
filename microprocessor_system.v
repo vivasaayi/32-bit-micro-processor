@@ -16,7 +16,7 @@
  * - Interrupt handling
  */
 
-module microprocessor_system_32 (
+module microprocessor_system (
     input wire clk,
     input wire rst_n,
     
@@ -71,8 +71,8 @@ module microprocessor_system_32 (
     wire accessing_internal_mem = (cpu_addr_bus < 32'h00010000); // First 64KB
     wire accessing_external_mem = (cpu_addr_bus >= 32'h00010000);
     
-    // Instantiate 32-bit CPU core (simple version)
-    cpu_core_32 cpu_inst (
+    // Instantiate CPU core
+    cpu_core cpu_inst (
         .clk(clk),
         .rst_n(rst_n),
         .addr_bus(cpu_addr_bus),

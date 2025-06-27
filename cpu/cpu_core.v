@@ -5,7 +5,7 @@
  * from data memory operations using a state machine approach.
  */
 
-module cpu_core_32 (
+module cpu_core (
     input wire clk,
     input wire rst_n,
     
@@ -67,7 +67,7 @@ module cpu_core_32 (
     wire is_immediate_inst, is_load_store, is_branch_jump;
     
     // Instantiate ALU
-    alu_32 alu_inst (
+    alu alu_inst (
         .a(alu_a),
         .b(alu_b),
         .op(alu_op),
@@ -77,7 +77,7 @@ module cpu_core_32 (
     );
     
     // Instantiate register file
-    register_file_32 reg_file_inst (
+    register_file reg_file_inst (
         .clk(clk),
         .rst_n(rst_n),
         .addr_a(reg_addr_a),

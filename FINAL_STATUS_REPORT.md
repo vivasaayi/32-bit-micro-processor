@@ -6,7 +6,7 @@ Successfully upgraded the HDL microprocessor project from 8-bit to 32-bit archit
 ## Completed Components
 
 ### ✅ 32-Bit CPU Core
-- **File**: `cpu/cpu_core_32_simple.v`
+- **File**: `cpu/cpu_core.v`
 - **Features**: 
   - 5-stage state machine (Fetch, Decode, Execute, Memory, Writeback)
   - 32-bit instruction set with 5-bit opcodes
@@ -16,7 +16,7 @@ Successfully upgraded the HDL microprocessor project from 8-bit to 32-bit archit
 - **Status**: ✅ **WORKING** - Successfully executes programs and advances PC correctly
 
 ### ✅ 32-Bit ALU
-- **File**: `cpu/alu_32.v`
+- **File**: `cpu/alu.v`
 - **Features**:
   - 32-bit arithmetic and logic operations
   - Flag generation (Zero, Carry, Negative, Overflow)
@@ -24,7 +24,7 @@ Successfully upgraded the HDL microprocessor project from 8-bit to 32-bit archit
 - **Status**: ✅ **WORKING**
 
 ### ✅ 32-Bit Register File
-- **File**: `cpu/register_file_32.v`
+- **File**: `cpu/register_file.v`
 - **Features**:
   - 16 32-bit registers
   - Dual-port read, single-port write
@@ -32,7 +32,7 @@ Successfully upgraded the HDL microprocessor project from 8-bit to 32-bit archit
 - **Status**: ✅ **WORKING**
 
 ### ✅ 32-Bit Microprocessor System
-- **File**: `microprocessor_system_32.v`
+- **File**: `microprocessor_system.v`
 - **Features**:
   - Complete system integration
   - 64KB internal memory (16K words)
@@ -41,7 +41,7 @@ Successfully upgraded the HDL microprocessor project from 8-bit to 32-bit archit
 - **Status**: ✅ **WORKING**
 
 ### ✅ 32-Bit Assembler
-- **File**: `tools/assembler_32.py`
+- **File**: `tools/assembler.py`
 - **Features**:
   - Complete 32-bit instruction set support
   - 32-bit immediate values
@@ -50,7 +50,7 @@ Successfully upgraded the HDL microprocessor project from 8-bit to 32-bit archit
 - **Status**: ✅ **WORKING** - Generates correct machine code
 
 ### ✅ Test Programs
-- **File**: `examples_32/simple_sort_32.asm`
+- **File**: `examples/simple_sort.asm`
 - **Features**:
   - Demonstrates 32-bit arithmetic operations
   - Bubble sort algorithm implementation

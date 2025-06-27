@@ -12,7 +12,7 @@
  * - 32-bit specific: MUL (multiply), DIV (divide)
  */
 
-module alu_32 (
+module alu (
     input wire [31:0] a,         // First operand (32-bit)
     input wire [31:0] b,         // Second operand (32-bit)
     input wire [3:0] op,         // Operation code
