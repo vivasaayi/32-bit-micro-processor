@@ -11,6 +11,10 @@ echo ""
 # Make sure we're in the right directory
 cd "$(dirname "$0")"
 
+# Clean up any existing temp directory
+echo "Cleaning up previous test results..."
+rm -rf temp/
+
 # Run the Python test runner
 python3 test_all_asm.py
 
