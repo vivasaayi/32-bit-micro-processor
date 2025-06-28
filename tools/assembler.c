@@ -37,32 +37,34 @@ typedef enum {
     OP_SUBI  = 0x07,  // Subtract immediate
     OP_MUL   = 0x08,  // Multiply
     OP_DIV   = 0x09,  // Divide
+    // JVM Enhancement: Add modulo operation
+    OP_MOD   = 0x0A,  // Modulo (remainder)
     
-    // Logical
-    OP_AND   = 0x0A,  // Logical AND
-    OP_OR    = 0x0B,  // Logical OR
-    OP_XOR   = 0x0C,  // Logical XOR
-    OP_NOT   = 0x0D,  // Logical NOT
-    OP_SHL   = 0x0E,  // Shift left logical
-    OP_SHR   = 0x0F,  // Shift right logical
+    // Logical (updated opcodes)
+    OP_AND   = 0x0B,  // Logical AND
+    OP_OR    = 0x0C,  // Logical OR
+    OP_XOR   = 0x0D,  // Logical XOR
+    OP_NOT   = 0x0E,  // Logical NOT
+    OP_SHL   = 0x0F,  // Shift left logical
+    OP_SHR   = 0x10,  // Shift right logical
     
-    // Comparison & Branches (matching CPU opcodes)
-    OP_CMP   = 0x10,  // Compare
-    OP_JMP   = 0x11,  // Unconditional jump
-    OP_JZ    = 0x12,  // Jump if zero
-    OP_JNZ   = 0x13,  // Jump if not zero
-    OP_JC    = 0x14,  // Jump if carry
-    OP_JNC   = 0x15,  // Jump if no carry
-    OP_JLT   = 0x16,  // Jump if less than
-    OP_JGE   = 0x17,  // Jump if greater or equal
-    OP_JLE   = 0x18,  // Jump if less or equal
-    OP_JN    = 0x19,  // Jump if negative
+    // Comparison & Branches (updated opcodes)
+    OP_CMP   = 0x11,  // Compare (updated from 0x10)
+    OP_JMP   = 0x12,  // Unconditional jump
+    OP_JZ    = 0x13,  // Jump if zero
+    OP_JNZ   = 0x14,  // Jump if not zero
+    OP_JC    = 0x15,  // Jump if carry
+    OP_JNC   = 0x16,  // Jump if no carry
+    OP_JLT   = 0x17,  // Jump if less than
+    OP_JGE   = 0x18,  // Jump if greater or equal
+    OP_JLE   = 0x19,  // Jump if less or equal
+    OP_JN    = 0x1A,  // Jump if negative
     
-    // Function Calls & Stack
-    OP_CALL  = 0x1A,  // Function call
-    OP_RET   = 0x1B,  // Return from function
-    OP_PUSH  = 0x1C,  // Push register to stack
-    OP_POP   = 0x1D,  // Pop from stack to register
+    // Function Calls & Stack (updated opcodes)
+    OP_CALL  = 0x1B,  // Function call
+    OP_RET   = 0x1C,  // Return from function
+    OP_PUSH  = 0x1D,  // Push register to stack
+    OP_POP   = 0x1E,  // Pop from stack to register
     
     // System
     OP_HALT  = 0x1F,  // Halt processor
@@ -110,6 +112,7 @@ static const instruction_def_t instructions[] = {
     {"SUBI",  OP_SUBI,  INST_TYPE_RRI},
     {"MUL",   OP_MUL,   INST_TYPE_RRR},
     {"DIV",   OP_DIV,   INST_TYPE_RRR},
+    {"MOD",   OP_MOD,   INST_TYPE_RRR},
     
     // Logical
     {"AND",   OP_AND,   INST_TYPE_RRR},

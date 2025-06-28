@@ -44,6 +44,7 @@ typedef enum {
     TOK_MINUS,
     TOK_MULTIPLY,
     TOK_DIVIDE,
+    TOK_MODULO,     // JVM Enhancement: Add modulo operator for % symbol
     TOK_ASSIGN,
     TOK_EQUAL,
     TOK_NOT_EQUAL,
@@ -408,6 +409,12 @@ void tokenize(const char *text) {
                     strcpy(tok.value, "]");
                     advance_char();
                     break;
+                // JVM Enhancement: Add modulo operator lexing
+                case '%':
+                    tok.type = TOK_MODULO;
+                    strcpy(tok.value, "%");
+                    advance_char();
+                    break;
                 default:
                     lexer_error("Unexpected character");
             }
@@ -547,7 +554,7 @@ int parse_primary() {
 int parse_multiplication() {
     int left_reg = parse_primary();
     
-    while (current_token()->type == TOK_MULTIPLY || current_token()->type == TOK_DIVIDE) {
+    while (current_token()->type == TOK_MULTIPLY || current_token()->type == TOK_DIVIDE || current_token()->type == TOK_MODULO) {
         Token *op = advance_token();
         int right_reg = parse_primary();
         int result_reg = codegen.next_reg++;
@@ -556,8 +563,10 @@ int parse_multiplication() {
         char instr[256];
         if (op->type == TOK_MULTIPLY) {
             snprintf(instr, sizeof(instr), "MUL R%d, R%d, R%d", result_reg, left_reg, right_reg);
-        } else {
+        } else if (op->type == TOK_DIVIDE) {
             snprintf(instr, sizeof(instr), "DIV R%d, R%d, R%d", result_reg, left_reg, right_reg);
+        } else { // TOK_MODULO - JVM Enhancement
+            snprintf(instr, sizeof(instr), "MOD R%d, R%d, R%d", result_reg, left_reg, right_reg);
         }
         emit(instr);
         left_reg = result_reg;

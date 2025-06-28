@@ -9,35 +9,37 @@
  * - Logic: AND, OR, XOR, NOT
  * - Shift: SHL, SHR, ROL, ROR
  * - Compare: CMP
- * - 32-bit specific: MUL (multiply), DIV (divide)
+ * - 32-bit specific: MUL (multiply), DIV (divide), MOD (modulo)
  */
 
 module alu (
     input wire [31:0] a,         // First operand (32-bit)
     input wire [31:0] b,         // Second operand (32-bit)
-    input wire [3:0] op,         // Operation code
+    input wire [4:0] op,         // Operation code (5-bit for JVM support)
     input wire [7:0] flags_in,   // Input flags
     output reg [31:0] result,    // Result (32-bit)
     output reg [7:0] flags_out   // Output flags
 );
 
-    // ALU operation codes
-    localparam ALU_ADD  = 4'h0;
-    localparam ALU_SUB  = 4'h1;
-    localparam ALU_ADC  = 4'h2;
-    localparam ALU_SBC  = 4'h3;
-    localparam ALU_AND  = 4'h4;
-    localparam ALU_OR   = 4'h5;
-    localparam ALU_XOR  = 4'h6;
-    localparam ALU_NOT  = 4'h7;
-    localparam ALU_SHL  = 4'h8;
-    localparam ALU_SHR  = 4'h9;
-    localparam ALU_ROL  = 4'hA;
-    localparam ALU_ROR  = 4'hB;
-    localparam ALU_CMP  = 4'hC;
-    localparam ALU_PASS = 4'hD;
-    localparam ALU_MUL  = 4'hE;  // Multiply
-    localparam ALU_DIV  = 4'hF;  // Divide
+    // ALU operation codes (5-bit for JVM support)
+    localparam ALU_ADD  = 5'h0;
+    localparam ALU_SUB  = 5'h1;
+    localparam ALU_ADC  = 5'h2;
+    localparam ALU_SBC  = 5'h3;
+    localparam ALU_AND  = 5'h4;
+    localparam ALU_OR   = 5'h5;
+    localparam ALU_XOR  = 5'h6;
+    localparam ALU_NOT  = 5'h7;
+    localparam ALU_SHL  = 5'h8;
+    localparam ALU_SHR  = 5'h9;
+    localparam ALU_ROL  = 5'hA;
+    localparam ALU_ROR  = 5'hB;
+    localparam ALU_CMP  = 5'hC;
+    localparam ALU_PASS = 5'hD;
+    localparam ALU_MUL  = 5'hE;  // Multiply
+    localparam ALU_DIV  = 5'hF;  // Divide
+    // JVM Enhancement: Add modulo operation for IREM bytecode
+    localparam ALU_MOD  = 5'h10; // Modulo (remainder)
 
     // Flag bit positions
     localparam FLAG_CARRY     = 0;
@@ -52,7 +54,7 @@ module alu (
     reg [31:0] operand_b;
     
     // Debug signals
-    reg [3:0] debug_op;
+    reg [4:0] debug_op;
     
     always @(*) begin
         // Initialize
@@ -156,6 +158,18 @@ module alu (
                     flags_out[FLAG_CARRY] = 1'b0;
                 end else begin
                     result = 32'hFFFFFFFF; // Division by zero
+                    flags_out[FLAG_CARRY] = 1'b1;
+                end
+            end
+            
+            // JVM Enhancement: Modulo operation for IREM bytecode
+            ALU_MOD: begin
+                // 32-bit modulo (remainder)
+                if (operand_b != 0) begin
+                    result = operand_a % operand_b;
+                    flags_out[FLAG_CARRY] = 1'b0;
+                end else begin
+                    result = 32'h0; // Modulo by zero
                     flags_out[FLAG_CARRY] = 1'b1;
                 end
             end

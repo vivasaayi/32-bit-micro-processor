@@ -55,7 +55,7 @@ module cpu_core (
     
     // ALU signals
     wire [31:0] alu_a, alu_b, alu_result;
-    wire [3:0] alu_op;
+    wire [4:0] alu_op;
     wire [7:0] flags_in, flags_out;
     
     // Register file signals
@@ -239,18 +239,19 @@ module cpu_core (
     // ALU connections
     assign alu_a = reg_data_a;
     assign alu_b = is_immediate_inst ? immediate : reg_data_b;
-    assign alu_op = (opcode == 5'h04 || opcode == 5'h05) ? 4'h0 : // ADD/ADDI
-                   (opcode == 5'h06 || opcode == 5'h07) ? 4'h1 : // SUB/SUBI
-                   (opcode == 5'h08) ? 4'hE :                     // MUL (assuming ALU_MUL = 4'hE)
-                   (opcode == 5'h09) ? 4'hF :                     // DIV (assuming ALU_DIV = 4'hF)
-                   (opcode == 5'h0A) ? 4'h4 :                     // AND
-                   (opcode == 5'h0B) ? 4'h5 :                     // OR
-                   (opcode == 5'h0C) ? 4'h6 :                     // XOR
-                   (opcode == 5'h0D) ? 4'h7 :                     // NOT
-                   (opcode == 5'h0E) ? 4'h8 :                     // SHL
-                   (opcode == 5'h0F) ? 4'h9 :                     // SHR
-                   (opcode == 5'h10) ? 4'hC :                     // CMP
-                   4'h0; // Default ADD
+    assign alu_op = (opcode == 5'h04 || opcode == 5'h05) ? 5'h0 : // ADD/ADDI
+                   (opcode == 5'h06 || opcode == 5'h07) ? 5'h1 : // SUB/SUBI
+                   (opcode == 5'h08) ? 5'hE :                     // MUL (assuming ALU_MUL = 5'hE)
+                   (opcode == 5'h09) ? 5'hF :                     // DIV (assuming ALU_DIV = 5'hF)
+                   (opcode == 5'h0A) ? 5'h10 :                    // MOD (ALU_MOD = 5'h10) - JVM Enhancement
+                   (opcode == 5'h0B) ? 5'h4 :                     // AND
+                   (opcode == 5'h0C) ? 5'h5 :                     // OR
+                   (opcode == 5'h0D) ? 5'h6 :                     // XOR
+                   (opcode == 5'h0E) ? 5'h7 :                     // NOT
+                   (opcode == 5'h0F) ? 5'h8 :                     // SHL
+                   (opcode == 5'h10) ? 5'h9 :                     // SHR
+                   (opcode == 5'h11) ? 5'hC :                     // CMP (updated opcode)
+                   5'h0; // Default ADD
     
     assign flags_in = flags_reg; // Use stored flags as input to ALU
     
