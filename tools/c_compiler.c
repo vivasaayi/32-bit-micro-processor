@@ -33,6 +33,8 @@ typedef enum {
     // Keywords
     TOK_INT,
     TOK_VOID,
+    TOK_STRUCT,     // JVM Enhancement: Add struct support
+    TOK_SIZEOF,     // JVM Enhancement: Add sizeof support for malloc
     TOK_IF,
     TOK_ELSE,
     TOK_WHILE,
@@ -55,6 +57,8 @@ typedef enum {
     TOK_LOGICAL_AND,
     TOK_LOGICAL_OR,
     TOK_AMPERSAND,
+    TOK_DOT,        // JVM Enhancement: Add struct member access
+    TOK_ARROW,      // JVM Enhancement: Add pointer member access
     
     // Delimiters
     TOK_SEMICOLON,
@@ -81,7 +85,23 @@ typedef struct {
     char name[MAX_TOKEN_LEN];
     int reg_num;
     char type[32];
+    int is_array;       // JVM Enhancement: Track if variable is array
+    int array_size;     // JVM Enhancement: Array size
+    int is_pointer;     // JVM Enhancement: Track if variable is pointer
+    int is_struct;      // JVM Enhancement: Track if variable is struct
+    char struct_type[MAX_TOKEN_LEN];  // JVM Enhancement: Struct type name
+    int base_address;   // JVM Enhancement: Base address for arrays/structs
 } Variable;
+
+// JVM Enhancement: Struct definition
+typedef struct {
+    char name[MAX_TOKEN_LEN];
+    char members[32][MAX_TOKEN_LEN];  // member names
+    char member_types[32][32];        // member types  
+    int member_offsets[32];           // byte offsets
+    int member_count;
+    int total_size;                   // total struct size in bytes
+} StructDef;
 
 typedef struct {
     Token tokens[MAX_TOKENS];
@@ -94,8 +114,11 @@ typedef struct {
     int count;
     Variable variables[MAX_VARIABLES];
     int var_count;
+    StructDef structs[MAX_VARIABLES];  // JVM Enhancement: Struct definitions
+    int struct_count;                   // JVM Enhancement: Number of structs
     int next_reg;
     int label_counter;
+    int heap_ptr;                      // JVM Enhancement: Track heap allocation
 } CodeGenerator;
 
 // Global state
@@ -214,6 +237,8 @@ Token read_identifier() {
     // Check if it's a keyword
     if (strcmp(tok.value, "int") == 0) tok.type = TOK_INT;
     else if (strcmp(tok.value, "void") == 0) tok.type = TOK_VOID;
+    else if (strcmp(tok.value, "struct") == 0) tok.type = TOK_STRUCT;  // JVM Enhancement
+    else if (strcmp(tok.value, "sizeof") == 0) tok.type = TOK_SIZEOF;  // JVM Enhancement
     else if (strcmp(tok.value, "if") == 0) tok.type = TOK_IF;
     else if (strcmp(tok.value, "else") == 0) tok.type = TOK_ELSE;
     else if (strcmp(tok.value, "while") == 0) tok.type = TOK_WHILE;
@@ -275,9 +300,15 @@ void tokenize(const char *text) {
                     advance_char();
                     break;
                 case '-':
-                    tok.type = TOK_MINUS;
-                    strcpy(tok.value, "-");
-                    advance_char();
+                    if (peek_char(1) == '>') {
+                        tok.type = TOK_ARROW;
+                        strcpy(tok.value, "->");
+                        advance_char(); advance_char();
+                    } else {
+                        tok.type = TOK_MINUS;
+                        strcpy(tok.value, "-");
+                        advance_char();
+                    }
                     break;
                 case '*':
                     tok.type = TOK_MULTIPLY;
@@ -415,6 +446,12 @@ void tokenize(const char *text) {
                     strcpy(tok.value, "%");
                     advance_char();
                     break;
+                // JVM Enhancement: Add struct member access
+                case '.':
+                    tok.type = TOK_DOT;
+                    strcpy(tok.value, ".");
+                    advance_char();
+                    break;
                 default:
                     lexer_error("Unexpected character");
             }
@@ -464,9 +501,50 @@ int allocate_register(const char *var_name) {
     strcpy(var.name, var_name);
     var.reg_num = codegen.next_reg++;
     strcpy(var.type, "int");
+    var.is_array = 0;        // JVM Enhancement: Initialize array flag
+    var.array_size = 0;      // JVM Enhancement: Initialize array size
+    var.is_pointer = 0;      // JVM Enhancement: Initialize pointer flag
+    var.is_struct = 0;       // JVM Enhancement: Initialize struct flag
+    strcpy(var.struct_type, ""); // JVM Enhancement: Initialize struct type
+    var.base_address = 0;    // JVM Enhancement: Initialize base address
     
     codegen.variables[codegen.var_count++] = var;
     return var.reg_num;
+}
+
+// JVM Enhancement: Allocate array with heap memory
+int allocate_array(const char *var_name, int size, const char *type) {
+    Variable var;
+    strcpy(var.name, var_name);
+    var.reg_num = codegen.next_reg++;
+    strcpy(var.type, type);
+    var.is_array = 1;
+    var.array_size = size;
+    var.is_pointer = 1;  // Arrays are implemented as pointers
+    var.is_struct = 0;
+    strcpy(var.struct_type, "");
+    var.base_address = codegen.heap_ptr;  // Allocate on heap
+    
+    // Emit code to allocate array on heap
+    char instr[256];
+    snprintf(instr, sizeof(instr), "LOADI R%d, #%d", var.reg_num, var.base_address);
+    emit(instr);
+    
+    // Update heap pointer (assuming 4 bytes per element)
+    codegen.heap_ptr += size * 4;
+    
+    codegen.variables[codegen.var_count++] = var;
+    return var.reg_num;
+}
+
+// JVM Enhancement: Find struct definition
+StructDef* find_struct(const char *name) {
+    for (int i = 0; i < codegen.struct_count; i++) {
+        if (strcmp(codegen.structs[i].name, name) == 0) {
+            return &codegen.structs[i];
+        }
+    }
+    return NULL;
 }
 
 char *generate_label(const char *prefix) {
@@ -520,22 +598,234 @@ int parse_primary() {
         return reg;
     }
     
+    // JVM Enhancement: Handle sizeof operator
+    if (tok->type == TOK_SIZEOF) {
+        advance_token();
+        expect_token(TOK_LPAREN);
+        Token *type_tok = current_token();
+        if (type_tok->type == TOK_STRUCT) {
+            advance_token();
+            Token *struct_name_tok = expect_token(TOK_IDENTIFIER);
+            StructDef *struct_def = find_struct(struct_name_tok->value);
+            if (!struct_def) {
+                parser_error("Unknown struct type");
+            }
+            expect_token(TOK_RPAREN);
+            
+            int reg = codegen.next_reg++;
+            if (codegen.next_reg >= 30) codegen.next_reg = 1;
+            char instr[256];
+            snprintf(instr, sizeof(instr), "LOADI R%d, #%d", reg, struct_def->total_size);
+            emit(instr);
+            return reg;
+        } else if (type_tok->type == TOK_INT) {
+            advance_token();
+            expect_token(TOK_RPAREN);
+            
+            int reg = codegen.next_reg++;
+            if (codegen.next_reg >= 30) codegen.next_reg = 1;
+            char instr[256];
+            snprintf(instr, sizeof(instr), "LOADI R%d, #4", reg);  // int is 4 bytes
+            emit(instr);
+            return reg;
+        }
+        parser_error("Unsupported sizeof operand");
+    }
+    
     if (tok->type == TOK_IDENTIFIER) {
         advance_token();
+        char var_name[MAX_TOKEN_LEN];
+        strcpy(var_name, tok->value);
+        
         if (current_token()->type == TOK_LPAREN) {
             // Function call
             advance_token(); // consume '('
             
-            // For simplicity, assume no arguments for now
+            // JVM Enhancement: Handle function calls with arguments
+            int arg_count = 0;
+            int arg_regs[16];  // Support up to 16 arguments
+            
+            while (current_token()->type != TOK_RPAREN) {
+                if (arg_count > 0) {
+                    expect_token(TOK_COMMA);
+                }
+                arg_regs[arg_count++] = parse_expression();
+                if (arg_count >= 16) {
+                    parser_error("Too many function arguments");
+                }
+            }
             expect_token(TOK_RPAREN);
             
+            // JVM Enhancement: Handle special functions like malloc and free
+            if (strcmp(var_name, "malloc") == 0) {
+                if (arg_count != 1) {
+                    parser_error("malloc requires exactly one argument");
+                }
+                
+                // Emit malloc implementation
+                int result_reg = codegen.next_reg++;
+                if (codegen.next_reg >= 30) codegen.next_reg = 1;
+                
+                char instr[256];
+                snprintf(instr, sizeof(instr), "MOVE R%d, R29", result_reg);  // Current heap pointer
+                emit(instr);
+                snprintf(instr, sizeof(instr), "ADD R29, R29, R%d", arg_regs[0]);  // Update heap pointer
+                emit(instr);
+                
+                return result_reg;
+            } else if (strcmp(var_name, "free") == 0) {
+                if (arg_count != 1) {
+                    parser_error("free requires exactly one argument");
+                }
+                
+                // For simplicity, free is a no-op in our implementation
+                // In a real implementation, we'd track allocated blocks
+                emit("; free() - no-op in simple implementation");
+                
+                int result_reg = codegen.next_reg++;
+                if (codegen.next_reg >= 30) codegen.next_reg = 1;
+                return result_reg;
+            }
+            
+            // Emit argument setup code
+            for (int i = 0; i < arg_count; i++) {
+                char instr[256];
+                snprintf(instr, sizeof(instr), "MOVE R%d, R%d", i + 2, arg_regs[i]);  // R2, R3, etc.
+                emit(instr);
+            }
+            
             char instr[256];
-            snprintf(instr, sizeof(instr), "CALL %s", tok->value);
+            snprintf(instr, sizeof(instr), "CALL %s", var_name);
             emit(instr);
             return 1; // Result in R1
+        } else if (current_token()->type == TOK_LBRACKET) {
+            // JVM Enhancement: Array indexing
+            advance_token(); // consume '['
+            int index_reg = parse_expression();
+            expect_token(TOK_RBRACKET);
+            
+            // Find the array variable
+            Variable *var = NULL;
+            for (int i = 0; i < codegen.var_count; i++) {
+                if (strcmp(codegen.variables[i].name, var_name) == 0) {
+                    var = &codegen.variables[i];
+                    break;
+                }
+            }
+            
+            if (!var || !var->is_array) {
+                parser_error("Variable is not an array");
+            }
+            
+            // Calculate address: base + index * element_size
+            int addr_reg = codegen.next_reg++;
+            int elem_size_reg = codegen.next_reg++;
+            int result_reg = codegen.next_reg++;
+            if (codegen.next_reg >= 30) codegen.next_reg = 1;
+            
+            char instr[256];
+            int element_size = 4;  // Default to 4 bytes for int
+            
+            if (var->is_struct) {
+                // For struct arrays, calculate struct size
+                StructDef *struct_def = find_struct(var->struct_type);
+                if (struct_def) {
+                    element_size = struct_def->total_size;
+                }
+            }
+            
+            snprintf(instr, sizeof(instr), "LOADI R%d, #%d", elem_size_reg, element_size);
+            emit(instr);
+            snprintf(instr, sizeof(instr), "MUL R%d, R%d, R%d", addr_reg, index_reg, elem_size_reg);
+            emit(instr);
+            snprintf(instr, sizeof(instr), "ADD R%d, R%d, R%d", addr_reg, var->reg_num, addr_reg);
+            emit(instr);
+            
+            // Check if there's a struct member access after array index
+            if (current_token()->type == TOK_DOT) {
+                advance_token(); // consume '.'
+                Token *member_tok = expect_token(TOK_IDENTIFIER);
+                
+                if (!var->is_struct) {
+                    parser_error("Array element is not a struct");
+                }
+                
+                StructDef *struct_def = find_struct(var->struct_type);
+                if (!struct_def) {
+                    parser_error("Unknown struct type");
+                }
+                
+                // Find member offset
+                int member_offset = -1;
+                for (int i = 0; i < struct_def->member_count; i++) {
+                    if (strcmp(struct_def->members[i], member_tok->value) == 0) {
+                        member_offset = struct_def->member_offsets[i];
+                        break;
+                    }
+                }
+                
+                if (member_offset == -1) {
+                    parser_error("Unknown struct member");
+                }
+                
+                // Load struct member: address + member_offset
+                snprintf(instr, sizeof(instr), "LOAD R%d, R%d, #%d", result_reg, addr_reg, member_offset);
+                emit(instr);
+            } else {
+                // Just load the array element
+                snprintf(instr, sizeof(instr), "LOAD R%d, R%d, #0", result_reg, addr_reg);
+                emit(instr);
+            }
+            
+            return result_reg;
+        } else if (current_token()->type == TOK_DOT) {
+            // JVM Enhancement: Struct member access
+            advance_token(); // consume '.'
+            Token *member_tok = expect_token(TOK_IDENTIFIER);
+            
+            // Find the struct variable
+            Variable *var = NULL;
+            for (int i = 0; i < codegen.var_count; i++) {
+                if (strcmp(codegen.variables[i].name, var_name) == 0) {
+                    var = &codegen.variables[i];
+                    break;
+                }
+            }
+            
+            if (!var || !var->is_struct) {
+                parser_error("Variable is not a struct");
+            }
+            
+            StructDef *struct_def = find_struct(var->struct_type);
+            if (!struct_def) {
+                parser_error("Unknown struct type");
+            }
+            
+            // Find member offset
+            int member_offset = -1;
+            for (int i = 0; i < struct_def->member_count; i++) {
+                if (strcmp(struct_def->members[i], member_tok->value) == 0) {
+                    member_offset = struct_def->member_offsets[i];
+                    break;
+                }
+            }
+            
+            if (member_offset == -1) {
+                parser_error("Unknown struct member");
+            }
+            
+            // Generate code to access member
+            int result_reg = codegen.next_reg++;
+            if (codegen.next_reg >= 30) codegen.next_reg = 1;
+            
+            char instr[256];
+            snprintf(instr, sizeof(instr), "LOAD R%d, R%d, #%d", result_reg, var->reg_num, member_offset);
+            emit(instr);
+            
+            return result_reg;
         } else {
-            // Variable
-            int reg = allocate_register(tok->value);
+            // Simple variable
+            int reg = allocate_register(var_name);
             return reg;
         }
     }
@@ -788,48 +1078,194 @@ int parse_expression() {
     return parse_logical_or();
 }
 
+// JVM Enhancement: Parse struct definition
+void parse_struct_definition() {
+    expect_token(TOK_STRUCT);
+    Token *name_tok = expect_token(TOK_IDENTIFIER);
+    expect_token(TOK_LBRACE);
+    
+    StructDef struct_def;
+    strcpy(struct_def.name, name_tok->value);
+    struct_def.member_count = 0;
+    struct_def.total_size = 0;
+    
+    // Parse struct members
+    while (current_token()->type != TOK_RBRACE) {
+        Token *type_tok = current_token();
+        if (type_tok->type == TOK_INT) {
+            advance_token();
+            Token *member_tok = expect_token(TOK_IDENTIFIER);
+            
+            // Handle array members
+            int array_size = 1;
+            if (current_token()->type == TOK_LBRACKET) {
+                advance_token();
+                Token *size_tok = expect_token(TOK_NUMBER);
+                array_size = atoi(size_tok->value);
+                expect_token(TOK_RBRACKET);
+            }
+            
+            expect_token(TOK_SEMICOLON);
+            
+            strcpy(struct_def.members[struct_def.member_count], member_tok->value);
+            strcpy(struct_def.member_types[struct_def.member_count], "int");
+            struct_def.member_offsets[struct_def.member_count] = struct_def.total_size;
+            struct_def.member_count++;
+            
+            struct_def.total_size += 4 * array_size;  // 4 bytes per int
+        } else if (type_tok->type == TOK_STRUCT) {
+            advance_token();
+            Token *struct_type_tok = expect_token(TOK_IDENTIFIER);
+            Token *member_tok = expect_token(TOK_IDENTIFIER);
+            expect_token(TOK_SEMICOLON);
+            
+            // Find the referenced struct to get its size
+            StructDef *ref_struct = find_struct(struct_type_tok->value);
+            if (!ref_struct) {
+                parser_error("Unknown struct type");
+            }
+            
+            strcpy(struct_def.members[struct_def.member_count], member_tok->value);
+            snprintf(struct_def.member_types[struct_def.member_count], 32, "struct %s", struct_type_tok->value);
+            struct_def.member_offsets[struct_def.member_count] = struct_def.total_size;
+            struct_def.member_count++;
+            
+            struct_def.total_size += ref_struct->total_size;
+        } else {
+            parser_error("Unsupported struct member type");
+        }
+    }
+    
+    expect_token(TOK_RBRACE);
+    expect_token(TOK_SEMICOLON);
+    
+    // Add struct definition to global list
+    codegen.structs[codegen.struct_count++] = struct_def;
+}
+
 // Statement parsing
 void parse_var_declaration() {
-    expect_token(TOK_INT);
+    Token *type_tok = current_token();
+    
+    if (type_tok->type == TOK_INT) {
+        expect_token(TOK_INT);
 
-    bool is_pointer = false;
-    if (current_token()->type == TOK_MULTIPLY) {
-        is_pointer = true;
-        advance_token();
-    }
-    
-    Token *name_tok = expect_token(TOK_IDENTIFIER);
-    
-    int reg = allocate_register(name_tok->value);
-    
-    if (current_token()->type == TOK_ASSIGN) {
-        advance_token();
+        bool is_pointer = false;
+        if (current_token()->type == TOK_MULTIPLY) {
+            is_pointer = true;
+            advance_token();
+        }
         
-        if (is_pointer && current_token()->type == TOK_AMPERSAND) {
-            advance_token(); // consume '&'
-            Token *addr_of_var_tok = expect_token(TOK_IDENTIFIER);
-            int addr_of_var_reg = allocate_register(addr_of_var_tok->value);
-            // HACK: Assume the register for the variable holds the address we want.
-            char instr[256];
-            snprintf(instr, sizeof(instr), "MOVE R%d, R%d", reg, addr_of_var_reg);
-            emit(instr);
+        Token *name_tok = expect_token(TOK_IDENTIFIER);
+        
+        // JVM Enhancement: Handle array declarations
+        bool is_array = false;
+        int array_size = 0;
+        if (current_token()->type == TOK_LBRACKET) {
+            is_array = true;
+            advance_token();
+            if (current_token()->type == TOK_NUMBER) {
+                Token *size_tok = advance_token();
+                array_size = atoi(size_tok->value);
+            } else {
+                array_size = 1;  // Dynamic array, size unknown
+            }
+            expect_token(TOK_RBRACKET);
+        }
+        
+        int reg;
+        if (is_array) {
+            reg = allocate_array(name_tok->value, array_size, "int");
         } else {
-            int value_reg = parse_expression();
-            
-            if (value_reg != reg) {
-                char instr[256];
-                snprintf(instr, sizeof(instr), "MOVE R%d, R%d", reg, value_reg);
-                emit(instr);
+            reg = allocate_register(name_tok->value);
+            // Update variable properties
+            for (int i = 0; i < codegen.var_count; i++) {
+                if (strcmp(codegen.variables[i].name, name_tok->value) == 0) {
+                    codegen.variables[i].is_pointer = is_pointer;
+                    break;
+                }
             }
         }
-    } else {
-        // Initialize to 0
+        
+        if (current_token()->type == TOK_ASSIGN) {
+            advance_token();
+            
+            if (is_pointer && current_token()->type == TOK_AMPERSAND) {
+                advance_token(); // consume '&'
+                Token *addr_of_var_tok = expect_token(TOK_IDENTIFIER);
+                int addr_of_var_reg = allocate_register(addr_of_var_tok->value);
+                // HACK: Assume the register for the variable holds the address we want.
+                char instr[256];
+                snprintf(instr, sizeof(instr), "MOVE R%d, R%d", reg, addr_of_var_reg);
+                emit(instr);
+            } else {
+                int value_reg = parse_expression();
+                
+                if (value_reg != reg) {
+                    char instr[256];
+                    snprintf(instr, sizeof(instr), "MOVE R%d, R%d", reg, value_reg);
+                    emit(instr);
+                }
+            }
+        } else if (!is_array) {
+            // Initialize to 0 (arrays are already allocated)
+            char instr[256];
+            snprintf(instr, sizeof(instr), "MOVE R%d, R0", reg);
+            emit(instr);
+        }
+        
+        expect_token(TOK_SEMICOLON);
+    } else if (type_tok->type == TOK_STRUCT) {
+        // JVM Enhancement: Handle struct variable declarations
+        advance_token();
+        Token *struct_type_tok = expect_token(TOK_IDENTIFIER);
+        Token *var_name_tok = expect_token(TOK_IDENTIFIER);
+        
+        StructDef *struct_def = find_struct(struct_type_tok->value);
+        if (!struct_def) {
+            parser_error("Unknown struct type");
+        }
+        
+        // JVM Enhancement: Handle struct arrays
+        bool is_array = false;
+        int array_size = 1;
+        if (current_token()->type == TOK_LBRACKET) {
+            is_array = true;
+            advance_token();
+            if (current_token()->type == TOK_NUMBER) {
+                Token *size_tok = advance_token();
+                array_size = atoi(size_tok->value);
+            }
+            expect_token(TOK_RBRACKET);
+        }
+        
+        // Allocate struct variable
+        Variable var;
+        strcpy(var.name, var_name_tok->value);
+        var.reg_num = codegen.next_reg++;
+        strcpy(var.type, "struct");
+        var.is_array = is_array;
+        var.array_size = array_size;
+        var.is_pointer = is_array;  // Arrays are pointers to first element
+        var.is_struct = 1;
+        strcpy(var.struct_type, struct_type_tok->value);
+        var.base_address = codegen.heap_ptr;  // Allocate on heap
+        
+        // Emit code to allocate struct(s) on heap
         char instr[256];
-        snprintf(instr, sizeof(instr), "MOVE R%d, R0", reg);
+        snprintf(instr, sizeof(instr), "LOADI R%d, #%d", var.reg_num, var.base_address);
         emit(instr);
+        
+        // Update heap pointer
+        int total_size = struct_def->total_size * array_size;
+        codegen.heap_ptr += total_size;
+        
+        codegen.variables[codegen.var_count++] = var;
+        
+        expect_token(TOK_SEMICOLON);
+    } else {
+        parser_error("Expected type in variable declaration");
     }
-    
-    expect_token(TOK_SEMICOLON);
 }
 
 void parse_assignment() {
@@ -840,16 +1276,122 @@ void parse_assignment() {
     }
 
     Token *name_tok = expect_token(TOK_IDENTIFIER);
+    char var_name[MAX_TOKEN_LEN];
+    strcpy(var_name, name_tok->value);
+    
+    // JVM Enhancement: Handle array indexing in assignment
+    bool is_array_access = false;
+    int index_reg = 0;
+    if (current_token()->type == TOK_LBRACKET) {
+        is_array_access = true;
+        advance_token();
+        index_reg = parse_expression();
+        expect_token(TOK_RBRACKET);
+    }
+    
+    // JVM Enhancement: Handle struct member access in assignment
+    bool is_struct_access = false;
+    char member_name[MAX_TOKEN_LEN];
+    int member_offset = 0;
+    if (current_token()->type == TOK_DOT) {
+        is_struct_access = true;
+        advance_token();
+        Token *member_tok = expect_token(TOK_IDENTIFIER);
+        strcpy(member_name, member_tok->value);
+        
+        // Find the struct variable
+        Variable *var = NULL;
+        for (int i = 0; i < codegen.var_count; i++) {
+            if (strcmp(codegen.variables[i].name, var_name) == 0) {
+                var = &codegen.variables[i];
+                break;
+            }
+        }
+        
+        if (!var || (!var->is_struct && !is_array_access)) {
+            parser_error("Variable is not a struct");
+        }
+        
+        StructDef *struct_def = find_struct(var->struct_type);
+        if (!struct_def) {
+            parser_error("Unknown struct type");
+        }
+        
+        // Find member offset
+        member_offset = -1;
+        for (int i = 0; i < struct_def->member_count; i++) {
+            if (strcmp(struct_def->members[i], member_name) == 0) {
+                member_offset = struct_def->member_offsets[i];
+                break;
+            }
+        }
+        
+        if (member_offset == -1) {
+            parser_error("Unknown struct member");
+        }
+    }
+    
     expect_token(TOK_ASSIGN);
     int value_reg = parse_expression();
     
-    int var_reg = allocate_register(name_tok->value);
+    int var_reg = allocate_register(var_name);
 
     if (is_deref) {
         char instr[256];
         snprintf(instr, sizeof(instr), "STORE R%d, R%d, #0", value_reg, var_reg);
         emit(instr);
+    } else if (is_array_access) {
+        // Array assignment: arr[index] = value or arr[index].member = value
+        Variable *var = NULL;
+        for (int i = 0; i < codegen.var_count; i++) {
+            if (strcmp(codegen.variables[i].name, var_name) == 0) {
+                var = &codegen.variables[i];
+                break;
+            }
+        }
+        
+        if (!var || !var->is_array) {
+            parser_error("Variable is not an array");
+        }
+        
+        // Calculate address: base + index * element_size
+        int addr_reg = codegen.next_reg++;
+        int elem_size_reg = codegen.next_reg++;
+        if (codegen.next_reg >= 30) codegen.next_reg = 1;
+        
+        char instr[256];
+        int element_size = 4;  // Default to 4 bytes for int
+        
+        if (var->is_struct) {
+            // For struct arrays, calculate struct size
+            StructDef *struct_def = find_struct(var->struct_type);
+            if (struct_def) {
+                element_size = struct_def->total_size;
+            }
+        }
+        
+        snprintf(instr, sizeof(instr), "LOADI R%d, #%d", elem_size_reg, element_size);
+        emit(instr);
+        snprintf(instr, sizeof(instr), "MUL R%d, R%d, R%d", addr_reg, index_reg, elem_size_reg);
+        emit(instr);
+        snprintf(instr, sizeof(instr), "ADD R%d, R%d, R%d", addr_reg, var->reg_num, addr_reg);
+        emit(instr);
+        
+        if (is_struct_access) {
+            // Store to struct member: address + member_offset
+            snprintf(instr, sizeof(instr), "STORE R%d, R%d, #%d", value_reg, addr_reg, member_offset);
+        } else {
+            // Store to array element directly
+            snprintf(instr, sizeof(instr), "STORE R%d, R%d, #0", value_reg, addr_reg);
+        }
+        emit(instr);
+    } else if (is_struct_access) {
+        // Struct member assignment: struct.member = value
+        char instr[256];
+        snprintf(instr, sizeof(instr), "STORE R%d, R%d, #%d", value_reg, var_reg, member_offset);
+        emit(instr);
     } else {
+        // Simple variable assignment
         if (value_reg != var_reg) {
             char instr[256];
             snprintf(instr, sizeof(instr), "MOVE R%d, R%d", var_reg, value_reg);
@@ -954,7 +1496,15 @@ void parse_expression_statement() {
 void parse_statement() {
     Token *tok = current_token();
     
-    if (tok->type == TOK_INT) {
+    if (tok->type == TOK_STRUCT) {
+        // Check if this is a struct definition or variable declaration
+        if (token_stream.pos + 2 < token_stream.count && 
+            token_stream.tokens[token_stream.pos + 2].type == TOK_LBRACE) {
+            parse_struct_definition();
+        } else {
+            parse_var_declaration();
+        }
+    } else if (tok->type == TOK_INT) {
         parse_var_declaration();
     } else if (tok->type == TOK_IF) {
         parse_if_statement();
@@ -964,7 +1514,9 @@ void parse_statement() {
         parse_return_statement();
     } else if (tok->type == TOK_IDENTIFIER) {
         // Look ahead to determine if assignment or expression
-        if (token_stream.tokens[token_stream.pos + 1].type == TOK_ASSIGN) {
+        if (token_stream.tokens[token_stream.pos + 1].type == TOK_ASSIGN ||
+            token_stream.tokens[token_stream.pos + 1].type == TOK_LBRACKET ||
+            token_stream.tokens[token_stream.pos + 1].type == TOK_DOT) {
             parse_assignment();
         } else {
             parse_expression_statement();
@@ -979,8 +1531,13 @@ void parse_statement() {
 void parse_function() {
     // Parse return type
     Token *return_type = advance_token();
-    if (return_type->type != TOK_INT && return_type->type != TOK_VOID) {
+    if (return_type->type != TOK_INT && return_type->type != TOK_VOID && return_type->type != TOK_STRUCT) {
         parser_error("Expected return type");
+    }
+    
+    // JVM Enhancement: Handle struct return types
+    if (return_type->type == TOK_STRUCT) {
+        expect_token(TOK_IDENTIFIER);  // struct type name
     }
     
     // Parse function name
@@ -994,9 +1551,47 @@ void parse_function() {
     
     // Parse parameters
     expect_token(TOK_LPAREN);
-    // For simplicity, skip parameter parsing for now
+    
+    // JVM Enhancement: Parse function parameters
+    int param_count = 0;
     while (current_token()->type != TOK_RPAREN) {
-        advance_token();
+        if (param_count > 0) {
+            expect_token(TOK_COMMA);
+        }
+        
+        // Parse parameter type
+        Token *param_type = current_token();
+        if (param_type->type == TOK_INT) {
+            advance_token();
+        } else if (param_type->type == TOK_STRUCT) {
+            advance_token();
+            expect_token(TOK_IDENTIFIER);  // struct type name
+        } else {
+            parser_error("Expected parameter type");
+        }
+        
+        // Handle pointer parameters
+        bool is_pointer = false;
+        if (current_token()->type == TOK_MULTIPLY) {
+            is_pointer = true;
+            advance_token();
+        }
+        
+        // Parse parameter name
+        Token *param_name = expect_token(TOK_IDENTIFIER);
+        
+        // Allocate register for parameter (parameters passed in R2, R3, etc.)
+        int param_reg = allocate_register(param_name->value);
+        
+        // Emit code to move parameter from calling convention register
+        char param_instr[256];
+        snprintf(param_instr, sizeof(param_instr), "MOVE R%d, R%d", param_reg, param_count + 2);
+        emit(param_instr);
+        
+        param_count++;
+        if (param_count >= 14) {  // R2-R15 available for parameters
+            parser_error("Too many parameters");
+        }
     }
     expect_token(TOK_RPAREN);
     
@@ -1018,7 +1613,14 @@ void parse_function() {
 
 void parse_program() {
     while (current_token()->type != TOK_EOF) {
-        parse_function();
+        // JVM Enhancement: Handle struct definitions at top level
+        if (current_token()->type == TOK_STRUCT && 
+            token_stream.pos + 2 < token_stream.count &&
+            token_stream.tokens[token_stream.pos + 2].type == TOK_LBRACE) {
+            parse_struct_definition();
+        } else {
+            parse_function();
+        }
     }
 }
 
@@ -1026,17 +1628,20 @@ void generate_code() {
     // Initialize code generator
     codegen.count = 0;
     codegen.var_count = 0;
+    codegen.struct_count = 0;     // JVM Enhancement: Initialize struct count
     codegen.next_reg = 1;  // R0 is always zero
     codegen.label_counter = 0;
+    codegen.heap_ptr = 0x20000;   // JVM Enhancement: Start heap at 128KB
     
     // Generate startup code
-    emit("; Generated by Custom C Compiler");
+    emit("; Generated by Enhanced C Compiler");
+    emit("; Support for arrays, structs, malloc, and JVM features");
     emit(".org 0x8000");
     emit("");
     emit("; Initialize stack pointer");
     emit("LOADI R30, #0x000F0000");
     emit("; Initialize heap pointer");
-    emit("LOADI R29, #131072");
+    emit("LOADI R29, #0x20000");  // 128KB heap start
     emit("");
     
     // Parse the program
