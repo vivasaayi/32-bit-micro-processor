@@ -1293,11 +1293,21 @@ void parse_assignment() {
     bool is_struct_access = false;
     char member_name[MAX_TOKEN_LEN];
     int member_offset = 0;
+    bool is_struct_array_member = false;
+    
     if (current_token()->type == TOK_DOT) {
         is_struct_access = true;
         advance_token();
         Token *member_tok = expect_token(TOK_IDENTIFIER);
         strcpy(member_name, member_tok->value);
+        
+        // Check if this struct member is an array: struct.array[index]
+        if (current_token()->type == TOK_LBRACKET) {
+            is_struct_array_member = true;
+            advance_token();
+            index_reg = parse_expression();
+            expect_token(TOK_RBRACKET);
+        }
         
         // Find the struct variable
         Variable *var = NULL;
@@ -1386,10 +1396,46 @@ void parse_assignment() {
         }
         emit(instr);
     } else if (is_struct_access) {
-        // Struct member assignment: struct.member = value
-        char instr[256];
-        snprintf(instr, sizeof(instr), "STORE R%d, R%d, #%d", value_reg, var_reg, member_offset);
-        emit(instr);
+        // Struct member assignment: struct.member = value OR struct.array[index] = value
+        if (is_struct_array_member) {
+            // Handle struct.array[index] = value
+            // Calculate base address of struct member (which is an array)
+            int struct_member_addr_reg = codegen.next_reg++;
+            int elem_size_reg = codegen.next_reg++;
+            int final_addr_reg = codegen.next_reg++;
+            if (codegen.next_reg >= 30) codegen.next_reg = 1;
+            
+            // Find the struct variable
+            Variable *var = NULL;
+            for (int i = 0; i < codegen.var_count; i++) {
+                if (strcmp(codegen.variables[i].name, var_name) == 0) {
+                    var = &codegen.variables[i];
+                    break;
+                }
+            }
+            
+            char instr[256];
+            // Get address of struct member: struct_base + member_offset
+            snprintf(instr, sizeof(instr), "ADD R%d, R%d, #%d", struct_member_addr_reg, var->reg_num, member_offset);
+            emit(instr);
+            
+            // Calculate array element address: member_base + index * element_size
+            snprintf(instr, sizeof(instr), "LOADI R%d, #4", elem_size_reg);  // 4 bytes per int
+            emit(instr);
+            snprintf(instr, sizeof(instr), "MUL R%d, R%d, R%d", final_addr_reg, index_reg, elem_size_reg);
+            emit(instr);
+            snprintf(instr, sizeof(instr), "ADD R%d, R%d, R%d", final_addr_reg, struct_member_addr_reg, final_addr_reg);
+            emit(instr);
+            
+            // Store value at calculated address
+            snprintf(instr, sizeof(instr), "STORE R%d, R%d, #0", value_reg, final_addr_reg);
+            emit(instr);
+        } else {
+            // Simple struct member assignment: struct.member = value
+            char instr[256];
+            snprintf(instr, sizeof(instr), "STORE R%d, R%d, #%d", value_reg, var_reg, member_offset);
+            emit(instr);
+        }
     } else {
         // Simple variable assignment
         if (value_reg != var_reg) {
@@ -1513,10 +1559,26 @@ void parse_statement() {
     } else if (tok->type == TOK_RETURN) {
         parse_return_statement();
     } else if (tok->type == TOK_IDENTIFIER) {
-        // Look ahead to determine if assignment or expression
-        if (token_stream.tokens[token_stream.pos + 1].type == TOK_ASSIGN ||
-            token_stream.tokens[token_stream.pos + 1].type == TOK_LBRACKET ||
-            token_stream.tokens[token_stream.pos + 1].type == TOK_DOT) {
+        // Enhanced lookahead for complex assignment patterns: id.member[index] = value
+        int lookahead = 1;
+        bool is_assignment = false;
+        
+        while (token_stream.pos + lookahead < token_stream.count) {
+            TokenType ahead_type = token_stream.tokens[token_stream.pos + lookahead].type;
+            if (ahead_type == TOK_ASSIGN) {
+                is_assignment = true;
+                break;
+            } else if (ahead_type == TOK_LBRACKET || ahead_type == TOK_DOT || 
+                       ahead_type == TOK_RBRACKET || ahead_type == TOK_IDENTIFIER || 
+                       ahead_type == TOK_NUMBER) {
+                lookahead++;
+                continue;
+            } else {
+                break;
+            }
+        }
+        
+        if (is_assignment) {
             parse_assignment();
         } else {
             parse_expression_statement();
