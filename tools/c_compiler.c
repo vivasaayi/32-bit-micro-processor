@@ -33,8 +33,13 @@ typedef enum {
     // Keywords
     TOK_INT,
     TOK_VOID,
+    TOK_UINT8_T,    // JVM Enhancement: Add uint8_t support
+    TOK_TYPEDEF,    // JVM Enhancement: Add typedef support
+    TOK_ENUM,       // JVM Enhancement: Add enum support
+    TOK_INCLUDE,    // JVM Enhancement: Add #include support
     TOK_STRUCT,     // JVM Enhancement: Add struct support
     TOK_SIZEOF,     // JVM Enhancement: Add sizeof support for malloc
+    TOK_CONST,      // JVM Enhancement: Add const support
     TOK_IF,
     TOK_ELSE,
     TOK_WHILE,
@@ -50,6 +55,7 @@ typedef enum {
     TOK_ASSIGN,
     TOK_EQUAL,
     TOK_NOT_EQUAL,
+    TOK_NOT,        // JVM Enhancement: Add logical NOT operator
     TOK_LESS,
     TOK_GREATER,
     TOK_LESS_EQUAL,
@@ -116,9 +122,12 @@ typedef struct {
     int var_count;
     StructDef structs[MAX_VARIABLES];  // JVM Enhancement: Struct definitions
     int struct_count;                   // JVM Enhancement: Number of structs
+    char typedefs[MAX_VARIABLES][MAX_TOKEN_LEN];  // JVM Enhancement: Typedef registry
+    int typedef_count;                 // JVM Enhancement: Number of typedefs
     int next_reg;
     int label_counter;
     int heap_ptr;                      // JVM Enhancement: Track heap allocation
+    int string_count;                  // JVM Enhancement: Track string literals
 } CodeGenerator;
 
 // Global state
@@ -149,6 +158,8 @@ void parse_statement();
 void parse_function();
 void parse_program();
 void generate_code();
+int is_typedef_type(const char *name);  // JVM Enhancement: Check typedef types
+void parse_typedef();  // JVM Enhancement: Parse typedef declarations
 
 // Error handling
 void error(const char *msg) {
@@ -237,8 +248,12 @@ Token read_identifier() {
     // Check if it's a keyword
     if (strcmp(tok.value, "int") == 0) tok.type = TOK_INT;
     else if (strcmp(tok.value, "void") == 0) tok.type = TOK_VOID;
-    else if (strcmp(tok.value, "struct") == 0) tok.type = TOK_STRUCT;  // JVM Enhancement
-    else if (strcmp(tok.value, "sizeof") == 0) tok.type = TOK_SIZEOF;  // JVM Enhancement
+    else if (strcmp(tok.value, "uint8_t") == 0) tok.type = TOK_UINT8_T;  // JVM Enhancement
+    else if (strcmp(tok.value, "typedef") == 0) tok.type = TOK_TYPEDEF;  // JVM Enhancement
+    else if (strcmp(tok.value, "enum") == 0) tok.type = TOK_ENUM;        // JVM Enhancement
+    else if (strcmp(tok.value, "struct") == 0) tok.type = TOK_STRUCT;    // JVM Enhancement
+    else if (strcmp(tok.value, "sizeof") == 0) tok.type = TOK_SIZEOF;    // JVM Enhancement
+    else if (strcmp(tok.value, "const") == 0) tok.type = TOK_CONST;      // JVM Enhancement
     else if (strcmp(tok.value, "if") == 0) tok.type = TOK_IF;
     else if (strcmp(tok.value, "else") == 0) tok.type = TOK_ELSE;
     else if (strcmp(tok.value, "while") == 0) tok.type = TOK_WHILE;
@@ -355,7 +370,9 @@ void tokenize(const char *text) {
                         strcpy(tok.value, "!=");
                         advance_char(); advance_char();
                     } else {
-                        lexer_error("Unexpected character");
+                        tok.type = TOK_NOT;
+                        strcpy(tok.value, "!");
+                        advance_char();
                     }
                     break;
                 case '<':
@@ -452,6 +469,13 @@ void tokenize(const char *text) {
                     strcpy(tok.value, ".");
                     advance_char();
                     break;
+                // JVM Enhancement: Add preprocessor directive support
+                case '#':
+                    // Skip preprocessor directives for now (simple approach)
+                    while (peek_char(0) != '\n' && peek_char(0) != '\0') {
+                        advance_char();
+                    }
+                    continue;
                 default:
                     lexer_error("Unexpected character");
             }
@@ -587,6 +611,23 @@ Token *expect_token(TokenType type) {
 int parse_primary() {
     Token *tok = current_token();
     
+    // JVM Enhancement: Handle unary operators
+    if (tok->type == TOK_NOT) {
+        advance_token();
+        int operand_reg = parse_primary();
+        int result_reg = codegen.next_reg++;
+        if (codegen.next_reg >= 30) codegen.next_reg = 1;
+        
+        // Emit logical NOT: result = (operand == 0) ? 1 : 0
+        char instr[256];
+        snprintf(instr, sizeof(instr), "CMP R%d, R%d, R0", result_reg, operand_reg);
+        emit(instr);
+        snprintf(instr, sizeof(instr), "SETZ R%d", result_reg);  // Set 1 if zero, 0 otherwise
+        emit(instr);
+        
+        return result_reg;
+    }
+    
     if (tok->type == TOK_NUMBER) {
         advance_token();
         int reg = codegen.next_reg++;
@@ -595,6 +636,26 @@ int parse_primary() {
         char instr[256];
         snprintf(instr, sizeof(instr), "LOADI R%d, #%s", reg, tok->value);
         emit(instr);
+        return reg;
+    }
+    
+    // JVM Enhancement: Handle string literals
+    if (tok->type == TOK_STRING) {
+        advance_token();
+        int reg = codegen.next_reg++;
+        if (codegen.next_reg >= 30) codegen.next_reg = 1;
+        
+        // For now, we'll treat strings as numeric addresses
+        // In a real implementation, we'd have a string table
+        char instr[256];
+        snprintf(instr, sizeof(instr), "LOADI R%d, #str_%d", reg, codegen.string_count++);
+        emit(instr);
+        
+        // Emit string data (as comment for now)
+        char str_comment[512];
+        snprintf(str_comment, sizeof(str_comment), "; String literal: \"%s\"", tok->value);
+        emit(str_comment);
+        
         return reg;
     }
     
@@ -626,6 +687,19 @@ int parse_primary() {
             if (codegen.next_reg >= 30) codegen.next_reg = 1;
             char instr[256];
             snprintf(instr, sizeof(instr), "LOADI R%d, #4", reg);  // int is 4 bytes
+            emit(instr);
+            return reg;
+        } else if (type_tok->type == TOK_IDENTIFIER) {
+            // JVM Enhancement: Handle sizeof(typedef_type)
+            Token *typedef_name = advance_token();
+            expect_token(TOK_RPAREN);
+            
+            // For now, assume all typedef'd structs are 4 bytes (simplified)
+            // In a real implementation, we'd track the actual size
+            int reg = codegen.next_reg++;
+            if (codegen.next_reg >= 30) codegen.next_reg = 1;
+            char instr[256];
+            snprintf(instr, sizeof(instr), "LOADI R%d, #4", reg);  // Default size
             emit(instr);
             return reg;
         }
@@ -831,10 +905,68 @@ int parse_primary() {
     }
     
     if (tok->type == TOK_LPAREN) {
-        advance_token();
-        int reg = parse_expression();
-        expect_token(TOK_RPAREN);
-        return reg;
+        // JVM Enhancement: Distinguish between type cast and parenthesized expression
+        // Look ahead to see if this is a type cast: (type)expr vs (expr)
+        int lookahead_pos = token_stream.pos + 1;
+        bool is_type_cast = false;
+        
+        if (lookahead_pos < token_stream.count) {
+            TokenType ahead_type = token_stream.tokens[lookahead_pos].type;
+            // Check if it looks like a type: int, uint8_t, struct, identifier (for typedef)
+            if (ahead_type == TOK_INT || ahead_type == TOK_UINT8_T || 
+                ahead_type == TOK_STRUCT || ahead_type == TOK_VOID) {
+                is_type_cast = true;
+            } else if (ahead_type == TOK_IDENTIFIER) {
+                // Could be a typedef'd type, check if it's registered
+                char *identifier_name = token_stream.tokens[lookahead_pos].value;
+                if (is_typedef_type(identifier_name)) {
+                    is_type_cast = true;
+                } else if (lookahead_pos + 1 < token_stream.count) {
+                    // Or check if next token suggests it's a type (like * or ))
+                    TokenType next_type = token_stream.tokens[lookahead_pos + 1].type;
+                    if (next_type == TOK_MULTIPLY || next_type == TOK_RPAREN) {
+                        is_type_cast = true;
+                    }
+                }
+            }
+        }
+        
+        if (is_type_cast) {
+            // Parse type cast: (type)expression
+            advance_token(); // consume '('
+            
+            // Parse the cast type (but ignore it for now in code generation)
+            Token *cast_type = current_token();
+            if (cast_type->type == TOK_INT || cast_type->type == TOK_UINT8_T || 
+                cast_type->type == TOK_VOID || cast_type->type == TOK_IDENTIFIER) {
+                advance_token();
+            } else if (cast_type->type == TOK_STRUCT) {
+                advance_token();
+                expect_token(TOK_IDENTIFIER);
+            }
+            
+            // Handle pointer cast
+            if (current_token()->type == TOK_MULTIPLY) {
+                advance_token();
+            }
+            
+            expect_token(TOK_RPAREN);
+            
+            // Parse the expression being cast
+            int reg = parse_expression();
+            
+            // For now, type casts are essentially no-ops in our simple system
+            // In a real compiler, we'd emit type conversion code here
+            emit("; Type cast (no-op in simple implementation)");
+            
+            return reg;
+        } else {
+            // Regular parenthesized expression
+            advance_token();
+            int reg = parse_expression();
+            expect_token(TOK_RPAREN);
+            return reg;
+        }
     }
     
     parser_error("Unexpected token in expression");
@@ -1143,12 +1275,108 @@ void parse_struct_definition() {
     codegen.structs[codegen.struct_count++] = struct_def;
 }
 
+// JVM Enhancement: Parse typedef enum
+// JVM Enhancement: Parse typedef (general)
+void parse_typedef() {
+    expect_token(TOK_TYPEDEF);
+    
+    Token *next_tok = current_token();
+    if (next_tok->type == TOK_ENUM) {
+        // Handle typedef enum
+        expect_token(TOK_ENUM);
+        expect_token(TOK_LBRACE);
+        
+        // Parse enum values - for now, just skip them
+        while (current_token()->type != TOK_RBRACE) {
+            if (current_token()->type == TOK_IDENTIFIER) {
+                advance_token();
+                if (current_token()->type == TOK_ASSIGN) {
+                    advance_token();
+                    expect_token(TOK_NUMBER);  // Skip the assigned value
+                }
+                if (current_token()->type == TOK_COMMA) {
+                    advance_token();
+                }
+            } else {
+                advance_token();  // Skip unknown tokens
+            }
+        }
+        expect_token(TOK_RBRACE);
+        
+        // Get the typedef name
+        Token *typedef_name = expect_token(TOK_IDENTIFIER);
+        expect_token(TOK_SEMICOLON);
+        
+        // Register the typedef
+        if (codegen.typedef_count < MAX_VARIABLES) {
+            strcpy(codegen.typedefs[codegen.typedef_count++], typedef_name->value);
+        }
+        
+    } else if (next_tok->type == TOK_STRUCT) {
+        // Handle typedef struct
+        expect_token(TOK_STRUCT);
+        expect_token(TOK_LBRACE);
+        
+        // Parse struct members (simplified - just skip for now)
+        while (current_token()->type != TOK_RBRACE) {
+            // Skip member declarations
+            if (current_token()->type == TOK_IDENTIFIER || 
+                current_token()->type == TOK_INT || 
+                current_token()->type == TOK_UINT8_T) {
+                advance_token();
+            } else if (current_token()->type == TOK_MULTIPLY) {
+                advance_token();
+            } else if (current_token()->type == TOK_LBRACKET) {
+                advance_token();
+                if (current_token()->type == TOK_NUMBER) {
+                    advance_token();
+                }
+                expect_token(TOK_RBRACKET);
+            } else if (current_token()->type == TOK_SEMICOLON) {
+                advance_token();
+            } else {
+                advance_token();  // Skip unknown tokens
+            }
+        }
+        expect_token(TOK_RBRACE);
+        
+        // Get the typedef name
+        Token *typedef_name = expect_token(TOK_IDENTIFIER);
+        expect_token(TOK_SEMICOLON);
+        
+        // Register the typedef
+        if (codegen.typedef_count < MAX_VARIABLES) {
+            strcpy(codegen.typedefs[codegen.typedef_count++], typedef_name->value);
+        }
+        
+    } else {
+        parser_error("Unsupported typedef type");
+    }
+}
+
 // Statement parsing
 void parse_var_declaration() {
-    Token *type_tok = current_token();
+    Token *tok = current_token();
     
-    if (type_tok->type == TOK_INT) {
-        expect_token(TOK_INT);
+    // JVM Enhancement: Handle const qualifier
+    bool is_const = false;
+    if (tok->type == TOK_CONST) {
+        is_const = true;
+        advance_token();
+        tok = current_token();
+    }
+    
+    Token *type_tok = tok;
+    
+    if (type_tok->type == TOK_INT || type_tok->type == TOK_UINT8_T || type_tok->type == TOK_IDENTIFIER) {
+        if (type_tok->type == TOK_INT) {
+            expect_token(TOK_INT);
+        } else if (type_tok->type == TOK_UINT8_T) {
+            expect_token(TOK_UINT8_T);  // JVM Enhancement: Support uint8_t
+        } else if (type_tok->type == TOK_IDENTIFIER) {
+            // JVM Enhancement: Support typedef'd types
+            expect_token(TOK_IDENTIFIER);
+        }
 
         bool is_pointer = false;
         if (current_token()->type == TOK_MULTIPLY) {
@@ -1542,7 +1770,10 @@ void parse_expression_statement() {
 void parse_statement() {
     Token *tok = current_token();
     
-    if (tok->type == TOK_STRUCT) {
+    if (tok->type == TOK_TYPEDEF) {
+        // JVM Enhancement: Handle typedef (enum, struct, etc.)
+        parse_typedef();
+    } else if (tok->type == TOK_STRUCT) {
         // Check if this is a struct definition or variable declaration
         if (token_stream.pos + 2 < token_stream.count && 
             token_stream.tokens[token_stream.pos + 2].type == TOK_LBRACE) {
@@ -1550,7 +1781,8 @@ void parse_statement() {
         } else {
             parse_var_declaration();
         }
-    } else if (tok->type == TOK_INT) {
+    } else if (tok->type == TOK_INT || tok->type == TOK_UINT8_T || tok->type == TOK_CONST || 
+               (tok->type == TOK_IDENTIFIER && is_typedef_type(tok->value))) {  // JVM Enhancement: Add typedef types
         parse_var_declaration();
     } else if (tok->type == TOK_IF) {
         parse_if_statement();
@@ -1585,6 +1817,9 @@ void parse_statement() {
         }
     } else if (current_token()->type == TOK_MULTIPLY) {
         parse_assignment();
+    } else if (tok->type == TOK_STRING || tok->type == TOK_NUMBER) {
+        // JVM Enhancement: Handle expression statements starting with literals
+        parse_expression_statement();
     } else {
         parser_error("Unexpected token in statement");
     }
@@ -1593,13 +1828,30 @@ void parse_statement() {
 void parse_function() {
     // Parse return type
     Token *return_type = advance_token();
-    if (return_type->type != TOK_INT && return_type->type != TOK_VOID && return_type->type != TOK_STRUCT) {
+    if (return_type->type != TOK_INT && return_type->type != TOK_VOID && 
+        return_type->type != TOK_STRUCT && return_type->type != TOK_IDENTIFIER) {
         parser_error("Expected return type");
+    }
+    
+    // JVM Enhancement: Validate typedef'd return types
+    if (return_type->type == TOK_IDENTIFIER) {
+        // Check if it's a valid typedef (for better error reporting)
+        if (!is_typedef_type(return_type->value)) {
+            // For now, allow unknown identifiers (might be forward declarations)
+            // In a real compiler, we'd have better type resolution
+        }
     }
     
     // JVM Enhancement: Handle struct return types
     if (return_type->type == TOK_STRUCT) {
         expect_token(TOK_IDENTIFIER);  // struct type name
+    }
+    
+    // JVM Enhancement: Handle pointer return types
+    bool is_pointer_return = false;
+    if (current_token()->type == TOK_MULTIPLY) {
+        is_pointer_return = true;
+        advance_token();
     }
     
     // Parse function name
@@ -1614,48 +1866,69 @@ void parse_function() {
     // Parse parameters
     expect_token(TOK_LPAREN);
     
-    // JVM Enhancement: Parse function parameters
-    int param_count = 0;
-    while (current_token()->type != TOK_RPAREN) {
-        if (param_count > 0) {
-            expect_token(TOK_COMMA);
+    // JVM Enhancement: Handle void parameters (no parameters)
+    if (current_token()->type == TOK_VOID) {
+        advance_token();
+        expect_token(TOK_RPAREN);
+        // No parameters to process
+    } else {
+        // JVM Enhancement: Parse function parameters
+        int param_count = 0;
+        while (current_token()->type != TOK_RPAREN) {
+            if (param_count > 0) {
+                expect_token(TOK_COMMA);
+            }
+            
+            // Parse parameter type
+            Token *param_type = current_token();
+            
+            // JVM Enhancement: Handle const qualifier
+            bool is_const = false;
+            if (param_type->type == TOK_CONST) {
+                is_const = true;
+                advance_token();
+                param_type = current_token();
+            }
+            
+            if (param_type->type == TOK_INT) {
+                advance_token();
+            } else if (param_type->type == TOK_UINT8_T) {
+                advance_token();
+            } else if (param_type->type == TOK_IDENTIFIER && strcmp(param_type->value, "char") == 0) {
+                // Handle 'char' as identifier since it's not in our token list
+                advance_token();
+            } else if (param_type->type == TOK_STRUCT) {
+                advance_token();
+                expect_token(TOK_IDENTIFIER);  // struct type name
+            } else {
+                parser_error("Expected parameter type");
+            }
+            
+            // Handle pointer parameters
+            bool is_pointer = false;
+            if (current_token()->type == TOK_MULTIPLY) {
+                is_pointer = true;
+                advance_token();
+            }
+            
+            // Parse parameter name
+            Token *param_name = expect_token(TOK_IDENTIFIER);
+            
+            // Allocate register for parameter (parameters passed in R2, R3, etc.)
+            int param_reg = allocate_register(param_name->value);
+            
+            // Emit code to move parameter from calling convention register
+            char param_instr[256];
+            snprintf(param_instr, sizeof(param_instr), "MOVE R%d, R%d", param_reg, param_count + 2);
+            emit(param_instr);
+            
+            param_count++;
+            if (param_count >= 14) {  // R2-R15 available for parameters
+                parser_error("Too many parameters");
+            }
         }
-        
-        // Parse parameter type
-        Token *param_type = current_token();
-        if (param_type->type == TOK_INT) {
-            advance_token();
-        } else if (param_type->type == TOK_STRUCT) {
-            advance_token();
-            expect_token(TOK_IDENTIFIER);  // struct type name
-        } else {
-            parser_error("Expected parameter type");
-        }
-        
-        // Handle pointer parameters
-        bool is_pointer = false;
-        if (current_token()->type == TOK_MULTIPLY) {
-            is_pointer = true;
-            advance_token();
-        }
-        
-        // Parse parameter name
-        Token *param_name = expect_token(TOK_IDENTIFIER);
-        
-        // Allocate register for parameter (parameters passed in R2, R3, etc.)
-        int param_reg = allocate_register(param_name->value);
-        
-        // Emit code to move parameter from calling convention register
-        char param_instr[256];
-        snprintf(param_instr, sizeof(param_instr), "MOVE R%d, R%d", param_reg, param_count + 2);
-        emit(param_instr);
-        
-        param_count++;
-        if (param_count >= 14) {  // R2-R15 available for parameters
-            parser_error("Too many parameters");
-        }
+        expect_token(TOK_RPAREN);
     }
-    expect_token(TOK_RPAREN);
     
     // Parse function body
     expect_token(TOK_LBRACE);
@@ -1680,6 +1953,9 @@ void parse_program() {
             token_stream.pos + 2 < token_stream.count &&
             token_stream.tokens[token_stream.pos + 2].type == TOK_LBRACE) {
             parse_struct_definition();
+        } else if (current_token()->type == TOK_TYPEDEF) {
+            // Handle all typedef variants: enum, struct, etc.
+            parse_typedef();
         } else {
             parse_function();
         }
@@ -1691,9 +1967,11 @@ void generate_code() {
     codegen.count = 0;
     codegen.var_count = 0;
     codegen.struct_count = 0;     // JVM Enhancement: Initialize struct count
+    codegen.typedef_count = 0;    // JVM Enhancement: Initialize typedef count
     codegen.next_reg = 1;  // R0 is always zero
     codegen.label_counter = 0;
     codegen.heap_ptr = 0x20000;   // JVM Enhancement: Start heap at 128KB
+    codegen.string_count = 0;     // JVM Enhancement: Initialize string count
     
     // Generate startup code
     emit("; Generated by Enhanced C Compiler");
@@ -1712,6 +1990,16 @@ void generate_code() {
     
     emit("");
     emit("HALT");
+}
+
+// JVM Enhancement: Check if identifier is a typedef'd type
+int is_typedef_type(const char *name) {
+    for (int i = 0; i < codegen.typedef_count; i++) {
+        if (strcmp(codegen.typedefs[i], name) == 0) {
+            return 1;  // true
+        }
+    }
+    return 0;  // false
 }
 
 // Main function
