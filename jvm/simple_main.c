@@ -3,7 +3,7 @@
 /* Simple test programs written as bytecode arrays */
 
 /* Test 1: Simple arithmetic - compute 5 + 3 * 2 */
-uint8_t test_arithmetic[] = {
+int test_arithmetic[] = {
     OP_ICONST_5,    /* Push 5 */
     OP_ICONST_3,    /* Push 3 */
     OP_ICONST_2,    /* Push 2 */
@@ -13,7 +13,7 @@ uint8_t test_arithmetic[] = {
 };
 
 /* Test 2: Local variables - store and load */
-uint8_t test_locals[] = {
+int test_locals[] = {
     OP_BIPUSH, 42,      /* Push 42 */
     OP_ISTORE_0,        /* Store in local 0 */
     OP_BIPUSH, 10,      /* Push 10 */
@@ -24,7 +24,7 @@ uint8_t test_locals[] = {
     OP_IRETURN          /* Return 52 */
 };
 
-void run_test(const char* name, uint8_t* bytecode, int length) {
+void run_test(const char* name, int* bytecode, int length) {
     printf("Running test\n");
     
     JVM* jvm = jvm_create();

@@ -4,7 +4,7 @@
 #define ARUVIJVM_VERSION 1
 
 /* Load bytecode from file */
-int load_bytecode_file(const char* filename, uint8_t** bytecode, int* length) {
+int load_bytecode_file(const char* filename, int** bytecode, int* length) {
     FILE* file = fopen(filename, "rb");
     if (!file) {
         printf("Error: Cannot open file %s\n", filename);
@@ -35,7 +35,7 @@ int load_bytecode_file(const char* filename, uint8_t** bytecode, int* length) {
     }
     
     /* Allocate memory for bytecode */
-    *bytecode = (uint8_t*)malloc(header.code_length);
+    *bytecode = (int*)malloc(header.code_length);
     if (!*bytecode) {
         printf("Error: Cannot allocate memory for bytecode\n");
         fclose(file);
@@ -60,7 +60,7 @@ int load_bytecode_file(const char* filename, uint8_t** bytecode, int* length) {
 }
 
 /* Save bytecode to file */
-int save_bytecode_file(const char* filename, uint8_t* bytecode, int length) {
+int save_bytecode_file(const char* filename, int* bytecode, int length) {
     FILE* file = fopen(filename, "wb");
     if (!file) {
         printf("Error: Cannot create file %s\n", filename);
@@ -96,7 +96,7 @@ int save_bytecode_file(const char* filename, uint8_t* bytecode, int length) {
 }
 
 /* Free bytecode memory */
-void free_bytecode(uint8_t* bytecode) {
+void free_bytecode(int* bytecode) {
     if (bytecode) {
         free(bytecode);
     }

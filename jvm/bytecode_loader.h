@@ -12,8 +12,8 @@ typedef struct {
 } BytecodeHeader;
 
 /* Function declarations */
-int load_bytecode_file(const char* filename, uint8_t** bytecode, int* length);
-int save_bytecode_file(const char* filename, uint8_t* bytecode, int length);
-void free_bytecode(uint8_t* bytecode);
+int load_bytecode_file(const char* filename, int** bytecode, int* length);
+int save_bytecode_file(const char* filename, int* bytecode, int length);
+void free_bytecode(int* bytecode);
 
 #endif

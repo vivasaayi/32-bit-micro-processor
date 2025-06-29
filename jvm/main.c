@@ -3,7 +3,7 @@
 /* Simple test programs written as bytecode arrays */
 
 /* Test 1: Simple arithmetic - compute 5 + 3 * 2 */
-uint8_t test_arithmetic[] = {
+int test_arithmetic[] = {
     OP_ICONST_5,    /* Push 5 */
     OP_ICONST_3,    /* Push 3 */
     OP_ICONST_2,    /* Push 2 */
@@ -13,7 +13,7 @@ uint8_t test_arithmetic[] = {
 };
 
 /* Test 2: Local variables - store and load */
-uint8_t test_locals[] = {
+int test_locals[] = {
     OP_BIPUSH, 42,      /* Push 42 */
     OP_ISTORE_0,        /* Store in local 0 */
     OP_BIPUSH, 10,      /* Push 10 */
@@ -25,7 +25,7 @@ uint8_t test_locals[] = {
 };
 
 /* Test 3: Conditional branch - simple if statement */
-uint8_t test_branch[] = {
+int test_branch[] = {
     OP_BIPUSH, 10,      /* Push 10 */
     OP_BIPUSH, 5,       /* Push 5 */
     OP_IF_ICMPGT, 0, 6, /* If 10 > 5, jump +6 bytes */
@@ -36,7 +36,7 @@ uint8_t test_branch[] = {
 };
 
 /* Test 4: Simple counting - just count to 3 and return */
-uint8_t test_loop[] = {
+int test_loop[] = {
     OP_ICONST_1,        /* counter = 1 */
     OP_ISTORE_0,        /* store in local 0 */
     OP_ILOAD_0,         /* load counter */

@@ -259,7 +259,7 @@ int jvm_execute(JVM* jvm, uint8_t* bytecode, int length) {
             }
             
             case OP_IF_ICMPEQ: {
-                int16_t offset = read_int16(frame->code, &frame->pc);
+                int offset = read_int16(frame->code, &frame->pc);
                 Value b = jvm_pop(jvm);
                 Value a = jvm_pop(jvm);
                 if (a.i == b.i) {
@@ -269,7 +269,7 @@ int jvm_execute(JVM* jvm, uint8_t* bytecode, int length) {
             }
             
             case OP_IF_ICMPNE: {
-                int16_t offset = read_int16(frame->code, &frame->pc);
+                int offset = read_int16(frame->code, &frame->pc);
                 Value b = jvm_pop(jvm);
                 Value a = jvm_pop(jvm);
                 if (a.i != b.i) {
@@ -279,7 +279,7 @@ int jvm_execute(JVM* jvm, uint8_t* bytecode, int length) {
             }
             
             case OP_IF_ICMPLT: {
-                int16_t offset = read_int16(frame->code, &frame->pc);
+                int offset = read_int16(frame->code, &frame->pc);
                 Value b = jvm_pop(jvm);
                 Value a = jvm_pop(jvm);
                 if (a.i < b.i) {
@@ -289,7 +289,7 @@ int jvm_execute(JVM* jvm, uint8_t* bytecode, int length) {
             }
             
             case OP_IF_ICMPGE: {
-                int16_t offset = read_int16(frame->code, &frame->pc);
+                int offset = read_int16(frame->code, &frame->pc);
                 Value b = jvm_pop(jvm);
                 Value a = jvm_pop(jvm);
                 if (a.i >= b.i) {
@@ -299,7 +299,7 @@ int jvm_execute(JVM* jvm, uint8_t* bytecode, int length) {
             }
             
             case OP_IF_ICMPGT: {
-                int16_t offset = read_int16(frame->code, &frame->pc);
+                int offset = read_int16(frame->code, &frame->pc);
                 Value b = jvm_pop(jvm);
                 Value a = jvm_pop(jvm);
                 if (a.i > b.i) {
@@ -309,7 +309,7 @@ int jvm_execute(JVM* jvm, uint8_t* bytecode, int length) {
             }
             
             case OP_IF_ICMPLE: {
-                int16_t offset = read_int16(frame->code, &frame->pc);
+                int offset = read_int16(frame->code, &frame->pc);
                 Value b = jvm_pop(jvm);
                 Value a = jvm_pop(jvm);
                 if (a.i <= b.i) {
@@ -319,7 +319,7 @@ int jvm_execute(JVM* jvm, uint8_t* bytecode, int length) {
             }
             
             case OP_GOTO: {
-                int16_t offset = read_int16(frame->code, &frame->pc);
+                int offset = read_int16(frame->code, &frame->pc);
                 frame->pc += offset - 3;
                 break;
             }
