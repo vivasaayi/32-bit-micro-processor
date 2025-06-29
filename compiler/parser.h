@@ -42,6 +42,9 @@ AstNode* parse_compound_statement(Parser* parser);
 AstNode* parse_if_statement(Parser* parser);
 AstNode* parse_while_statement(Parser* parser);
 AstNode* parse_for_statement(Parser* parser);
+AstNode* parse_switch_statement(Parser* parser);
+AstNode* parse_case_statement(Parser* parser);
+AstNode* parse_default_statement(Parser* parser);
 AstNode* parse_return_statement(Parser* parser);
 AstNode* parse_break_statement(Parser* parser);
 AstNode* parse_continue_statement(Parser* parser);
@@ -70,5 +73,8 @@ AstNode* parse_member_access(Parser* parser, AstNode* object);
 Type* parse_type(Parser* parser);
 AstNode* parse_parameter_list(Parser* parser);
 AstNode* parse_argument_list(Parser* parser);
+AstNode* parse_array_initializer(Parser* parser);
+
+const char* token_type_name(TokenType type);
 
 #endif

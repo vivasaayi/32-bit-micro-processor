@@ -80,13 +80,21 @@ AstNode* parse_program(Parser* parser) {
         if (decl) {
             add_child(program, decl);
         } else if (parser->had_error) {
-            // Synchronize after error
+            // Synchronize after error - ensure we make progress
+            int old_current = parser->current;
             while (!is_at_end(parser) && !check(parser, TOK_SEMICOLON) && 
                    !check(parser, TOK_LBRACE) && !check(parser, TOK_RBRACE)) {
                 advance(parser);
             }
             if (check(parser, TOK_SEMICOLON)) advance(parser);
+            // If we didn't make any progress, force advance to prevent infinite loop
+            if (parser->current == old_current && !is_at_end(parser)) {
+                advance(parser);
+            }
             parser->had_error = 0; // Reset error state
+        } else {
+            // If no declaration was parsed and no error was set, break to avoid infinite loop
+            break;
         }
     }
     
@@ -219,17 +227,19 @@ AstNode* parse_variable_declaration(Parser* parser) {
     char* name = strdup(peek(parser)->value);
     advance(parser);
     
-    // Check for array declaration: int arr[size]
+    // Check for array declaration: int arr[size] or int arr[]
     if (match(parser, TOK_LBRACKET)) {
-        if (!check(parser, TOK_INT_LITERAL)) {
-            parser_error(parser, "Expected array size");
+        int array_size = 0;
+        
+        if (check(parser, TOK_INT_LITERAL)) {
+            array_size = atoi(peek(parser)->value);
+            advance(parser);
+        } else if (!check(parser, TOK_RBRACKET)) {
+            parser_error(parser, "Expected array size or ']'");
             free(name);
             free_type(type);
             return NULL;
         }
-        
-        int array_size = atoi(peek(parser)->value);
-        advance(parser);
         
         if (!match(parser, TOK_RBRACKET)) {
             parser_error(parser, "Expected ']' after array size");
@@ -238,14 +248,19 @@ AstNode* parse_variable_declaration(Parser* parser) {
             return NULL;
         }
         
-        // Create array type
+        // Create array type (size will be determined later if 0 and there's an initializer)
         Type* array_type = create_array_type(type, array_size);
         type = array_type;
     }
     
     AstNode* initializer = NULL;
     if (match(parser, TOK_ASSIGN)) {
-        initializer = parse_expression(parser);
+        // Check for array initializer: {1, 2, 3}
+        if (check(parser, TOK_LBRACE) && type->base_type == TYPE_ARRAY) {
+            initializer = parse_array_initializer(parser);
+        } else {
+            initializer = parse_expression(parser);
+        }
         if (!initializer) {
             free(name);
             free_type(type);
@@ -377,7 +392,7 @@ AstNode* parse_typedef_declaration(Parser* parser) {
 AstNode* parse_statement(Parser* parser) {
     // Check for declarations first (for local variables)
     if (check(parser, TOK_INT) || check(parser, TOK_CHAR) || check(parser, TOK_FLOAT) || 
-        check(parser, TOK_DOUBLE) || check(parser, TOK_VOID)) {
+        check(parser, TOK_DOUBLE) || check(parser, TOK_VOID) || check(parser, TOK_BOOL)) {
         return parse_variable_declaration(parser);
     }
     
@@ -392,6 +407,15 @@ AstNode* parse_statement(Parser* parser) {
     }
     if (check(parser, TOK_FOR)) {
         return parse_for_statement(parser);
+    }
+    if (check(parser, TOK_SWITCH)) {
+        return parse_switch_statement(parser);
+    }
+    if (check(parser, TOK_CASE)) {
+        return parse_case_statement(parser);
+    }
+    if (check(parser, TOK_DEFAULT)) {
+        return parse_default_statement(parser);
     }
     if (check(parser, TOK_RETURN)) {
         return parse_return_statement(parser);
@@ -420,13 +444,22 @@ AstNode* parse_compound_statement(Parser* parser) {
         if (stmt) {
             add_child(compound, stmt);
         } else if (parser->had_error) {
-            // Error recovery
+            // Error recovery - ensure we make progress to avoid infinite loops
+            int old_current = parser->current;
             while (!is_at_end(parser) && !check(parser, TOK_SEMICOLON) && 
                    !check(parser, TOK_RBRACE)) {
                 advance(parser);
             }
             if (check(parser, TOK_SEMICOLON)) advance(parser);
+            // If we didn't make any progress, force advance to prevent infinite loop
+            if (parser->current == old_current && !is_at_end(parser)) {
+                advance(parser);
+            }
             parser->had_error = 0;
+        } else {
+            // If no statement was parsed and no error was set, we need to break
+            // to avoid infinite loop
+            break;
         }
     }
     
@@ -529,6 +562,103 @@ AstNode* parse_for_statement(Parser* parser) {
     return create_for_stmt(NULL, NULL, NULL, body);
 }
 
+// Parse switch statement
+AstNode* parse_switch_statement(Parser* parser) {
+    advance(parser); // consume 'switch'
+    
+    if (!match(parser, TOK_LPAREN)) {
+        parser_error(parser, "Expected '(' after 'switch'");
+        return NULL;
+    }
+    
+    AstNode* condition = parse_expression(parser);
+    if (!condition) return NULL;
+    
+    if (!match(parser, TOK_RPAREN)) {
+        parser_error(parser, "Expected ')' after switch condition");
+        free_ast(condition);
+        return NULL;
+    }
+    
+    if (!match(parser, TOK_LBRACE)) {
+        parser_error(parser, "Expected '{' after switch statement");
+        free_ast(condition);
+        return NULL;
+    }
+    
+    AstNode* body = create_compound_stmt();
+    AstNode* switch_stmt = create_switch_stmt(condition, body);
+    
+    while (!is_at_end(parser) && !check(parser, TOK_RBRACE)) {
+        AstNode* case_stmt = parse_case_statement(parser);
+        if (case_stmt) {
+            add_child(body, case_stmt);
+        } else if (parser->had_error) {
+            // Error recovery - ensure we make progress
+            int old_current = parser->current;
+            while (!is_at_end(parser) && !check(parser, TOK_RBRACE) && 
+                   !check(parser, TOK_CASE) && !check(parser, TOK_DEFAULT)) {
+                advance(parser);
+            }
+            // If we didn't make any progress, force advance to prevent infinite loop
+            if (parser->current == old_current && !is_at_end(parser)) {
+                advance(parser);
+            }
+            parser->had_error = 0;
+        } else {
+            // If no case statement was parsed and no error was set, break to avoid infinite loop
+            break;
+        }
+    }
+    
+    if (!match(parser, TOK_RBRACE)) {
+        parser_error(parser, "Expected '}' after switch statement");
+        free_ast(switch_stmt);
+        return NULL;
+    }
+    
+    return switch_stmt;
+}
+
+// Parse case statement
+AstNode* parse_case_statement(Parser* parser) {
+    advance(parser); // consume 'case'
+    
+    AstNode* value = parse_expression(parser);
+    if (!value) return NULL;
+    
+    if (!match(parser, TOK_COLON)) {
+        parser_error(parser, "Expected ':' after case value");
+        free_ast(value);
+        return NULL;
+    }
+    
+    AstNode* stmt = parse_statement(parser);
+    if (!stmt) {
+        free_ast(value);
+        return NULL;
+    }
+    
+    return create_case_stmt(value, stmt);
+}
+
+// Parse default statement
+AstNode* parse_default_statement(Parser* parser) {
+    advance(parser); // consume 'default'
+    
+    if (!match(parser, TOK_COLON)) {
+        parser_error(parser, "Expected ':' after default");
+        return NULL;
+    }
+    
+    AstNode* stmt = parse_statement(parser);
+    if (!stmt) {
+        return NULL;
+    }
+    
+    return create_default_stmt(stmt);
+}
+
 // Parse return statement
 AstNode* parse_return_statement(Parser* parser) {
     advance(parser); // consume 'return'
@@ -598,7 +728,10 @@ AstNode* parse_assignment(Parser* parser) {
     
     if (match(parser, TOK_ASSIGN) || match(parser, TOK_PLUS_ASSIGN) || 
         match(parser, TOK_MINUS_ASSIGN) || match(parser, TOK_MUL_ASSIGN) || 
-        match(parser, TOK_DIV_ASSIGN)) {
+        match(parser, TOK_DIV_ASSIGN) || match(parser, TOK_MOD_ASSIGN) ||
+        match(parser, TOK_AND_ASSIGN) || match(parser, TOK_OR_ASSIGN) ||
+        match(parser, TOK_XOR_ASSIGN) || match(parser, TOK_SHL_ASSIGN) ||
+        match(parser, TOK_SHR_ASSIGN)) {
         
         TokenType op = previous(parser)->type;
         AstNode* right = parse_assignment(parser);
@@ -893,6 +1026,12 @@ AstNode* parse_primary(Parser* parser) {
         return node;
     }
     
+    if (match(parser, TOK_BOOL_LITERAL)) {
+        Token* token = previous(parser);
+        int value = (strcmp(token->value, "true") == 0) ? 1 : 0;
+        return create_bool_literal(value);
+    }
+    
     if (match(parser, TOK_IDENTIFIER)) {
         char* name = strdup(previous(parser)->value);
         AstNode* node = create_identifier(name);
@@ -969,23 +1108,31 @@ AstNode* parse_member_access(Parser* parser, AstNode* object) {
 
 // Parse type
 Type* parse_type(Parser* parser) {
+    Type* base = NULL;
     if (match(parser, TOK_INT)) {
-        return create_type(TYPE_INT);
+        base = create_type(TYPE_INT);
+    } else if (match(parser, TOK_FLOAT)) {
+        base = create_type(TYPE_FLOAT);
+    } else if (match(parser, TOK_CHAR)) {
+        base = create_type(TYPE_CHAR);
+    } else if (match(parser, TOK_VOID)) {
+        base = create_type(TYPE_VOID);
+    } else if (match(parser, TOK_DOUBLE)) {
+        base = create_type(TYPE_DOUBLE);
+    } else if (match(parser, TOK_BOOL)) {
+        base = create_type(TYPE_BOOL);
+    } else if (match(parser, TOK_IDENTIFIER)) {
+        // Support typedefs and custom types (e.g., uint8_t)
+        char* name = strdup(previous(parser)->value);
+        base = create_custom_type(name);
+        free(name);
     }
-    if (match(parser, TOK_FLOAT)) {
-        return create_type(TYPE_FLOAT);
+    if (!base) return NULL;
+    // Handle pointer types: int*, uint8_t*, etc.
+    while (match(parser, TOK_MULTIPLY)) {
+        base = create_pointer_type(base);
     }
-    if (match(parser, TOK_CHAR)) {
-        return create_type(TYPE_CHAR);
-    }
-    if (match(parser, TOK_VOID)) {
-        return create_type(TYPE_VOID);
-    }
-    if (match(parser, TOK_DOUBLE)) {
-        return create_type(TYPE_DOUBLE);
-    }
-    
-    return NULL;
+    return base;
 }
 
 // Parse parameter list
@@ -995,26 +1142,36 @@ AstNode* parse_parameter_list(Parser* parser) {
     if (check(parser, TOK_RPAREN)) {
         return params; // Empty parameter list
     }
-    
-    do {
+     do {
         Type* type = parse_type(parser);
         if (!type) {
             parser_error(parser, "Expected parameter type");
+            // Error recovery: advance to avoid infinite loop
+            if (!is_at_end(parser)) {
+                advance(parser);
+            }
             free_ast(params);
             return NULL;
         }
-        
+
         char* name = NULL;
         if (check(parser, TOK_IDENTIFIER)) {
             name = strdup(peek(parser)->value);
             advance(parser);
         }
-        
+
         AstNode* param = create_parameter(name, type);
         add_child(params, param);
+
+        if (!match(parser, TOK_COMMA)) {
+            break;
+        }
         
-        if (name) free(name);
-    } while (match(parser, TOK_COMMA));
+        // Handle trailing comma: if next token is ')', break out of loop
+        if (check(parser, TOK_RPAREN)) {
+            break;
+        }
+    } while (!is_at_end(parser));
     
     return params;
 }
@@ -1026,15 +1183,70 @@ AstNode* parse_argument_list(Parser* parser) {
     if (check(parser, TOK_RPAREN)) {
         return args; // Empty argument list
     }
-    
-    do {
-        AstNode* arg = parse_expression(parser);
-        if (!arg) {
+     do {
+        AstNode* expr = parse_expression(parser);
+        if (!expr) {
+            // Error recovery: advance to avoid infinite loop
+            if (!is_at_end(parser)) {
+                advance(parser);
+            }
             free_ast(args);
             return NULL;
         }
-        add_child(args, arg);
-    } while (match(parser, TOK_COMMA));
+        add_child(args, expr);
+
+        if (!match(parser, TOK_COMMA)) {
+            break;
+        }
+        
+        // Handle trailing comma: if next token is ')', break out of loop
+        if (check(parser, TOK_RPAREN)) {
+            break;
+        }
+    } while (!is_at_end(parser));
     
     return args;
+}
+
+// Parse array initializer: {expr1, expr2, expr3}
+AstNode* parse_array_initializer(Parser* parser) {
+    if (!match(parser, TOK_LBRACE)) {
+        parser_error(parser, "Expected '{' for array initializer");
+        return NULL;
+    }
+    
+    AstNode* initializer = create_array_initializer();
+    
+    if (match(parser, TOK_RBRACE)) {
+        return initializer; // Empty initializer
+    }
+    do {
+        AstNode* expr = parse_expression(parser);
+        if (!expr) {
+            // Error recovery: advance to avoid infinite loop
+            if (!is_at_end(parser)) {
+                advance(parser);
+            }
+            free_ast(initializer);
+            return NULL;
+        }
+        add_child(initializer, expr);
+
+        if (!match(parser, TOK_COMMA)) {
+            break;
+        }
+        
+        // Handle trailing comma: if next token is '}', break out of loop
+        if (check(parser, TOK_RBRACE)) {
+            break;
+        }
+    } while (!is_at_end(parser));
+    
+    if (!match(parser, TOK_RBRACE)) {
+        parser_error(parser, "Expected '}' after array initializer");
+        free_ast(initializer);
+        return NULL;
+    }
+    
+    return initializer;
 }

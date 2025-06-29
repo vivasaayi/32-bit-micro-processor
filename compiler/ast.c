@@ -161,6 +161,17 @@ AstNode* create_string_literal(const char* value) {
     return node;
 }
 
+AstNode* create_bool_literal(int value) {
+    AstNode* node = create_ast_node(AST_BOOL_LITERAL);
+    node->data.bool_literal.value = value ? 1 : 0;
+    return node;
+}
+
+AstNode* create_array_initializer(void) {
+    AstNode* node = create_ast_node(AST_ARRAY_INITIALIZER);
+    return node;
+}
+
 AstNode* create_identifier(const char* name) {
     AstNode* node = create_ast_node(AST_IDENTIFIER);
     node->data.identifier.name = strdup(name);
@@ -264,6 +275,28 @@ AstNode* create_for_stmt(AstNode* init, AstNode* condition, AstNode* increment, 
     if (condition) add_child(node, condition);
     if (increment) add_child(node, increment);
     add_child(node, body);
+    return node;
+}
+
+AstNode* create_switch_stmt(AstNode* expression, AstNode* body) {
+    AstNode* node = create_ast_node(AST_SWITCH_STMT);
+    node->data.switch_stmt.expression = expression;
+    add_child(node, expression);
+    add_child(node, body);
+    return node;
+}
+
+AstNode* create_case_stmt(AstNode* value, AstNode* statements) {
+    AstNode* node = create_ast_node(AST_CASE_STMT);
+    node->data.case_stmt.value = value;
+    add_child(node, value);
+    if (statements) add_child(node, statements);
+    return node;
+}
+
+AstNode* create_default_stmt(AstNode* statements) {
+    AstNode* node = create_ast_node(AST_DEFAULT_STMT);
+    if (statements) add_child(node, statements);
     return node;
 }
 
@@ -388,6 +421,12 @@ Type* create_struct_type(const char* name) {
 
 Type* create_enum_type(const char* name) {
     Type* type = create_type(TYPE_ENUM);
+    type->name = strdup(name);
+    return type;
+}
+
+Type* create_custom_type(const char* name) {
+    Type* type = create_type(TYPE_INT); // Default to int for now, can be improved for real typedefs
     type->name = strdup(name);
     return type;
 }

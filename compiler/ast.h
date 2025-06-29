@@ -20,6 +20,8 @@ typedef enum {
     AST_FLOAT_LITERAL,
     AST_CHAR_LITERAL,
     AST_STRING_LITERAL,
+    AST_BOOL_LITERAL,
+    AST_ARRAY_INITIALIZER,
     
     // Identifiers
     AST_IDENTIFIER,
@@ -51,6 +53,9 @@ typedef enum {
     AST_IF_STMT,
     AST_WHILE_STMT,
     AST_FOR_STMT,
+    AST_SWITCH_STMT,
+    AST_CASE_STMT,
+    AST_DEFAULT_STMT,
     AST_RETURN_STMT,
     AST_BREAK_STMT,
     AST_CONTINUE_STMT,
@@ -91,7 +96,7 @@ typedef enum {
 
 // Data types
 typedef enum {
-    TYPE_VOID, TYPE_INT, TYPE_CHAR, TYPE_FLOAT, TYPE_DOUBLE,
+    TYPE_VOID, TYPE_INT, TYPE_CHAR, TYPE_FLOAT, TYPE_DOUBLE, TYPE_BOOL,
     TYPE_POINTER, TYPE_ARRAY, TYPE_STRUCT, TYPE_ENUM, TYPE_FUNCTION
 } TypeKind;
 
@@ -146,6 +151,10 @@ struct AstNode {
         struct {
             char* value;
         } string_literal;
+        
+        struct {
+            int value; // 0 for false, 1 for true
+        } bool_literal;
         
         // Identifier
         struct {
@@ -205,6 +214,19 @@ struct AstNode {
             char* name;
             Type* type;
         } parameter;
+        
+        // Switch statements
+        struct {
+            AstNode* expression;  // Expression to switch on
+        } switch_stmt;
+        
+        struct {
+            AstNode* value;      // Case value
+        } case_stmt;
+        
+        struct {
+            // Default case has no additional data
+        } default_stmt;
     } data;
 };
 
@@ -220,6 +242,8 @@ AstNode* create_int_literal(int value);
 AstNode* create_float_literal(float value);
 AstNode* create_char_literal(char value);
 AstNode* create_string_literal(const char* value);
+AstNode* create_bool_literal(int value);
+AstNode* create_array_initializer(void);
 AstNode* create_identifier(const char* name);
 
 AstNode* create_binary_op(AstNode* left, AstNode* right, TokenType operator);
@@ -236,6 +260,9 @@ AstNode* create_compound_stmt(void);
 AstNode* create_if_stmt(AstNode* condition, AstNode* then_stmt, AstNode* else_stmt);
 AstNode* create_while_stmt(AstNode* condition, AstNode* body);
 AstNode* create_for_stmt(AstNode* init, AstNode* condition, AstNode* increment, AstNode* body);
+AstNode* create_switch_stmt(AstNode* expression, AstNode* body);
+AstNode* create_case_stmt(AstNode* value, AstNode* statements);
+AstNode* create_default_stmt(AstNode* statements);
 AstNode* create_return_stmt(AstNode* value);
 AstNode* create_break_stmt(void);
 AstNode* create_continue_stmt(void);
@@ -259,5 +286,6 @@ Type* create_array_type(Type* element_type, int size);
 Type* create_function_type(Type* return_type);
 Type* create_struct_type(const char* name);
 Type* create_enum_type(const char* name);
+Type* create_custom_type(const char* name);
 
 #endif

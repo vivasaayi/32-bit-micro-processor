@@ -11,15 +11,17 @@
 #define INITIAL_CAPACITY 256
 
 static const char* keywords[] = {
-    "int", "char", "float", "double", "void",
+    "int", "char", "float", "double", "void", "bool",
     "if", "else", "while", "for", "return",
-    "break", "continue", "struct", "enum", "typedef"
+    "break", "continue", "struct", "enum", "typedef",
+    "switch", "case", "default", "true", "false"
 };
 
 static const TokenType keyword_tokens[] = {
-    TOK_INT, TOK_CHAR, TOK_FLOAT, TOK_DOUBLE, TOK_VOID,
+    TOK_INT, TOK_CHAR, TOK_FLOAT, TOK_DOUBLE, TOK_VOID, TOK_BOOL,
     TOK_IF, TOK_ELSE, TOK_WHILE, TOK_FOR, TOK_RETURN,
-    TOK_BREAK, TOK_CONTINUE, TOK_STRUCT, TOK_ENUM, TOK_TYPEDEF
+    TOK_BREAK, TOK_CONTINUE, TOK_STRUCT, TOK_ENUM, TOK_TYPEDEF,
+    TOK_SWITCH, TOK_CASE, TOK_DEFAULT, TOK_BOOL_LITERAL, TOK_BOOL_LITERAL
 };
 
 #define NUM_KEYWORDS (sizeof(keywords) / sizeof(keywords[0]))
@@ -303,7 +305,12 @@ TokenList* tokenize(const char* source) {
                     }
                     break;
                 case '%':
-                    add_token(list, make_token(TOK_MODULO, "%", line, column));
+                    if (peek(&lexer, 0) == '=') {
+                        advance(&lexer);
+                        add_token(list, make_token(TOK_MOD_ASSIGN, "%=", line, column));
+                    } else {
+                        add_token(list, make_token(TOK_MODULO, "%", line, column));
+                    }
                     break;
                 case '=':
                     if (peek(&lexer, 0) == '=') {
@@ -327,7 +334,12 @@ TokenList* tokenize(const char* source) {
                         add_token(list, make_token(TOK_LE, "<=", line, column));
                     } else if (peek(&lexer, 0) == '<') {
                         advance(&lexer);
-                        add_token(list, make_token(TOK_SHL, "<<", line, column));
+                        if (peek(&lexer, 0) == '=') {
+                            advance(&lexer);
+                            add_token(list, make_token(TOK_SHL_ASSIGN, "<<=", line, column));
+                        } else {
+                            add_token(list, make_token(TOK_SHL, "<<", line, column));
+                        }
                     } else {
                         add_token(list, make_token(TOK_LT, "<", line, column));
                     }
@@ -338,7 +350,12 @@ TokenList* tokenize(const char* source) {
                         add_token(list, make_token(TOK_GE, ">=", line, column));
                     } else if (peek(&lexer, 0) == '>') {
                         advance(&lexer);
-                        add_token(list, make_token(TOK_SHR, ">>", line, column));
+                        if (peek(&lexer, 0) == '=') {
+                            advance(&lexer);
+                            add_token(list, make_token(TOK_SHR_ASSIGN, ">>=", line, column));
+                        } else {
+                            add_token(list, make_token(TOK_SHR, ">>", line, column));
+                        }
                     } else {
                         add_token(list, make_token(TOK_GT, ">", line, column));
                     }
@@ -347,6 +364,9 @@ TokenList* tokenize(const char* source) {
                     if (peek(&lexer, 0) == '&') {
                         advance(&lexer);
                         add_token(list, make_token(TOK_AND, "&&", line, column));
+                    } else if (peek(&lexer, 0) == '=') {
+                        advance(&lexer);
+                        add_token(list, make_token(TOK_AND_ASSIGN, "&=", line, column));
                     } else {
                         add_token(list, make_token(TOK_BITAND, "&", line, column));
                     }
@@ -355,12 +375,20 @@ TokenList* tokenize(const char* source) {
                     if (peek(&lexer, 0) == '|') {
                         advance(&lexer);
                         add_token(list, make_token(TOK_OR, "||", line, column));
+                    } else if (peek(&lexer, 0) == '=') {
+                        advance(&lexer);
+                        add_token(list, make_token(TOK_OR_ASSIGN, "|=", line, column));
                     } else {
                         add_token(list, make_token(TOK_BITOR, "|", line, column));
                     }
                     break;
                 case '^':
-                    add_token(list, make_token(TOK_BITXOR, "^", line, column));
+                    if (peek(&lexer, 0) == '=') {
+                        advance(&lexer);
+                        add_token(list, make_token(TOK_XOR_ASSIGN, "^=", line, column));
+                    } else {
+                        add_token(list, make_token(TOK_BITXOR, "^", line, column));
+                    }
                     break;
                 case '~':
                     add_token(list, make_token(TOK_BITNOT, "~", line, column));
@@ -462,6 +490,29 @@ const char* token_type_name(TokenType type) {
         case TOK_AND: return "AND";
         case TOK_OR: return "OR";
         case TOK_NOT: return "NOT";
+        case TOK_BOOL: return "BOOL";
+        case TOK_BOOL_LITERAL: return "BOOL_LITERAL";
+        case TOK_SWITCH: return "SWITCH";
+        case TOK_CASE: return "CASE";
+        case TOK_DEFAULT: return "DEFAULT";
+        case TOK_PLUS_ASSIGN: return "PLUS_ASSIGN";
+        case TOK_MINUS_ASSIGN: return "MINUS_ASSIGN";
+        case TOK_MUL_ASSIGN: return "MUL_ASSIGN";
+        case TOK_DIV_ASSIGN: return "DIV_ASSIGN";
+        case TOK_MOD_ASSIGN: return "MOD_ASSIGN";
+        case TOK_AND_ASSIGN: return "AND_ASSIGN";
+        case TOK_OR_ASSIGN: return "OR_ASSIGN";
+        case TOK_XOR_ASSIGN: return "XOR_ASSIGN";
+        case TOK_SHL_ASSIGN: return "SHL_ASSIGN";
+        case TOK_SHR_ASSIGN: return "SHR_ASSIGN";
+        case TOK_BITAND: return "BITAND";
+        case TOK_BITOR: return "BITOR";
+        case TOK_BITXOR: return "BITXOR";
+        case TOK_BITNOT: return "BITNOT";
+        case TOK_SHL: return "SHL";
+        case TOK_SHR: return "SHR";
+        case TOK_INCREMENT: return "INCREMENT";
+        case TOK_DECREMENT: return "DECREMENT";
         case TOK_DOT: return "DOT";
         case TOK_ARROW: return "ARROW";
         case TOK_SEMICOLON: return "SEMICOLON";
