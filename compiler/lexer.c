@@ -57,6 +57,20 @@ static void skip_whitespace(Lexer* lexer) {
     }
 }
 
+static void skip_preprocessor(Lexer* lexer) {
+    // Skip preprocessor directives (lines starting with #)
+    if (peek(lexer, 0) == '#') {
+        // Skip the entire line until newline or end of file
+        while (peek(lexer, 0) != '\n' && peek(lexer, 0) != '\0') {
+            advance(lexer);
+        }
+        // Skip the newline character if present
+        if (peek(lexer, 0) == '\n') {
+            advance(lexer);
+        }
+    }
+}
+
 static void skip_comment(Lexer* lexer) {
     if (peek(lexer, 0) == '/' && peek(lexer, 1) == '/') {
         // Single-line comment
@@ -222,6 +236,12 @@ TokenList* tokenize(const char* source) {
         // Skip comments
         if (peek(&lexer, 0) == '/' && (peek(&lexer, 1) == '/' || peek(&lexer, 1) == '*')) {
             skip_comment(&lexer);
+            continue;
+        }
+        
+        // Skip preprocessor directives
+        if (peek(&lexer, 0) == '#') {
+            skip_preprocessor(&lexer);
             continue;
         }
         
