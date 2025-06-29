@@ -111,6 +111,9 @@ void print_ast(AstNode* node, int indent) {
         case AST_BINARY_OP:
             printf("BinaryOp: %d\n", node->data.binary_op.operator);
             break;
+        case AST_TERNARY_OP:
+            printf("TernaryOp: condition ? true : false\n");
+            break;
         case AST_FUNCTION_CALL:
             printf("FunctionCall:\n");
             break;
@@ -177,6 +180,14 @@ AstNode* create_unary_op(AstNode* operand, TokenType operator) {
     AstNode* node = create_ast_node(AST_UNARY_OP);
     node->data.unary_op.operator = operator;
     add_child(node, operand);
+    return node;
+}
+
+AstNode* create_ternary_op(AstNode* condition, AstNode* true_expr, AstNode* false_expr) {
+    AstNode* node = create_ast_node(AST_TERNARY_OP);
+    add_child(node, condition);
+    add_child(node, true_expr);
+    add_child(node, false_expr);
     return node;
 }
 

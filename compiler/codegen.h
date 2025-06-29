@@ -34,6 +34,7 @@ void codegen_expression(AstNode* expr, CodegenContext* ctx, const char* result_r
 // Expression code generation
 void codegen_binary_op(AstNode* expr, CodegenContext* ctx, const char* result_reg);
 void codegen_unary_op(AstNode* expr, CodegenContext* ctx, const char* result_reg);
+void codegen_ternary_op(AstNode* expr, CodegenContext* ctx, const char* result_reg);
 void codegen_assignment(AstNode* expr, CodegenContext* ctx, const char* result_reg);
 void codegen_function_call(AstNode* expr, CodegenContext* ctx, const char* result_reg);
 void codegen_identifier(AstNode* expr, CodegenContext* ctx, const char* result_reg);

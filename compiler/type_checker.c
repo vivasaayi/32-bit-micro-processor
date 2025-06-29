@@ -151,6 +151,7 @@ int type_check_node(AstNode* node, SymbolTable* symbols) {
             return type_check_statement(node, symbols);
             
         case AST_BINARY_OP:
+        case AST_TERNARY_OP:
         case AST_UNARY_OP:
         case AST_ASSIGNMENT:
         case AST_FUNCTION_CALL:
@@ -274,6 +275,38 @@ int type_check_expression(AstNode* expr, SymbolTable* symbols, Type** result_typ
             }
         }
         
+        case AST_TERNARY_OP: {
+            Type* condition_type, *true_type, *false_type;
+            
+            // Type check all three expressions
+            if (!type_check_expression(expr->children[0], symbols, &condition_type) ||
+                !type_check_expression(expr->children[1], symbols, &true_type) ||
+                !type_check_expression(expr->children[2], symbols, &false_type)) {
+                *result_type = NULL;
+                return 0;
+            }
+            
+            // Condition should be evaluable as boolean (any numeric type)
+            if (condition_type->base_type != TYPE_INT && 
+                condition_type->base_type != TYPE_FLOAT &&
+                condition_type->base_type != TYPE_CHAR) {
+                printf("Error: Ternary condition must be numeric type\n");
+                *result_type = NULL;
+                return 0;
+            }
+            
+            // True and false expressions should be compatible
+            if (!types_compatible(true_type, false_type)) {
+                printf("Error: Incompatible types in ternary true/false expressions\n");
+                *result_type = NULL;
+                return 0;
+            }
+            
+            // Result type is the common type of true/false expressions
+            *result_type = get_common_type(true_type, false_type);
+            return 1;
+        }
+        
         case AST_UNARY_OP: {
             Type* operand_type;
             if (!type_check_expression(expr->children[0], symbols, &operand_type)) {
@@ -330,10 +363,31 @@ int type_check_expression(AstNode* expr, SymbolTable* symbols, Type** result_typ
                 return 0;
             }
             
-            if (!types_compatible(left_type, right_type)) {
-                printf("Error: Incompatible types in assignment\n");
-                *result_type = NULL;
-                return 0;
+            TokenType op = expr->data.assignment.operator;
+            
+            if (op == TOK_ASSIGN) {
+                // Regular assignment - just check type compatibility
+                if (!types_compatible(left_type, right_type)) {
+                    printf("Error: Incompatible types in assignment\n");
+                    *result_type = NULL;
+                    return 0;
+                }
+            } else {
+                // Compound assignment - check that the operation is valid
+                // For compound assignments like +=, -=, *=, /=, both operands should be numeric
+                if ((left_type->base_type != TYPE_INT && left_type->base_type != TYPE_FLOAT && left_type->base_type != TYPE_CHAR) ||
+                    (right_type->base_type != TYPE_INT && right_type->base_type != TYPE_FLOAT && right_type->base_type != TYPE_CHAR)) {
+                    printf("Error: Compound assignment requires numeric types\n");
+                    *result_type = NULL;
+                    return 0;
+                }
+                
+                // Check type compatibility for the operation
+                if (!types_compatible(left_type, right_type)) {
+                    printf("Error: Incompatible types in compound assignment\n");
+                    *result_type = NULL;
+                    return 0;
+                }
             }
             
             *result_type = left_type;

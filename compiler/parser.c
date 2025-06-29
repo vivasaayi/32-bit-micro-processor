@@ -49,6 +49,10 @@ int is_at_end(Parser* parser) {
     return peek(parser)->type == TOK_EOF;
 }
 
+// Forward declarations for recursive functions
+AstNode* parse_ternary(Parser* parser);
+AstNode* parse_logical_or(Parser* parser);
+
 // Main parse function
 AstNode* parse(TokenList* tokens) {
     Parser parser = {
@@ -214,6 +218,30 @@ AstNode* parse_variable_declaration(Parser* parser) {
     
     char* name = strdup(peek(parser)->value);
     advance(parser);
+    
+    // Check for array declaration: int arr[size]
+    if (match(parser, TOK_LBRACKET)) {
+        if (!check(parser, TOK_INT_LITERAL)) {
+            parser_error(parser, "Expected array size");
+            free(name);
+            free_type(type);
+            return NULL;
+        }
+        
+        int array_size = atoi(peek(parser)->value);
+        advance(parser);
+        
+        if (!match(parser, TOK_RBRACKET)) {
+            parser_error(parser, "Expected ']' after array size");
+            free(name);
+            free_type(type);
+            return NULL;
+        }
+        
+        // Create array type
+        Type* array_type = create_array_type(type, array_size);
+        type = array_type;
+    }
     
     AstNode* initializer = NULL;
     if (match(parser, TOK_ASSIGN)) {
@@ -565,7 +593,7 @@ AstNode* parse_expression(Parser* parser) {
 
 // Parse assignment
 AstNode* parse_assignment(Parser* parser) {
-    AstNode* expr = parse_logical_or(parser);
+    AstNode* expr = parse_ternary(parser);
     if (!expr) return NULL;
     
     if (match(parser, TOK_ASSIGN) || match(parser, TOK_PLUS_ASSIGN) || 
@@ -580,6 +608,38 @@ AstNode* parse_assignment(Parser* parser) {
         }
         
         return create_assignment(expr, right, op);
+    }
+    
+    return expr;
+}
+
+// Parse ternary operator (condition ? true_expr : false_expr)
+AstNode* parse_ternary(Parser* parser) {
+    AstNode* expr = parse_logical_or(parser);
+    if (!expr) return NULL;
+    
+    if (match(parser, TOK_QUESTION)) {
+        AstNode* true_expr = parse_expression(parser);
+        if (!true_expr) {
+            free_ast(expr);
+            return NULL;
+        }
+        
+        if (!match(parser, TOK_COLON)) {
+            parser_error(parser, "Expected ':' in ternary operator");
+            free_ast(expr);
+            free_ast(true_expr);
+            return NULL;
+        }
+        
+        AstNode* false_expr = parse_ternary(parser); // Right associative
+        if (!false_expr) {
+            free_ast(expr);
+            free_ast(true_expr);
+            return NULL;
+        }
+        
+        return create_ternary_op(expr, true_expr, false_expr);
     }
     
     return expr;

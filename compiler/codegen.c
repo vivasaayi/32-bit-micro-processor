@@ -135,11 +135,26 @@ void codegen_function_decl(AstNode* func, CodegenContext* ctx) {
 // Generate code for variable declaration
 void codegen_variable_decl(AstNode* var, CodegenContext* ctx) {
     const char* name = var->data.variable_decl.name;
+    Type* type = var->data.variable_decl.type;
     
     emit_comment(ctx, "Variable declaration");
     
-    // Allocate space for variable (simplified - just reserve a register or stack slot)
-    fprintf(ctx->output, "; Variable %s allocated\n", name);
+    // Check if it's an array type
+    if (type && type->base_type == TYPE_ARRAY) {
+        int array_size = type->array_size;
+        int element_size = 4; // Assume 4 bytes per element for simplicity
+        int total_size = array_size * element_size;
+        
+        fprintf(ctx->output, "; Array %s[%d] allocated (%d bytes)\n", name, array_size, total_size);
+        // In a real implementation, would allocate stack space
+        fprintf(ctx->output, "    ; Array base address for %s\n", name);
+        
+        // For global arrays, we could emit a data section entry
+        // For local arrays, we would adjust stack pointer
+    } else {
+        // Regular variable allocation
+        fprintf(ctx->output, "; Variable %s allocated\n", name);
+    }
     
     // Generate initializer if present
     if (var->child_count > 0 && var->children[0]) {
@@ -218,6 +233,10 @@ void codegen_expression(AstNode* expr, CodegenContext* ctx, const char* result_r
             codegen_unary_op(expr, ctx, result_reg);
             break;
             
+        case AST_TERNARY_OP:
+            codegen_ternary_op(expr, ctx, result_reg);
+            break;
+            
         case AST_ASSIGNMENT:
             codegen_assignment(expr, ctx, result_reg);
             break;
@@ -227,12 +246,13 @@ void codegen_expression(AstNode* expr, CodegenContext* ctx, const char* result_r
             break;
             
         case AST_ARRAY_ACCESS:
-            // Simplified array access
-            codegen_expression(expr->children[0], ctx, "r1"); // Array base
+            // Generate array access: array[index]
+            // Calculate: base_address + (index * element_size)
+            codegen_expression(expr->children[0], ctx, "r1"); // Array base address
             codegen_expression(expr->children[1], ctx, "r2"); // Index
-            emit_instruction(ctx, "mul", "r2, r2, #4"); // Scale index
-            emit_instruction(ctx, "add", "r1, r1, r2"); // Calculate address
-            emit_instruction(ctx, "load", "%s, [r1]", result_reg); // Load value
+            emit_instruction(ctx, "mul", "r2, r2, #4"); // Scale index by element size (4 bytes)
+            emit_instruction(ctx, "add", "r1, r1, r2"); // Calculate final address
+            emit_instruction(ctx, "load", "%s, [r1]", result_reg); // Load value at address
             break;
             
         case AST_MEMBER_ACCESS:
@@ -358,16 +378,106 @@ void codegen_unary_op(AstNode* expr, CodegenContext* ctx, const char* result_reg
     }
 }
 
+// Generate code for ternary operator (condition ? true_expr : false_expr)
+void codegen_ternary_op(AstNode* expr, CodegenContext* ctx, const char* result_reg) {
+    static int label_counter = 0;
+    int current_label = label_counter++;
+    
+    char false_label[32];
+    char end_label[32];
+    snprintf(false_label, sizeof(false_label), "L_ternary_false_%d", current_label);
+    snprintf(end_label, sizeof(end_label), "L_ternary_end_%d", current_label);
+    
+    emit_comment(ctx, "Ternary operator: condition ? true : false");
+    
+    // Evaluate condition
+    codegen_expression(expr->children[0], ctx, "r1");
+    
+    // Jump to false branch if condition is zero
+    emit_instruction(ctx, "cmp", "r1, #0");
+    emit_instruction(ctx, "je", "%s", false_label);
+    
+    // True branch
+    codegen_expression(expr->children[1], ctx, result_reg);
+    emit_instruction(ctx, "jmp", "%s", end_label);
+    
+    // False branch
+    fprintf(ctx->output, "%s:\n", false_label);
+    codegen_expression(expr->children[2], ctx, result_reg);
+    
+    // End label
+    fprintf(ctx->output, "%s:\n", end_label);
+}
+
 // Generate code for assignment
 void codegen_assignment(AstNode* expr, CodegenContext* ctx, const char* result_reg) {
-    // Generate code for right-hand side
-    codegen_expression(expr->children[1], ctx, "r1");
+    TokenType op = expr->data.assignment.operator;
     
-    // Store to left-hand side (simplified)
+    // Handle compound assignments by expanding them to regular assignments
+    if (op != TOK_ASSIGN) {
+        emit_comment(ctx, "Compound assignment - expanding to regular assignment");
+        
+        // For compound assignment: lval OP= rval becomes lval = lval OP rval
+        // First, load current value of left-hand side
+        if (expr->children[0]->type == AST_IDENTIFIER) {
+            const char* var_name = expr->children[0]->data.identifier.name;
+            fprintf(ctx->output, "    ; Load current value of %s\n", var_name);
+            emit_instruction(ctx, "load", "r2, [%s]", var_name);
+        } else if (expr->children[0]->type == AST_ARRAY_ACCESS) {
+            // Load current array element value
+            fprintf(ctx->output, "    ; Load current array element value\n");
+            codegen_expression(expr->children[0]->children[0], ctx, "r2"); // Array base
+            codegen_expression(expr->children[0]->children[1], ctx, "r3"); // Index
+            emit_instruction(ctx, "mul", "r3, r3, #4"); // Scale index
+            emit_instruction(ctx, "add", "r2, r2, r3"); // Calculate address
+            emit_instruction(ctx, "load", "r2, [r2]"); // Load current value
+        } else {
+            fprintf(ctx->output, "    ; Load current value (complex lvalue)\n");
+            emit_instruction(ctx, "mov", "r2, #0"); // Fallback
+        }
+        
+        // Generate code for right-hand side
+        codegen_expression(expr->children[1], ctx, "r3");
+        
+        // Perform the compound operation
+        switch (op) {
+            case TOK_PLUS_ASSIGN:
+                emit_instruction(ctx, "add", "r1, r2, r3");
+                break;
+            case TOK_MINUS_ASSIGN:
+                emit_instruction(ctx, "sub", "r1, r2, r3");
+                break;
+            case TOK_MUL_ASSIGN:
+                emit_instruction(ctx, "mul", "r1, r2, r3");
+                break;
+            case TOK_DIV_ASSIGN:
+                emit_instruction(ctx, "div", "r1, r2, r3");
+                break;
+            default:
+                emit_comment(ctx, "Unknown compound assignment operator");
+                emit_instruction(ctx, "mov", "r1, r3"); // Fallback to simple assignment
+                break;
+        }
+    } else {
+        // Regular assignment: just generate code for right-hand side
+        codegen_expression(expr->children[1], ctx, "r1");
+    }
+    
+    // Store to left-hand side
     if (expr->children[0]->type == AST_IDENTIFIER) {
         const char* var_name = expr->children[0]->data.identifier.name;
         fprintf(ctx->output, "    ; Store to variable %s\n", var_name);
         emit_instruction(ctx, "store", "r1, [%s]", var_name);
+    } else if (expr->children[0]->type == AST_ARRAY_ACCESS) {
+        // Handle array assignment: arr[index] = value
+        fprintf(ctx->output, "    ; Store to array element\n");
+        codegen_expression(expr->children[0]->children[0], ctx, "r2"); // Array base
+        codegen_expression(expr->children[0]->children[1], ctx, "r3"); // Index
+        emit_instruction(ctx, "mul", "r3, r3, #4"); // Scale index by element size
+        emit_instruction(ctx, "add", "r2, r2, r3"); // Calculate address
+        emit_instruction(ctx, "store", "r1, [r2]"); // Store value at address
+    } else {
+        fprintf(ctx->output, "    ; Store to complex lvalue (simplified)\n");
     }
     
     // Assignment result is the assigned value

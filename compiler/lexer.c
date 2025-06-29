@@ -372,6 +372,12 @@ TokenList* tokenize(const char* source) {
                 case ']':
                     add_token(list, make_token(TOK_RBRACKET, "]", line, column));
                     break;
+                case '?':
+                    add_token(list, make_token(TOK_QUESTION, "?", line, column));
+                    break;
+                case ':':
+                    add_token(list, make_token(TOK_COLON, ":", line, column));
+                    break;
                 default: {
                     // Unknown character - create error token
                     char error_msg[32];
@@ -446,6 +452,8 @@ const char* token_type_name(TokenType type) {
         case TOK_RBRACE: return "RBRACE";
         case TOK_LBRACKET: return "LBRACKET";
         case TOK_RBRACKET: return "RBRACKET";
+        case TOK_QUESTION: return "QUESTION";
+        case TOK_COLON: return "COLON";
         case TOK_EOF: return "EOF";
         case TOK_ERROR: return "ERROR";
         default: return "UNKNOWN";

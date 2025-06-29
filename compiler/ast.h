@@ -30,6 +30,9 @@ typedef enum {
     // Unary Operations
     AST_UNARY_OP,
     
+    // Ternary Operations
+    AST_TERNARY_OP,
+    
     // Assignments
     AST_ASSIGNMENT,
     
@@ -221,6 +224,7 @@ AstNode* create_identifier(const char* name);
 
 AstNode* create_binary_op(AstNode* left, AstNode* right, TokenType operator);
 AstNode* create_unary_op(AstNode* operand, TokenType operator);
+AstNode* create_ternary_op(AstNode* condition, AstNode* true_expr, AstNode* false_expr);
 AstNode* create_postfix_op(AstNode* operand, TokenType operator);
 AstNode* create_assignment(AstNode* left, AstNode* right, TokenType operator);
 AstNode* create_function_call(AstNode* function, AstNode* args);

@@ -34,6 +34,7 @@ typedef enum {
     TOK_LPAREN, TOK_RPAREN,
     TOK_LBRACE, TOK_RBRACE,
     TOK_LBRACKET, TOK_RBRACKET,
+    TOK_QUESTION, TOK_COLON,
     
     // Special
     TOK_EOF,
