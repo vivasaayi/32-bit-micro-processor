@@ -23,7 +23,7 @@ class CTestRunner:
         self.c_programs_dir = self.hdl_root / "test_programs" / "c"
         self.temp_dir = self.hdl_root / "temp"
         self.tools_dir = self.hdl_root / "tools"
-        self.compiler_path = self.temp_dir / "c_compiler"  # C compiler now in temp
+        self.compiler_path = self.hdl_root / "compiler" / "ccompiler"  # Use correct compiler path
         self.assembler_path = self.temp_dir / "assembler"  # C assembler now in temp
         self.testbench_dir = self.hdl_root / "processor" / "testbench"
         
