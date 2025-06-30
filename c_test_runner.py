@@ -24,7 +24,7 @@ class CTestRunner:
         self.temp_dir = self.hdl_root / "temp"
         self.tools_dir = self.hdl_root / "tools"
         self.compiler_path = self.hdl_root / "compiler" / "ccompiler"  # Use correct compiler path
-        self.assembler_path = self.temp_dir / "assembler"  # C assembler now in temp
+        self.assembler_path = self.hdl_root / "tools" / "assembler"  # Use enhanced assembler (now primary)
         self.testbench_dir = self.hdl_root / "processor" / "testbench"
         
         # Create temp directories
@@ -61,10 +61,10 @@ class CTestRunner:
         if ret_code != 0:
             return False, f"C compilation failed: {stderr or stdout}", asm_file
         
-        # The compiler writes to input.asm, so we need to move it
-        generated_asm = c_file.parent / f"{c_file.stem}.asm"
+        # The compiler writes to output.s in the current directory
+        generated_asm = self.hdl_root / "output.s"
         if generated_asm.exists():
-            # Move to our temp directory
+            # Move to our temp directory with proper naming
             generated_asm.rename(asm_file)
             return True, "C compilation successful", asm_file
         else:
@@ -403,7 +403,12 @@ endmodule
     def run_single_test(self, test_name: str, test_type: str = "c") -> Dict:
         """Run a single test by name"""
         if test_type == "c":
-            test_file = self.c_programs_dir / f"{test_name}.c"
+            # Handle subdirectories - if test_name contains '/', treat it as a relative path
+            if '/' in test_name:
+                test_file = self.c_programs_dir / f"{test_name}.c"
+            else:
+                test_file = self.c_programs_dir / f"{test_name}.c"
+            
             if not test_file.exists():
                 print(f"❌ C test file not found: {test_file}")
                 return {"error": f"Test file not found: {test_file}"}
@@ -476,13 +481,20 @@ endmodule
         """Run a C test with enhanced string preprocessing"""
         print(f"\n=== Running Enhanced Test: {test_name} ===")
         
+        # Handle subdirectories in test names
+        if '/' in test_name:
+            c_file = self.c_programs_dir / f"{test_name}.c"
+            base_name = test_name.replace('/', '_')  # Use underscore for file names
+        else:
+            c_file = self.c_programs_dir / f"{test_name}.c"
+            base_name = test_name
+        
         # Paths
-        c_file = self.c_programs_dir / f"{test_name}.c"
-        preprocessed_file = self.temp_asm_dir / f"{test_name}_preprocessed.c"
-        memory_layout_file = self.temp_asm_dir / f"{test_name}_memory_layout.json"
-        asm_file = self.temp_asm_dir / f"{test_name}.asm"
-        enhanced_asm_file = self.temp_asm_dir / f"{test_name}_enhanced.asm"
-        hex_file = self.temp_hex_dir / f"{test_name}_enhanced.hex"
+        preprocessed_file = self.temp_asm_dir / f"{base_name}_preprocessed.c"
+        memory_layout_file = self.temp_asm_dir / f"{base_name}_memory_layout.json"
+        asm_file = self.temp_asm_dir / f"{base_name}.asm"
+        enhanced_asm_file = self.temp_asm_dir / f"{base_name}_enhanced.asm"
+        hex_file = self.temp_hex_dir / f"{base_name}_enhanced.hex"
         
         if not c_file.exists():
             return False, f"C file not found: {c_file}", {}
@@ -510,8 +522,8 @@ endmodule
         if ret_code != 0:
             return False, f"Compilation failed: {stderr}", {}
         
-        # The C compiler creates a .asm file automatically
-        compiler_asm_file = preprocessed_file.with_suffix('.asm')
+        # The C compiler creates output.s in the current directory
+        compiler_asm_file = self.hdl_root / "output.s"
         if not compiler_asm_file.exists():
             return False, f"Compiler did not generate assembly file: {compiler_asm_file}", {}
         
@@ -544,7 +556,7 @@ endmodule
         
         # Step 5: Run Simulation
         print("Step 5: Running simulation...")
-        success, message, sim_results = self.run_simulation(hex_file, f"{test_name}_enhanced")
+        success, message, sim_results = self.run_simulation(hex_file, f"{base_name}_enhanced")
         
         # Extract string output from memory layout for display
         if memory_layout_file.exists():
