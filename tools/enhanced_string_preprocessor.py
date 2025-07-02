@@ -120,11 +120,18 @@ class StringPreprocessor:
     def preprocess_c_file(self, content: str) -> str:
         """Process C file and add string manipulation support"""
         
+        # Check if log_int is used before processing
+        needs_log_int = 'log_int(' in content
+        
         # Find all log_string calls
         log_string_pattern = r'log_string\("([^"]+)"\)'
         
         # Replace log_string calls with function calls
         processed_content = re.sub(log_string_pattern, self.process_log_string_call, content)
+        
+        # Add log_int support if needed
+        if needs_log_int:
+            processed_content = self.add_log_int_support(processed_content)
         
         # Add set_log_length() call before the return statement in main()
         # Find the main function and add the call before any return
@@ -177,6 +184,47 @@ class StringPreprocessor:
             }
         
         return layout
+
+    def add_log_int_support(self, content: str) -> str:
+        """Add log_int function support"""
+        # Add log_int function declaration if not already present
+        if 'void log_int(' not in content:
+            log_int_func = """
+void log_int(int value) {
+    // Convert integer to string and log it
+    if (value == 0) {
+        putchar('0');
+        return;
+    }
+    
+    if (value < 0) {
+        putchar('-');
+        value = -value;
+    }
+    
+    // Convert to string (simple implementation)
+    char digits[12]; // Enough for 32-bit int
+    int i = 0;
+    while (value > 0) {
+        digits[i++] = '0' + (value % 10);
+        value /= 10;
+    }
+    
+    // Print digits in reverse order
+    while (i > 0) {
+        putchar(digits[--i]);
+    }
+}
+
+"""
+            # Insert after any existing function declarations but before main
+            main_pos = content.find('int main(')
+            if main_pos != -1:
+                content = content[:main_pos] + log_int_func + content[main_pos:]
+            else:
+                content = log_int_func + content
+        
+        return content
 
 def main():
     if len(sys.argv) < 3:

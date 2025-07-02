@@ -60,6 +60,14 @@ typedef enum {
     OP_JLE   = 0x19,  // Jump if less or equal
     OP_JN    = 0x1A,  // Jump if negative
     
+    // Set instructions (conditional set to 1 or 0)
+    OP_SETEQ = 0x20,  // Set if equal
+    OP_SETNE = 0x21,  // Set if not equal
+    OP_SETLT = 0x22,  // Set if less than
+    OP_SETGE = 0x23,  // Set if greater or equal
+    OP_SETLE = 0x24,  // Set if less or equal
+    OP_SETGT = 0x25,  // Set if greater than
+    
     // Function Calls & Stack (updated opcodes)
     OP_CALL  = 0x1B,  // Function call
     OP_RET   = 0x1C,  // Return from function
@@ -166,10 +174,14 @@ static const instruction_def_t instructions[] = {
     {"jz",    OP_JZ,    INST_TYPE_I},
     {"JE",    OP_JZ,    INST_TYPE_I},   // C compiler alias for JZ
     {"je",    OP_JZ,    INST_TYPE_I},   // C compiler alias for JZ
+    {"BEQ",   OP_JZ,    INST_TYPE_I},   // Branch if equal (alias for JZ)
+    {"beq",   OP_JZ,    INST_TYPE_I},   // Branch if equal (alias for JZ)
     {"JNZ",   OP_JNZ,   INST_TYPE_I},
     {"jnz",   OP_JNZ,   INST_TYPE_I},
     {"JNE",   OP_JNZ,   INST_TYPE_I},  // C compiler alias for JNZ
     {"jne",   OP_JNZ,   INST_TYPE_I},  // C compiler alias for JNZ
+    {"BNE",   OP_JNZ,   INST_TYPE_I},  // Branch if not equal (alias for JNZ)
+    {"bne",   OP_JNZ,   INST_TYPE_I},  // Branch if not equal (alias for JNZ)
     {"JC",    OP_JC,    INST_TYPE_I},
     {"jc",    OP_JC,    INST_TYPE_I},
     {"JNC",   OP_JNC,   INST_TYPE_I},
@@ -182,6 +194,20 @@ static const instruction_def_t instructions[] = {
     {"jle",   OP_JLE,   INST_TYPE_I},
     {"JN",    OP_JN,    INST_TYPE_I},
     {"jn",    OP_JN,    INST_TYPE_I},
+    
+    // Set instructions (rd = condition ? 1 : 0)
+    {"SETEQ", OP_SETEQ, INST_TYPE_R},
+    {"seteq", OP_SETEQ, INST_TYPE_R},
+    {"SETNE", OP_SETNE, INST_TYPE_R},
+    {"setne", OP_SETNE, INST_TYPE_R},
+    {"SETLT", OP_SETLT, INST_TYPE_R},
+    {"setlt", OP_SETLT, INST_TYPE_R},
+    {"SETGE", OP_SETGE, INST_TYPE_R},
+    {"setge", OP_SETGE, INST_TYPE_R},
+    {"SETLE", OP_SETLE, INST_TYPE_R},
+    {"setle", OP_SETLE, INST_TYPE_R},
+    {"SETGT", OP_SETGT, INST_TYPE_R},
+    {"setgt", OP_SETGT, INST_TYPE_R},
     
     // Function Calls & Stack
     {"CALL",  OP_CALL,  INST_TYPE_I},
@@ -363,8 +389,9 @@ static uint32_t encode_instruction(opcode_t opcode, int rd, int rs1, int rs2, in
                ((uint32_t)(rd & 0x1F) << 19) | 
                ((uint32_t)immediate & 0x7FFFF);
     } else {
-        // Standard format
+        // Standard format - set bit 24 to distinguish from direct addressing
         return ((uint32_t)opcode << 27) | 
+               (1 << 24) |  // Set bit 24 to make bits 26-24 = 001 (not 000)
                ((uint32_t)(rd & 0x1F) << 19) | 
                ((uint32_t)(rs1 & 0x1F) << 14) | 
                ((uint32_t)(rs2 & 0x1F) << 9) | 

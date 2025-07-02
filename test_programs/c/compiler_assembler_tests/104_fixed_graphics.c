@@ -1,0 +1,40 @@
+// 104_fixed_graphics.c - Graphics test with correct addressing
+// Fixed framebuffer access avoiding memory conflicts
+
+int main() {
+    log_string("=== Fixed Graphics Test ===\n");
+    
+    // Use framebuffer at a higher address to avoid heap conflicts
+    unsigned int *fb = (unsigned int*)0x8000;
+    
+    log_string("Setting first pixel to red\n");
+    fb[0] = 0xFF0000FF;  // Red pixel at (0,0)
+    
+    log_string("Setting pixel at (1,0) to green\n");
+    fb[1] = 0x00FF00FF;  // Green pixel at (1,0)
+    
+    log_string("Setting pixel at (0,1) to blue\n"); 
+    fb[320] = 0x0000FFFF;  // Blue pixel at (0,1) - next row
+    
+    log_string("Filling first 100 pixels with white\n");
+    for (int i = 0; i < 100; i++) {
+        fb[i] = 0xFFFFFFFF;  // White pixels
+    }
+    
+    log_string("Creating red square (10x10)\n");
+    for (int y = 10; y < 20; y++) {
+        for (int x = 10; x < 20; x++) {
+            fb[y * 320 + x] = 0xFF0000FF;  // Red square
+        }
+    }
+    
+    log_string("Creating green line across screen\n");
+    for (int x = 0; x < 320; x++) {
+        fb[50 * 320 + x] = 0x00FF00FF;  // Green horizontal line at y=50
+    }
+    
+    log_string("Fixed graphics test completed\n");
+    log_string("Check framebuffer output\n");
+    
+    return 0;
+}

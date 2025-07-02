@@ -9,6 +9,13 @@
 #include "ast.h"
 #include "type_checker.h"
 
+// Variable location tracking
+typedef struct VariableLocation {
+    char* name;
+    int stack_offset;  // Offset from frame pointer (negative for locals)
+    struct VariableLocation* next;
+} VariableLocation;
+
 // Code generation context
 typedef struct CodegenContext {
     FILE* output;
@@ -18,6 +25,8 @@ typedef struct CodegenContext {
     int current_function_offset;
     int break_label;
     int continue_label;
+    VariableLocation* local_vars;  // Linked list of local variable locations
+    int stack_offset;              // Current stack offset for local variables
 } CodegenContext;
 
 // Main code generation function
@@ -52,6 +61,11 @@ const char* get_temp_register(CodegenContext* ctx);
 void emit_label(CodegenContext* ctx, int label);
 void emit_instruction(CodegenContext* ctx, const char* op, const char* args, ...);
 void emit_comment(CodegenContext* ctx, const char* comment);
+
+// Variable location management
+void add_local_variable(CodegenContext* ctx, const char* name, int size);
+int get_variable_offset(CodegenContext* ctx, const char* name);
+void clear_local_variables(CodegenContext* ctx);
 
 // Runtime functions
 void emit_runtime_functions(CodegenContext* ctx);

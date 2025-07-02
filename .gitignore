@@ -188,3 +188,4 @@ benchmark_*.dat
 # !Makefile
 # !build.sh
 temp
+tools/assembler.dSYM

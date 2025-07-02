@@ -20,7 +20,9 @@ int generate_code(AstNode* ast, SymbolTable* symbols, FILE* output) {
         .temp_counter = 0,
         .current_function_offset = 0,
         .break_label = -1,
-        .continue_label = -1
+        .continue_label = -1,
+        .local_vars = NULL,
+        .stack_offset = 0
     };
     
     // Emit assembly header
@@ -108,6 +110,9 @@ void codegen_declaration(AstNode* decl, CodegenContext* ctx) {
 void codegen_function_decl(AstNode* func, CodegenContext* ctx) {
     const char* name = func->data.function_decl.name;
     
+    // Clear any previous local variables
+    clear_local_variables(ctx);
+    
     emit_comment(ctx, "Function declaration");
     fprintf(ctx->output, "%s:\n", name);
     
@@ -115,7 +120,7 @@ void codegen_function_decl(AstNode* func, CodegenContext* ctx) {
     emit_instruction(ctx, "push", "fp");
     emit_instruction(ctx, "mov", "fp, sp");
     
-    // Allocate space for local variables (simplified)
+    // Allocate space for local variables (will be calculated as we go)
     emit_instruction(ctx, "sub", "sp, sp, #64");
     
     // Generate function body
@@ -146,21 +151,21 @@ void codegen_variable_decl(AstNode* var, CodegenContext* ctx) {
         int total_size = array_size * element_size;
         
         fprintf(ctx->output, "; Array %s[%d] allocated (%d bytes)\n", name, array_size, total_size);
-        // In a real implementation, would allocate stack space
-        fprintf(ctx->output, "    ; Array base address for %s\n", name);
         
-        // For global arrays, we could emit a data section entry
-        // For local arrays, we would adjust stack pointer
+        // Add to local variables with proper stack offset
+        add_local_variable(ctx, name, total_size);
     } else {
-        // Regular variable allocation
-        fprintf(ctx->output, "; Variable %s allocated\n", name);
+        // Regular variable allocation - 4 bytes for int
+        add_local_variable(ctx, name, 4);
+        fprintf(ctx->output, "; Variable %s allocated at [fp%d]\n", name, get_variable_offset(ctx, name));
     }
     
     // Generate initializer if present
     if (var->child_count > 0 && var->children[0]) {
         codegen_expression(var->children[0], ctx, "r1");
         fprintf(ctx->output, "    ; Store initializer value for %s\n", name);
-        // In a real implementation, would store to variable's location
+        int offset = get_variable_offset(ctx, name);
+        emit_instruction(ctx, "store", "r1, [fp%+d]", offset);
     }
 }
 
@@ -422,7 +427,16 @@ void codegen_assignment(AstNode* expr, CodegenContext* ctx, const char* result_r
         if (expr->children[0]->type == AST_IDENTIFIER) {
             const char* var_name = expr->children[0]->data.identifier.name;
             fprintf(ctx->output, "    ; Load current value of %s\n", var_name);
-            emit_instruction(ctx, "load", "r2, [%s]", var_name);
+            
+            // Check if it's a local variable
+            int offset = get_variable_offset(ctx, var_name);
+            if (offset != 0) {
+                // Local variable - use stack-relative addressing
+                emit_instruction(ctx, "load", "r2, [fp%+d]", offset);
+            } else {
+                // Global variable
+                emit_instruction(ctx, "load", "r2, [%s]", var_name);
+            }
         } else if (expr->children[0]->type == AST_ARRAY_ACCESS) {
             // Load current array element value
             fprintf(ctx->output, "    ; Load current array element value\n");
@@ -467,7 +481,16 @@ void codegen_assignment(AstNode* expr, CodegenContext* ctx, const char* result_r
     if (expr->children[0]->type == AST_IDENTIFIER) {
         const char* var_name = expr->children[0]->data.identifier.name;
         fprintf(ctx->output, "    ; Store to variable %s\n", var_name);
-        emit_instruction(ctx, "store", "r1, [%s]", var_name);
+        
+        // Check if it's a local variable
+        int offset = get_variable_offset(ctx, var_name);
+        if (offset != 0) {
+            // Local variable - use stack-relative addressing
+            emit_instruction(ctx, "store", "r1, [fp%+d]", offset);
+        } else {
+            // Global variable or parameter - use label (fallback)
+            emit_instruction(ctx, "store", "r1, [%s]", var_name);
+        }
     } else if (expr->children[0]->type == AST_ARRAY_ACCESS) {
         // Handle array assignment: arr[index] = value
         fprintf(ctx->output, "    ; Store to array element\n");
@@ -521,11 +544,20 @@ void codegen_function_call(AstNode* expr, CodegenContext* ctx, const char* resul
 void codegen_identifier(AstNode* expr, CodegenContext* ctx, const char* result_reg) {
     const char* name = expr->data.identifier.name;
     
+    // Check if it's a local variable first
+    int offset = get_variable_offset(ctx, name);
+    if (offset != 0) {
+        // Local variable - use stack-relative addressing
+        emit_instruction(ctx, "load", "%s, [fp%+d]", result_reg, offset);
+        return;
+    }
+    
     // Look up symbol to determine if it's a variable, function, etc.
     Symbol* symbol = lookup_symbol(ctx->symbols, name);
     if (symbol) {
         switch (symbol->symbol_type) {
             case SYMBOL_VARIABLE:
+                // Global variable
                 emit_instruction(ctx, "load", "%s, [%s]", result_reg, name);
                 break;
             case SYMBOL_FUNCTION:
@@ -729,4 +761,37 @@ void emit_runtime_functions(CodegenContext* ctx) {
     // Data section
     fprintf(ctx->output, "; Data section\n");
     fprintf(ctx->output, "heap_ptr: .word 0x10000\n\n");
+}
+
+// Variable location management functions
+void add_local_variable(CodegenContext* ctx, const char* name, int size) {
+    VariableLocation* var = malloc(sizeof(VariableLocation));
+    var->name = strdup(name);
+    var->stack_offset = ctx->stack_offset - size;
+    var->next = ctx->local_vars;
+    ctx->local_vars = var;
+    ctx->stack_offset -= size;
+}
+
+int get_variable_offset(CodegenContext* ctx, const char* name) {
+    VariableLocation* var = ctx->local_vars;
+    while (var) {
+        if (strcmp(var->name, name) == 0) {
+            return var->stack_offset;
+        }
+        var = var->next;
+    }
+    return 0; // Not found - should not happen
+}
+
+void clear_local_variables(CodegenContext* ctx) {
+    VariableLocation* var = ctx->local_vars;
+    while (var) {
+        VariableLocation* next = var->next;
+        free(var->name);
+        free(var);
+        var = next;
+    }
+    ctx->local_vars = NULL;
+    ctx->stack_offset = 0;
 }

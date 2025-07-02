@@ -71,11 +71,15 @@ module cpu_core (
     wire [31:0] immediate;
     wire is_immediate_inst, is_load_store, is_branch_jump;
     
-    // Branch/jump opcodes
-    localparam [4:0] OP_CMP = 5'h10, OP_JMP = 5'h11, OP_JZ = 5'h12, OP_JNZ = 5'h13;
-    localparam [4:0] OP_JC = 5'h14, OP_JNC = 5'h15, OP_JLT = 5'h16, OP_JGE = 5'h17, OP_JLE = 5'h18;
-    localparam [4:0] OP_CALL = 5'h19, OP_RET = 5'h1A, OP_PUSH = 5'h1B, OP_POP = 5'h1C;
-    localparam [4:0] OP_SYSCALL = 5'h1D, OP_IRET = 5'h1E, OP_HALT = 5'h1F;
+    // Branch/jump opcodes (updated to match assembler)
+    localparam [4:0] OP_CMP = 5'h11, OP_JMP = 5'h12, OP_JZ = 5'h13, OP_JNZ = 5'h14;
+    localparam [4:0] OP_JC = 5'h15, OP_JNC = 5'h16, OP_JLT = 5'h17, OP_JGE = 5'h18, OP_JLE = 5'h19, OP_JN = 5'h1A;
+    localparam [4:0] OP_CALL = 5'h1B, OP_RET = 5'h1C, OP_PUSH = 5'h1D, OP_POP = 5'h1E;
+    localparam [4:0] OP_HALT = 5'h1F;
+    
+    // Set instruction opcodes
+    localparam [5:0] OP_SETEQ = 6'h20, OP_SETNE = 6'h21, OP_SETLT = 6'h22;
+    localparam [5:0] OP_SETGE = 6'h23, OP_SETLE = 6'h24, OP_SETGT = 6'h25;
     
     // Instantiate ALU
     alu alu_inst (
@@ -128,12 +132,32 @@ module cpu_core (
                 
                 EXECUTE: begin
                     alu_result_reg <= alu_result;
+                    $display("DEBUG CPU Execute: Instruction opcode=%h, alu_result=%d, alu_result_reg will be set to %d", 
+                            opcode, alu_result, alu_result);
                     // Update flags for ALU operations
                     if (opcode == 5'h04 || opcode == 5'h05 || opcode == 5'h06 || opcode == 5'h07 || 
                         opcode == 5'h08 || opcode == 5'h09 || opcode == 5'h0A || opcode == 5'h0D) begin
                         flags_reg <= flags_out;
                         $display("DEBUG CPU: Flags updated to C=%b Z=%b N=%b V=%b", 
                                 flags_out[0], flags_out[1], flags_out[2], flags_out[3]);
+                    end
+                    // Handle set instructions
+                    $display("DEBUG: Checking SET condition: opcode=%h, OP_SETEQ=%h, condition=%b", 
+                            opcode, OP_SETEQ, (opcode == OP_SETEQ || opcode == OP_SETNE || opcode == OP_SETLT ||
+                            opcode == OP_SETGE || opcode == OP_SETLE || opcode == OP_SETGT));
+                    if (opcode == OP_SETEQ || opcode == OP_SETNE || opcode == OP_SETLT ||
+                        opcode == OP_SETGE || opcode == OP_SETLE || opcode == OP_SETGT) begin
+                        case (opcode)
+                            OP_SETEQ: alu_result_reg <= flags_reg[1] ? 32'h1 : 32'h0;  // Z flag
+                            OP_SETNE: alu_result_reg <= !flags_reg[1] ? 32'h1 : 32'h0; // !Z flag
+                            OP_SETLT: alu_result_reg <= flags_reg[2] ? 32'h1 : 32'h0;  // N flag
+                            OP_SETGE: alu_result_reg <= !flags_reg[2] ? 32'h1 : 32'h0; // !N flag
+                            OP_SETLE: alu_result_reg <= (flags_reg[2] || flags_reg[1]) ? 32'h1 : 32'h0; // N || Z
+                            OP_SETGT: alu_result_reg <= (!flags_reg[2] && !flags_reg[1]) ? 32'h1 : 32'h0; // !N && !Z
+                            // No default case - leave alu_result_reg as set by line 134
+                        endcase
+                        $display("DEBUG CPU: SET instruction - opcode=%h, flags=0x%h, result=%d", 
+                                opcode, flags_reg, alu_result_reg);
                     end
                     if (opcode == 5'h1F) begin // HALT
                         halted_reg <= 1'b1;
@@ -256,13 +280,15 @@ module cpu_core (
     assign flags_in = flags_reg; // Use stored flags as input to ALU
     
     // Register file connections
-    assign reg_addr_a = store_direct_addr ? rd : rs1;  // For STORE direct addressing, source is in rd field
-    assign reg_addr_b = rs2;  // Always use rs2 for second operand (ALU operand B)
+    assign reg_addr_a = (opcode == 5'h03) ? rd : rs1;  // For STORE, source data is in rd; others use rs1
+    assign reg_addr_b = (opcode == 5'h03 && !store_direct_addr) ? rs1 : rs2;  // For STORE register addressing, address base is in rs1
     assign reg_addr_w = rd;   // Always use rd for write destination
     assign reg_data_w = (state == WRITEBACK) ? 
                        ((opcode == 5'h02) ? memory_data_reg : alu_result_reg) : 32'h0;
     assign reg_write_en = (state == WRITEBACK) && 
-                         !(opcode == 5'h03) && !(opcode == 5'h1F) && !is_branch_jump;
+                         !(opcode == 5'h03) && !(opcode == 5'h1F) && !is_branch_jump ||
+                         (state == WRITEBACK) && (opcode == OP_SETEQ || opcode == OP_SETNE || 
+                          opcode == OP_SETLT || opcode == OP_SETGE || opcode == OP_SETLE || opcode == OP_SETGT);
 
     // Memory interface with intelligent addressing
     assign addr_bus = (state == FETCH) ? pc_reg : 
