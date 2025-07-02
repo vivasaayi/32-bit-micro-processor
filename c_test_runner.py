@@ -159,6 +159,8 @@ class CTestRunner:
             "error_output": stderr,
             "log_file": str(sim_log_file)
         }
+
+        print("Simulation Log File:", sim_log_file)
         
         # Extract log output
         log_start = stdout.find("=== LOG OUTPUT ===")
@@ -232,6 +234,7 @@ class CTestRunner:
                     result["stages"]["c_to_asm"]["message"] = msg
                     return result
 
+        print("Assembly file generated:", asm_file)
         print(f"  ✅ {message}")
         
         # Stage 2: Assembly to Hex
@@ -246,7 +249,8 @@ class CTestRunner:
         if not success:
             print(f"  ❌ {message}")
             return result
-        
+
+        print("Hex file generated:", hex_file)
         print(f"  ✅ {message}")
         
         # Stage 3: Simulation
@@ -847,6 +851,7 @@ endmodule
             
             # Stage 1: Assemble to Hex
             print("Stage 1: Assembling to Hex...")
+            print("Assembly file name:", asm_file)
             success, message, hex_file = self.assemble_to_hex(asm_file)
             result = {
                 "test_name": test_name,
@@ -858,6 +863,8 @@ endmodule
             if not success:
                 print(f"  ❌ {message}")
                 return result
+
+            print("Hex file generated:", hex_file)
             print(f"  ✅ {message}")
             # Stage 2: Simulation
             print("Stage 2: Running Simulation...")

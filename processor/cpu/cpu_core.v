@@ -59,27 +59,59 @@ module cpu_core (
     wire [7:0] flags_in, flags_out;
     
     // Register file signals
-    wire [4:0] reg_addr_a, reg_addr_b, reg_addr_w;
+    wire [4:0] reg_addr_a, reg_addr_b, reg_addr_w; 
     wire [31:0] reg_data_a, reg_data_b, reg_data_w;
     wire reg_write_en;
     
     // Control signals
-    wire [4:0] opcode;
-    wire [4:0] rd, rs1, rs2;  // 5-bit register addresses
+    wire [5:0] opcode; // RAJAN: 6 bit opcode
+    wire [4:0] rd, rs1, rs2;  // RAJAN:  5-bit register addresses
     wire [19:0] imm20;
     wire [11:0] imm12;
     wire [31:0] immediate;
     wire is_immediate_inst, is_load_store, is_branch_jump;
     
-    // Branch/jump opcodes (updated to match assembler)
-    localparam [4:0] OP_CMP = 5'h11, OP_JMP = 5'h12, OP_JZ = 5'h13, OP_JNZ = 5'h14;
-    localparam [4:0] OP_JC = 5'h15, OP_JNC = 5'h16, OP_JLT = 5'h17, OP_JGE = 5'h18, OP_JLE = 5'h19, OP_JN = 5'h1A;
-    localparam [4:0] OP_CALL = 5'h1B, OP_RET = 5'h1C, OP_PUSH = 5'h1D, OP_POP = 5'h1E;
-    localparam [4:0] OP_HALT = 5'h1F;
-    
-    // Set instruction opcodes
-    localparam [5:0] OP_SETEQ = 6'h20, OP_SETNE = 6'h21, OP_SETLT = 6'h22;
-    localparam [5:0] OP_SETGE = 6'h23, OP_SETLE = 6'h24, OP_SETGT = 6'h25;
+    // Branch/jump opcodes
+    localparam [5:0] 
+        OP_CMP   = 6'h11,
+        OP_JMP   = 6'h12,
+        OP_JZ    = 6'h13,
+        OP_JNZ   = 6'h14,
+        OP_JC    = 6'h15,
+        OP_JNC   = 6'h16,
+        OP_JLT   = 6'h17,
+        OP_JGE   = 6'h18,
+        OP_JLE   = 6'h19,
+        OP_JN    = 6'h1A,
+        OP_CALL  = 6'h1B,
+        OP_RET   = 6'h1C,
+        OP_PUSH  = 6'h1D,
+        OP_POP   = 6'h1E,
+        OP_HALT  = 6'h1F;
+
+    // Set/compare instruction opcodes
+    localparam [5:0]
+        OP_SETEQ = 6'h20,
+        OP_SETNE = 6'h21,
+        OP_SETLT = 6'h22,
+        OP_SETGE = 6'h23,
+        OP_SETLE = 6'h24,
+        OP_SETGT = 6'h25;
+
+    // ALU operation codes (extracted for clarity)
+    localparam [5:0]
+        ALU_ADD  = 6'h00,
+        ALU_SUB  = 6'h01,
+        ALU_AND  = 6'h04,
+        ALU_OR   = 6'h05,
+        ALU_XOR  = 6'h06,
+        ALU_NOT  = 6'h07,
+        ALU_SHL  = 6'h08,
+        ALU_SHR  = 6'h09,
+        ALU_CMP  = 6'h0C,
+        ALU_MUL  = 6'h0E,
+        ALU_DIV  = 6'h0F,
+        ALU_MOD  = 6'h10;
     
     // Instantiate ALU
     alu alu_inst (
@@ -135,8 +167,8 @@ module cpu_core (
                     $display("DEBUG CPU Execute: Instruction opcode=%h, alu_result=%d, alu_result_reg will be set to %d", 
                             opcode, alu_result, alu_result);
                     // Update flags for ALU operations
-                    if (opcode == 5'h04 || opcode == 5'h05 || opcode == 5'h06 || opcode == 5'h07 || 
-                        opcode == 5'h08 || opcode == 5'h09 || opcode == 5'h0A || opcode == 5'h0D) begin
+                    if (opcode == 6'h04 || opcode == 6'h05 || opcode == 6'h06 || opcode == 6'h07 || 
+                        opcode == 6'h08 || opcode == 6'h09 || opcode == 6'h0A || opcode == 6'h0D) begin
                         flags_reg <= flags_out;
                         $display("DEBUG CPU: Flags updated to C=%b Z=%b N=%b V=%b", 
                                 flags_out[0], flags_out[1], flags_out[2], flags_out[3]);
@@ -159,7 +191,7 @@ module cpu_core (
                         $display("DEBUG CPU: SET instruction - opcode=%h, flags=0x%h, result=%d", 
                                 opcode, flags_reg, alu_result_reg);
                     end
-                    if (opcode == 5'h1F) begin // HALT
+                    if (opcode == 6'h1F) begin // HALT
                         halted_reg <= 1'b1;
                     end
                     // Branch/jump PC update
@@ -172,22 +204,22 @@ module cpu_core (
                         $display("DEBUG CPU: Branch not taken at PC=0x%x, condition failed", pc_reg);
                     end
                     // Debug output for ALU operations
-                    if (opcode == 5'h04 || opcode == 5'h05) begin // ADD/ADDI
+                    if (opcode == 6'h04 || opcode == 6'h05) begin // ADD/ADDI
                         $display("DEBUG ALU: ADD/ADDI - op=%s R%d = R%d + %s%d => %d", 
-                                (opcode == 5'h04) ? "ADD" : "ADDI",
+                                (opcode == 6'h04) ? "ADD" : "ADDI",
                                 rd, rs1, 
-                                (opcode == 5'h04) ? "R" : "#",
-                                (opcode == 5'h04) ? rs2 : immediate,
+                                (opcode == 6'h04) ? "R" : "#",
+                                (opcode == 6'h04) ? rs2 : immediate,
                                 alu_result);
                     end
                 end
                 
                 MEMORY: begin
-                    if (is_load_store && opcode == 5'h02) begin // LOAD
+                    if (is_load_store && opcode == 6'h02) begin // LOAD
                         memory_data_reg <= data_bus;
                         $display("DEBUG CPU: LOAD from addr=0x%x, data=%d", immediate, data_bus);
                     end
-                    if (opcode == 5'h03) begin // STORE
+                    if (opcode == 6'h03) begin // STORE
                         $display("DEBUG CPU: STORE R%d=%d to addr=0x%x, mem_write=%b, data_bus=0x%x", 
                                 store_direct_addr ? rd : rs1, reg_data_a, immediate, mem_write, data_bus);
                     end
@@ -213,7 +245,8 @@ module cpu_core (
     end
     
     // Instruction decode
-    assign opcode = instruction_reg[31:27];
+    // 6 bit opcodes
+    assign opcode = instruction_reg[31:26]; 
     assign rd = instruction_reg[23:19];   // 5-bit register address
     assign rs1 = instruction_reg[18:14];  // 5-bit register address
     assign rs2 = instruction_reg[13:9];   // 5-bit register address
@@ -224,8 +257,8 @@ module cpu_core (
     wire [31:0] addi_subi_imm = {{12{instruction_reg[19]}}, instruction_reg[19:0]};
     
     // Control signal generation
-    assign is_immediate_inst = (opcode == 5'h01) || (opcode == 5'h05) || (opcode == 5'h07);
-    assign is_load_store = (opcode == 5'h02) || (opcode == 5'h03);
+    assign is_immediate_inst = (opcode == 6'h01) || (opcode == 6'h05) || (opcode == 6'h07);
+    assign is_load_store = (opcode == 6'h02) || (opcode == 6'h03);
     assign is_branch_jump = (opcode >= OP_JMP && opcode <= OP_JLE);
     
     // Enhanced memory addressing intelligence
@@ -235,7 +268,7 @@ module cpu_core (
     
     // Detect STORE with direct addressing (20-bit immediate format)
     // Format: opcode(5) | 000(3) | rs(4) | address(20)
-    wire store_direct_addr = (opcode == 5'h03) && (instruction_reg[26:24] == 3'b000);
+    wire store_direct_addr = (opcode == 6'h03) && (instruction_reg[26:24] == 3'b000);
     
     // Optimize for known memory regions
     wire use_optimized_addressing = is_log_buffer_access || is_stack_access;
@@ -253,40 +286,40 @@ module cpu_core (
         1'b0;
 
     // Immediate value selection
-    assign immediate = (opcode == 5'h02) ? {13'h0000, imm20} :                         // LOAD: 19-bit address
-                      (opcode == 5'h03 && store_direct_addr) ? {13'h0000, imm20} :     // STORE direct: 19-bit address  
-                      (opcode == 5'h03 && !store_direct_addr) ? {{23{imm12[8]}}, imm12} : // STORE reg+offset: 9-bit offset
-                      (opcode == 5'h01) ? {13'h0000, imm20} :                          // LOADI: 19-bit immediate
-                      ((opcode == 5'h05) || (opcode == 5'h07)) ? {{23{imm12[8]}}, imm12} : // ADDI/SUBI: 9-bit signed
+    assign immediate = (opcode == 6'h02) ? {13'h0000, imm20} :                         // LOAD: 19-bit address
+                      (opcode == 6'h03 && store_direct_addr) ? {13'h0000, imm20} :     // STORE direct: 19-bit address  
+                      (opcode == 6'h03 && !store_direct_addr) ? {{23{imm12[8]}}, imm12} : // STORE reg+offset: 9-bit offset
+                      (opcode == 6'h01) ? {13'h0000, imm20} :                          // LOADI: 19-bit immediate
+                      ((opcode == 6'h05) || (opcode == 6'h07)) ? {{23{imm12[8]}}, imm12} : // ADDI/SUBI: 9-bit signed
                       {{23{imm12[8]}}, imm12};                                         // Default: 9-bit signed
     
     // ALU connections
     assign alu_a = reg_data_a;
     assign alu_b = is_immediate_inst ? immediate : reg_data_b;
-    assign alu_op = (opcode == 5'h04 || opcode == 5'h05) ? 5'h0 : // ADD/ADDI
-                   (opcode == 5'h06 || opcode == 5'h07) ? 5'h1 : // SUB/SUBI
-                   (opcode == 5'h08) ? 5'hE :                     // MUL (assuming ALU_MUL = 5'hE)
-                   (opcode == 5'h09) ? 5'hF :                     // DIV (assuming ALU_DIV = 5'hF)
-                   (opcode == 5'h0A) ? 5'h10 :                    // MOD (ALU_MOD = 5'h10) - JVM Enhancement
-                   (opcode == 5'h0B) ? 5'h4 :                     // AND
-                   (opcode == 5'h0C) ? 5'h5 :                     // OR
-                   (opcode == 5'h0D) ? 5'h6 :                     // XOR
-                   (opcode == 5'h0E) ? 5'h7 :                     // NOT
-                   (opcode == 5'h0F) ? 5'h8 :                     // SHL
-                   (opcode == 5'h10) ? 5'h9 :                     // SHR
-                   (opcode == 5'h11) ? 5'hC :                     // CMP (updated opcode)
-                   5'h0; // Default ADD
+    assign alu_op = (opcode == 6'h04 || opcode == 6'h05) ? ALU_ADD : // ADD/ADDI
+                   (opcode == 6'h06 || opcode == 6'h07) ? ALU_SUB : // SUB/SUBI
+                   (opcode == 6'h08) ? ALU_MUL :                     // MUL
+                   (opcode == 6'h09) ? ALU_DIV :                     // DIV
+                   (opcode == 6'h0A) ? ALU_MOD :                     // MOD
+                   (opcode == 6'h0B) ? ALU_AND :                     // AND
+                   (opcode == 6'h0C) ? ALU_OR  :                     // OR
+                   (opcode == 6'h0D) ? ALU_XOR :                     // XOR
+                   (opcode == 6'h0E) ? ALU_NOT :                     // NOT
+                   (opcode == 6'h0F) ? ALU_SHL :                     // SHL
+                   (opcode == 6'h10) ? ALU_SHR :                     // SHR
+                   (opcode == 6'h11) ? ALU_CMP :                     // CMP
+                   ALU_ADD; // Default ADD
     
     assign flags_in = flags_reg; // Use stored flags as input to ALU
     
     // Register file connections
-    assign reg_addr_a = (opcode == 5'h03) ? rd : rs1;  // For STORE, source data is in rd; others use rs1
-    assign reg_addr_b = (opcode == 5'h03 && !store_direct_addr) ? rs1 : rs2;  // For STORE register addressing, address base is in rs1
+    assign reg_addr_a = (opcode == 6'h03) ? rd : rs1;  // For STORE, source data is in rd; others use rs1
+    assign reg_addr_b = (opcode == 6'h03 && !store_direct_addr) ? rs1 : rs2;  // For STORE register addressing, address base is in rs1
     assign reg_addr_w = rd;   // Always use rd for write destination
     assign reg_data_w = (state == WRITEBACK) ? 
-                       ((opcode == 5'h02) ? memory_data_reg : alu_result_reg) : 32'h0;
+                       ((opcode == 6'h02) ? memory_data_reg : alu_result_reg) : 32'h0;
     assign reg_write_en = (state == WRITEBACK) && 
-                         !(opcode == 5'h03) && !(opcode == 5'h1F) && !is_branch_jump ||
+                         !(opcode == 6'h03) && !(opcode == 6'h1F) && !is_branch_jump ||
                          (state == WRITEBACK) && (opcode == OP_SETEQ || opcode == OP_SETNE || 
                           opcode == OP_SETLT || opcode == OP_SETGE || opcode == OP_SETLE || opcode == OP_SETGT);
 
@@ -297,12 +330,12 @@ module cpu_core (
                      (state == MEMORY && is_load_store) ? immediate :         // LOAD: always direct addressing
                      pc_reg;
     
-    assign data_bus = (state == MEMORY && opcode == 5'h03 && mem_write) ? reg_data_a : 32'hZZZZZZZZ;
+    assign data_bus = (state == MEMORY && opcode == 6'h03 && mem_write) ? reg_data_a : 32'hZZZZZZZZ;
     
     assign mem_read = (state == FETCH) ? 1'b1 : 
-                     (state == MEMORY && opcode == 5'h02) ? 1'b1 : 1'b0;
+                     (state == MEMORY && opcode == 6'h02) ? 1'b1 : 1'b0;
     
-    assign mem_write = (state == MEMORY && opcode == 5'h03) ? 1'b1 : 1'b0;
+    assign mem_write = (state == MEMORY && opcode == 6'h03) ? 1'b1 : 1'b0;
     
     // Debug outputs
     always @(posedge clk) begin
@@ -311,10 +344,10 @@ module cpu_core (
         end else if (state == EXECUTE) begin
             $display("DEBUG CPU Execute: PC=0x%x, Opcode=%h, rd=%d, rs1=%d, rs2=%d, imm=%h",
                     pc_reg, opcode, rd, rs1, rs2, immediate);
-            if (opcode == 5'h04 || opcode == 5'h05) begin
+            if (opcode == 6'h04 || opcode == 6'h05) begin
                 $display("DEBUG CPU ALU: %s rd=%d, rs1=%d, val2=%d, result=%d",
-                        opcode == 5'h04 ? "ADD" : "ADDI",
-                        rd, rs1, opcode == 5'h04 ? reg_data_b : immediate,
+                        opcode == 6'h04 ? "ADD" : "ADDI",
+                        rd, rs1, opcode == 6'h04 ? reg_data_b : immediate,
                         alu_result);
             end
         end else if (state == WRITEBACK && reg_write_en) begin

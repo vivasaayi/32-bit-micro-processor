@@ -1,5 +1,5 @@
 .org 0x8000
-; Write 8 colored pixels at the top-left of the framebuffer and verify each write
+; WRajan Test: rite 8 colored pixels at the top-left of the framebuffer and verify each write
 
 main:
     mov r9, #0x4000         ; Debug address (not framebuffer)
