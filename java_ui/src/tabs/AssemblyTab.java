@@ -14,6 +14,7 @@ public class AssemblyTab extends BaseTab {
     private JTextArea explanationArea;
     private JButton assembleButton;
     private JButton explainButton;
+    private JLabel filePathLabel;
     private JSplitPane mainSplitPane;
     private JSplitPane rightSplitPane;
     
@@ -55,6 +56,18 @@ public class AssemblyTab extends BaseTab {
     protected void setupLayout() {
         setLayout(new BorderLayout());
         
+        // File path label at the top
+        filePathLabel = new JLabel("No assembly file loaded");
+        filePathLabel.setFont(new Font(Font.SANS_SERIF, Font.ITALIC, 10));
+        filePathLabel.setForeground(Color.BLUE);
+        filePathLabel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        filePathLabel.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseClicked(java.awt.event.MouseEvent evt) {
+                openFileLocation();
+            }
+        });
+        add(filePathLabel, BorderLayout.NORTH);
+        
         // Left panel: source code with buttons
         JPanel leftPanel = new JPanel(new BorderLayout());
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
@@ -83,6 +96,7 @@ public class AssemblyTab extends BaseTab {
         sourceArea.setText(content);
         logArea.setText("");
         explanationArea.setText("");
+        updateFilePath();
     }
     
     @Override
@@ -231,6 +245,25 @@ public class AssemblyTab extends BaseTab {
         worker.execute();
     }
     
+    private void openFileLocation() {
+        try {
+            if (appState.getCurrentFile() != null && appState.getCurrentFile().exists()) {
+                File file = appState.getCurrentFile();
+                // Open file location in Finder (macOS)
+                if (System.getProperty("os.name").toLowerCase().contains("mac")) {
+                    Runtime.getRuntime().exec(new String[]{"open", "-R", file.getAbsolutePath()});
+                } else if (System.getProperty("os.name").toLowerCase().contains("windows")) {
+                    Runtime.getRuntime().exec(new String[]{"explorer", "/select,", file.getAbsolutePath()});
+                } else {
+                    // Linux - open containing directory
+                    Runtime.getRuntime().exec(new String[]{"xdg-open", file.getParent()});
+                }
+            }
+        } catch (Exception e) {
+            logArea.append("Error opening file location: " + e.getMessage() + "\n");
+        }
+    }
+    
     private String generateAssemblyExplanation(String assembly) {
         StringBuilder explanation = new StringBuilder();
         explanation.append("ASSEMBLY CODE EXPLANATION\n");
@@ -312,5 +345,13 @@ public class AssemblyTab extends BaseTab {
         if (sourceArea != null) sourceArea.setText("");
         if (logArea != null) logArea.setText("");
         if (explanationArea != null) explanationArea.setText("");
+    }
+    
+    public void updateFilePath() {
+        if (appState.getCurrentFile() != null) {
+            filePathLabel.setText("Assembly File: " + appState.getCurrentFile().getAbsolutePath());
+        } else {
+            filePathLabel.setText("No assembly file loaded");
+        }
     }
 }

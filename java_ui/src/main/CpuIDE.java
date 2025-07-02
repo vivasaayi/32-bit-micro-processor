@@ -34,7 +34,8 @@ public class CpuIDE extends JFrame {
     private JavaTab javaTab;
     private AssemblyTab assemblyTab;
     private HexTab hexTab;
-    private SimulationTab simulationTab;
+    private TestbenchTemplateTab testbenchTemplateTab;
+    private VVvpTab vvpTab;
     private SimulationLogTab simulationLogTab;
     private TerminalTab terminalTab;
     private VcdTab vcdTab;
@@ -70,7 +71,8 @@ public class CpuIDE extends JFrame {
         javaTab = new JavaTab(appState, this);
         assemblyTab = new AssemblyTab(appState, this);
         hexTab = new HexTab(appState, this);
-        simulationTab = new SimulationTab(appState, this);
+        testbenchTemplateTab = new TestbenchTemplateTab(appState, this);
+        vvpTab = new VVvpTab(appState, this);
         simulationLogTab = new SimulationLogTab(appState, this);
         terminalTab = new TerminalTab(appState, this);
         vcdTab = new VcdTab(appState, this);
@@ -80,7 +82,8 @@ public class CpuIDE extends JFrame {
         tabbedPane.addTab("Java", javaTab);
         tabbedPane.addTab("Assembly", assemblyTab);
         tabbedPane.addTab("Hex", hexTab);
-        tabbedPane.addTab("Simulation", simulationTab);
+        tabbedPane.addTab("Testbench Template", testbenchTemplateTab);
+        tabbedPane.addTab("V/VVP", vvpTab);
         tabbedPane.addTab("Sim Log", simulationLogTab);
         tabbedPane.addTab("Terminal", terminalTab);
         tabbedPane.addTab("VCD", vcdTab);
@@ -219,9 +222,12 @@ public class CpuIDE extends JFrame {
                     tabbedPane.setSelectedComponent(hexTab);
                     break;
                 case "v":
-                    simulationTab.loadVerilogContent(content);
-                    simulationTab.loadSimulationFiles(); // Load both V and VVP files
-                    tabbedPane.setSelectedComponent(simulationTab);
+                    vvpTab.loadVerilogContent(content);
+                    tabbedPane.setSelectedComponent(vvpTab);
+                    break;
+                case "vvp":
+                    vvpTab.loadVvpContent(content);
+                    tabbedPane.setSelectedComponent(vvpTab);
                     break;
                 case "log":
                     simulationLogTab.loadContent(content);
@@ -248,9 +254,10 @@ public class CpuIDE extends JFrame {
         
         // Always enable certain tabs
         tabbedPane.setEnabledAt(3, true); // Hex tab
-        tabbedPane.setEnabledAt(5, true); // Simulation Log tab
-        tabbedPane.setEnabledAt(6, true); // Terminal tab
-        tabbedPane.setEnabledAt(7, true); // VCD tab
+        tabbedPane.setEnabledAt(4, true); // Testbench Template tab (always visible)
+        tabbedPane.setEnabledAt(6, true); // Simulation Log tab
+        tabbedPane.setEnabledAt(7, true); // Terminal tab
+        tabbedPane.setEnabledAt(8, true); // VCD tab
         
         // Enable tabs based on file type and generated files
         if (fileType != null) {
@@ -278,7 +285,7 @@ public class CpuIDE extends JFrame {
                     break;
                 case "v":
                 case "vvp":
-                    tabbedPane.setEnabledAt(4, true); // Simulation tab
+                    tabbedPane.setEnabledAt(5, true); // V/VVP tab
                     break;
             }
         }
@@ -289,6 +296,9 @@ public class CpuIDE extends JFrame {
         }
         if (appState.hasGeneratedFile("hex")) {
             // Hex tab is always enabled
+        }
+        if (appState.hasGeneratedFile("vvp")) {
+            tabbedPane.setEnabledAt(5, true); // V/VVP tab
         }
     }
     
@@ -303,8 +313,10 @@ public class CpuIDE extends JFrame {
     }
     
     private void runSimulation() {
-        simulationTab.startSimulation();
-        tabbedPane.setSelectedComponent(simulationTab);
+        // For now, just switch to the simulation log tab
+        // The actual simulation will be run from the V/VVP tab
+        tabbedPane.setSelectedComponent(simulationLogTab);
+        updateStatus("Switch to V/VVP tab to run simulation");
     }
     
     public void updateStatus(String message) {
@@ -327,6 +339,12 @@ public class CpuIDE extends JFrame {
     public void loadGeneratedAssembly(File asmFile) {
         try {
             String content = new String(Files.readAllBytes(asmFile.toPath()));
+            
+            // Update app state to reflect the assembly file
+            File previousFile = appState.getCurrentFile();
+            appState.setCurrentFile(asmFile);
+            appState.setFileType("asm");
+            
             assemblyTab.loadContent(content);
             
             // Enable assembly tab and switch to it
@@ -348,6 +366,11 @@ public class CpuIDE extends JFrame {
     public void loadGeneratedHex(File hexFile) {
         try {
             String content = new String(Files.readAllBytes(hexFile.toPath()));
+            
+            // Update app state to reflect the hex file
+            appState.setCurrentFile(hexFile);
+            appState.setFileType("hex");
+            
             hexTab.loadContent(content);
             
             // Switch to hex tab (always enabled)
@@ -371,13 +394,32 @@ public class CpuIDE extends JFrame {
         if (javaTab != null) javaTab.clearContent();
         if (assemblyTab != null) assemblyTab.clearContent();
         if (hexTab != null) hexTab.clearContent();
-        if (simulationTab != null) simulationTab.clearContent();
+        if (testbenchTemplateTab != null) testbenchTemplateTab.clearContent();
+        if (vvpTab != null) vvpTab.clearContent();
         if (simulationLogTab != null) simulationLogTab.clearContent();
         if (terminalTab != null) terminalTab.clearContent();
         if (vcdTab != null) vcdTab.clearContent();
         
         // Clear application state
         appState.clearGeneratedFiles();
+    }
+    
+    // Getter methods for tab communication
+    public TestbenchTemplateTab getTestbenchTemplateTab() {
+        return testbenchTemplateTab;
+    }
+    
+    public VVvpTab getVVvpTab() {
+        return vvpTab;
+    }
+    
+    public void switchToTab(String tabName) {
+        for (int i = 0; i < tabbedPane.getTabCount(); i++) {
+            if (tabbedPane.getTitleAt(i).equals(tabName)) {
+                tabbedPane.setSelectedIndex(i);
+                break;
+            }
+        }
     }
     
     public static void main(String[] args) {

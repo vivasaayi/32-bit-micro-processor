@@ -9,6 +9,7 @@ import java.io.*;
 import javax.swing.SwingWorker;
 import util.AppState;
 import util.InstructionDecoder;
+import main.CpuIDE;
 
 public class HexTab extends BaseTab {
     private JTextArea hexArea;
@@ -17,6 +18,8 @@ public class HexTab extends BaseTab {
     private JTextArea explanationArea;
     private JButton disassembleButton;
     private JButton explainButton;
+    private JButton loadAndTestButton;
+    private JLabel filePathLabel;
     private JSplitPane mainSplitPane;
     private JSplitPane rightSplitPane;
     
@@ -58,18 +61,45 @@ public class HexTab extends BaseTab {
         explainButton = new JButton("Explain Opcodes");
         explainButton.addActionListener(e -> explainOpcodes());
         explainButton.setEnabled(false);
+        
+        loadAndTestButton = new JButton("Load and Test Hex");
+        loadAndTestButton.addActionListener(e -> loadAndTestHex());
     }
     
     @Override
     protected void setupLayout() {
         setLayout(new BorderLayout());
-        
+
+        // File path label at the top
+        filePathLabel = new JLabel("No hex file loaded");
+        filePathLabel.setFont(new Font(Font.SANS_SERIF, Font.ITALIC, 10));
+        filePathLabel.setForeground(Color.BLUE);
+        filePathLabel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        filePathLabel.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseClicked(java.awt.event.MouseEvent evt) {
+                openFileLocation();
+            }
+        });
+
+        // Top panel with file path and Load/Test button
+        JPanel topPanel = new JPanel(new BorderLayout());
+        topPanel.add(filePathLabel, BorderLayout.WEST);
+        JPanel loadTestPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        loadTestPanel.add(loadAndTestButton);
+        topPanel.add(loadTestPanel, BorderLayout.EAST);
+        // Add a separator for clarity
+        JPanel topWithSeparator = new JPanel(new BorderLayout());
+        topWithSeparator.add(topPanel, BorderLayout.NORTH);
+        topWithSeparator.add(new JSeparator(), BorderLayout.SOUTH);
+        add(topWithSeparator, BorderLayout.NORTH);
+
         // Left panel: hex content with buttons
         JPanel leftPanel = new JPanel(new BorderLayout());
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
         buttonPanel.add(disassembleButton);
         buttonPanel.add(explainButton);
-        
+        // (No loadAndTestButton here anymore)
+
         leftPanel.add(new JLabel("Raw Hex Content:"), BorderLayout.NORTH);
         leftPanel.add(new JScrollPane(hexArea), BorderLayout.CENTER);
         leftPanel.add(buttonPanel, BorderLayout.SOUTH);
@@ -103,6 +133,7 @@ public class HexTab extends BaseTab {
         tableModel.setRowCount(0); // Clear table
         explanationArea.setText("");
         explainButton.setEnabled(false);
+        updateFilePath();
     }
     
     @Override
@@ -300,5 +331,104 @@ public class HexTab extends BaseTab {
         if (tableModel != null) tableModel.setRowCount(0);
         if (explanationArea != null) explanationArea.setText("");
         if (explainButton != null) explainButton.setEnabled(false);
+        if (filePathLabel != null) filePathLabel.setText("No hex file loaded");
+    }
+    
+    private void openFileLocation() {
+        try {
+            if (appState.getCurrentFile() != null && appState.getCurrentFile().exists()) {
+                File file = appState.getCurrentFile();
+                // Open file location in Finder (macOS)
+                if (System.getProperty("os.name").toLowerCase().contains("mac")) {
+                    Runtime.getRuntime().exec(new String[]{"open", "-R", file.getAbsolutePath()});
+                } else if (System.getProperty("os.name").toLowerCase().contains("windows")) {
+                    Runtime.getRuntime().exec(new String[]{"explorer", "/select,", file.getAbsolutePath()});
+                } else {
+                    // Linux - open containing directory
+                    Runtime.getRuntime().exec(new String[]{"xdg-open", file.getParent()});
+                }
+            }
+        } catch (Exception e) {
+            updateStatus("Error opening file location: " + e.getMessage());
+        }
+    }
+    
+    public void updateFilePath() {
+        if (appState.getCurrentFile() != null) {
+            filePathLabel.setText("Hex File: " + appState.getCurrentFile().getAbsolutePath());
+        } else {
+            filePathLabel.setText("No hex file loaded");
+        }
+    }
+    
+    private void loadAndTestHex() {
+        if (hexArea.getText().trim().isEmpty()) {
+            showError("Load and Test Hex", "No hex content to test. Please load or generate a hex file first.");
+            return;
+        }
+        
+        updateStatus("Generating testbench for hex testing...");
+        
+        try {
+            // Get the testbench template tab and vvp tab from parent frame
+            if (parentFrame instanceof CpuIDE) {
+                CpuIDE ide = (CpuIDE) parentFrame;
+                TestbenchTemplateTab templateTab = ide.getTestbenchTemplateTab();
+                VVvpTab vvpTab = ide.getVVvpTab();
+                
+                if (templateTab == null || vvpTab == null) {
+                    showError("Load and Test Hex", "Unable to access template or VVP tabs.");
+                    return;
+                }
+                
+                // Generate testbench content using current app state
+                String testbenchContent = templateTab.generateTestbenchFromCurrentFile(appState);
+                
+                // Get current file info for naming the generated testbench file
+                String testName = "hex_test";
+                if (appState.getCurrentFile() != null) {
+                    String fileName = appState.getCurrentFile().getName();
+                    if (fileName.contains(".")) {
+                        testName = fileName.substring(0, fileName.lastIndexOf('.'));
+                    }
+                }
+                
+                // Save the generated testbench to a file
+                try {
+                    File verilogFile = new File("temp", testName + "_testbench.v");
+                    verilogFile.getParentFile().mkdirs(); // Ensure temp directory exists
+                    
+                    try (FileWriter writer = new FileWriter(verilogFile)) {
+                        writer.write(testbenchContent);
+                    }
+                    
+                    // Update AppState with the generated verilog file
+                    appState.addGeneratedFile("verilog", verilogFile);
+                    
+                    // Load the testbench content into VVvpTab with file path
+                    vvpTab.loadVerilogContent(testbenchContent, verilogFile.getAbsolutePath());
+                    
+                    // Switch to the V/VVP tab
+                    ide.switchToTab("V/VVP");
+                    
+                    updateStatus("Testbench generated and loaded into V/VVP tab");
+                    showInfo("Load and Test Hex", 
+                        "Testbench successfully generated!\n\n" +
+                        "File: " + verilogFile.getAbsolutePath() + "\n" +
+                        "Test name: " + testName + "\n\n" +
+                        "The testbench has been loaded into the V/VVP tab.\n" +
+                        "You can now generate the VVP file for simulation.");
+                    
+                } catch (IOException e) {
+                    showError("Load and Test Hex", "Failed to save testbench file: " + e.getMessage());
+                }
+                
+            } else {
+                showError("Load and Test Hex", "Unable to access IDE components for testbench generation.");
+            }
+            
+        } catch (Exception e) {
+            showError("Load and Test Hex", "Error generating testbench: " + e.getMessage());
+        }
     }
 }

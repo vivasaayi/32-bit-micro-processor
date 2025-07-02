@@ -189,3 +189,4 @@ benchmark_*.dat
 # !build.sh
 temp
 tools/assembler.dSYM
+*.class

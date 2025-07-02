@@ -15,6 +15,7 @@ public class CTab extends BaseTab {
     private JTextArea sourceArea;
     private JTextArea logArea;
     private JButton compileButton;
+    private JLabel filePathLabel;
     private JSplitPane splitPane;
     
     public CTab(AppState appState, JFrame parentFrame) {
@@ -49,6 +50,18 @@ public class CTab extends BaseTab {
     protected void setupLayout() {
         setLayout(new BorderLayout());
         
+        // File path label at the top
+        filePathLabel = new JLabel("No file loaded");
+        filePathLabel.setFont(new Font(Font.SANS_SERIF, Font.ITALIC, 10));
+        filePathLabel.setForeground(Color.BLUE);
+        filePathLabel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        filePathLabel.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseClicked(java.awt.event.MouseEvent evt) {
+                openFileLocation();
+            }
+        });
+        add(filePathLabel, BorderLayout.NORTH);
+        
         // Top panel with source code
         JPanel topPanel = new JPanel(new BorderLayout());
         topPanel.add(new JScrollPane(sourceArea), BorderLayout.CENTER);
@@ -75,6 +88,7 @@ public class CTab extends BaseTab {
     public void loadContent(String content) {
         sourceArea.setText(content);
         logArea.setText("");
+        updateFilePath();
     }
     
     @Override
@@ -113,15 +127,19 @@ public class CTab extends BaseTab {
             @Override
             protected Void doInBackground() throws Exception {
                 try {
-                    // Build compiler command
+                    // Build compiler command with file-based naming
                     String compilerPath = "/Users/rajanpanneerselvam/work/hdl/compiler/ccompiler";
                     String inputFile = appState.getCurrentFile().getAbsolutePath();
                     
-                    // Your compiler outputs to 'output.s' in the same directory as input file
+                    // Generate output file name based on input file
                     File inputFileObj = new File(inputFile);
-                    String outputFile = new File(inputFileObj.getParent(), "output.s").getAbsolutePath();
+                    String baseName = inputFileObj.getName();
+                    if (baseName.contains(".")) {
+                        baseName = baseName.substring(0, baseName.lastIndexOf('.'));
+                    }
+                    String outputFile = new File(inputFileObj.getParent(), baseName + ".s").getAbsolutePath();
                     
-                    ProcessBuilder pb = new ProcessBuilder(compilerPath, inputFile);
+                    ProcessBuilder pb = new ProcessBuilder(compilerPath, inputFile, "-o", outputFile);
                     pb.directory(inputFileObj.getParentFile());
                     
                     Process process = pb.start();
@@ -193,5 +211,32 @@ public class CTab extends BaseTab {
         };
         
         worker.execute();
+    }
+    
+    private void openFileLocation() {
+        try {
+            if (appState.getCurrentFile() != null && appState.getCurrentFile().exists()) {
+                File file = appState.getCurrentFile();
+                // Open file location in Finder (macOS)
+                if (System.getProperty("os.name").toLowerCase().contains("mac")) {
+                    Runtime.getRuntime().exec(new String[]{"open", "-R", file.getAbsolutePath()});
+                } else if (System.getProperty("os.name").toLowerCase().contains("windows")) {
+                    Runtime.getRuntime().exec(new String[]{"explorer", "/select,", file.getAbsolutePath()});
+                } else {
+                    // Linux - open containing directory
+                    Runtime.getRuntime().exec(new String[]{"xdg-open", file.getParent()});
+                }
+            }
+        } catch (Exception e) {
+            logArea.append("Error opening file location: " + e.getMessage() + "\n");
+        }
+    }
+    
+    public void updateFilePath() {
+        if (appState.getCurrentFile() != null) {
+            filePathLabel.setText("File: " + appState.getCurrentFile().getAbsolutePath());
+        } else {
+            filePathLabel.setText("No file loaded");
+        }
     }
 }
