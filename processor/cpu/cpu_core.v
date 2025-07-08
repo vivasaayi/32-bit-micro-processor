@@ -71,47 +71,85 @@ module cpu_core (
     wire [31:0] immediate;
     wire is_immediate_inst, is_load_store, is_branch_jump;
     
-    // Branch/jump opcodes
-    localparam [5:0] 
-        OP_CMP   = 6'h11,
-        OP_JMP   = 6'h12,
-        OP_JZ    = 6'h13,
-        OP_JNZ   = 6'h14,
-        OP_JC    = 6'h15,
-        OP_JNC   = 6'h16,
-        OP_JLT   = 6'h17,
-        OP_JGE   = 6'h18,
-        OP_JLE   = 6'h19,
-        OP_JN    = 6'h1A,
-        OP_CALL  = 6'h1B,
-        OP_RET   = 6'h1C,
-        OP_PUSH  = 6'h1D,
-        OP_POP   = 6'h1E,
-        OP_HALT  = 6'h1F;
+    // ----------------------------------------------------------------------
+    // OPCODE ASSIGNMENTS (6-bit, non-overlapping ranges)
+    // ----------------------------------------------------------------------
+    // 0x00–0x1F: ALU operations
+    // 0x20–0x2F: Memory operations
+    // 0x30–0x3F: Control/Branch
+    // 0x40–0x4F: Set/Compare
+    // 0x50–0x5F: System/Privileged
+    // 0x60–0x7F: Reserved/Extension
 
-    // Set/compare instruction opcodes
-    localparam [5:0]
-        OP_SETEQ = 6'h20,
-        OP_SETNE = 6'h21,
-        OP_SETLT = 6'h22,
-        OP_SETGE = 6'h23,
-        OP_SETLE = 6'h24,
-        OP_SETGT = 6'h25;
-
-    // ALU operation codes (extracted for clarity)
+    // ALU operation codes (0x00–0x1F)
     localparam [5:0]
         ALU_ADD  = 6'h00,
         ALU_SUB  = 6'h01,
-        ALU_AND  = 6'h04,
-        ALU_OR   = 6'h05,
-        ALU_XOR  = 6'h06,
-        ALU_NOT  = 6'h07,
-        ALU_SHL  = 6'h08,
-        ALU_SHR  = 6'h09,
-        ALU_CMP  = 6'h0C,
-        ALU_MUL  = 6'h0E,
-        ALU_DIV  = 6'h0F,
-        ALU_MOD  = 6'h10;
+        ALU_AND  = 6'h02,
+        ALU_OR   = 6'h03,
+        ALU_XOR  = 6'h04,
+        ALU_NOT  = 6'h05,
+        ALU_SHL  = 6'h06,
+        ALU_SHR  = 6'h07,
+        ALU_MUL  = 6'h08,
+        ALU_DIV  = 6'h09,
+        ALU_MOD  = 6'h0A,
+        ALU_CMP  = 6'h0B,
+        ALU_SAR  = 6'h0C; // Arithmetic shift right
+
+    // Memory operation codes (0x20–0x2F)
+    localparam [5:0]
+        MEM_LOAD  = 6'h20,
+        MEM_STORE = 6'h21;
+
+    // Control/Branch opcodes (0x30–0x3F)
+    localparam [5:0]
+        OP_JMP   = 6'h30,
+        OP_JZ    = 6'h31,
+        OP_JNZ   = 6'h32,
+        OP_JC    = 6'h33,
+        OP_JNC   = 6'h34,
+        OP_JLT   = 6'h35,
+        OP_JGE   = 6'h36,
+        OP_JLE   = 6'h37,
+        OP_CALL  = 6'h38,
+        OP_RET   = 6'h39,
+        OP_PUSH  = 6'h3A,
+        OP_POP   = 6'h3B;
+
+    // Set/Compare opcodes (0x40–0x4F)
+    localparam [5:0]
+        OP_SETEQ = 6'h40,
+        OP_SETNE = 6'h41,
+        OP_SETLT = 6'h42,
+        OP_SETGE = 6'h43,
+        OP_SETLE = 6'h44,
+        OP_SETGT = 6'h45;
+
+    // System/Privileged opcodes (0x50–0x5F)
+    localparam [5:0]
+        OP_HALT  = 6'h50,
+        OP_INT   = 6'h51;
+
+    // ----------------------------------------------------------------------
+    // ALU OPCODE TABLE (0x00–0x1F)
+    // ----------------------------------------------------------------------
+    // | Opcode | Mnemonic | Operation         |
+    // |--------|----------|------------------|
+    // | 0x00   | ADD      | a + b            |
+    // | 0x01   | SUB      | a - b            |
+    // | 0x02   | AND      | a & b            |
+    // | 0x03   | OR       | a | b            |
+    // | 0x04   | XOR      | a ^ b            |
+    // | 0x05   | NOT      | ~a               |
+    // | 0x06   | SHL      | a << b           |
+    // | 0x07   | SHR      | a >> b           |
+    // | 0x08   | MUL      | a * b            |
+    // | 0x09   | DIV      | a / b            |
+    // | 0x0A   | MOD      | a % b            |
+    // | 0x0B   | CMP      | compare a, b     |
+    // | 0x0C   | SAR      | a >>> b (arith)  |
+    // ----------------------------------------------------------------------
     
     // Instantiate ALU
     alu alu_inst (
@@ -257,9 +295,9 @@ module cpu_core (
     wire [31:0] addi_subi_imm = {{12{instruction_reg[19]}}, instruction_reg[19:0]};
     
     // Control signal generation
-    assign is_immediate_inst = (opcode == 6'h01) || (opcode == 6'h05) || (opcode == 6'h07);
-    assign is_load_store = (opcode == 6'h02) || (opcode == 6'h03);
-    assign is_branch_jump = (opcode >= OP_JMP && opcode <= OP_JLE);
+    assign is_immediate_inst = 1'b0; // (set as needed for your ISA)
+    assign is_load_store = (opcode == MEM_LOAD) || (opcode == MEM_STORE);
+    assign is_branch_jump = (opcode >= OP_JMP && opcode <= OP_POP);
     
     // Enhanced memory addressing intelligence
     wire is_log_buffer_access = (immediate >= 32'h3000) && (immediate < 32'h5000);
@@ -296,18 +334,19 @@ module cpu_core (
     // ALU connections
     assign alu_a = reg_data_a;
     assign alu_b = is_immediate_inst ? immediate : reg_data_b;
-    assign alu_op = (opcode == 6'h04 || opcode == 6'h05) ? ALU_ADD : // ADD/ADDI
-                   (opcode == 6'h06 || opcode == 6'h07) ? ALU_SUB : // SUB/SUBI
-                   (opcode == 6'h08) ? ALU_MUL :                     // MUL
-                   (opcode == 6'h09) ? ALU_DIV :                     // DIV
-                   (opcode == 6'h0A) ? ALU_MOD :                     // MOD
-                   (opcode == 6'h0B) ? ALU_AND :                     // AND
-                   (opcode == 6'h0C) ? ALU_OR  :                     // OR
-                   (opcode == 6'h0D) ? ALU_XOR :                     // XOR
-                   (opcode == 6'h0E) ? ALU_NOT :                     // NOT
-                   (opcode == 6'h0F) ? ALU_SHL :                     // SHL
-                   (opcode == 6'h10) ? ALU_SHR :                     // SHR
-                   (opcode == 6'h11) ? ALU_CMP :                     // CMP
+    assign alu_op = (opcode == ALU_ADD) ? ALU_ADD :
+                   (opcode == ALU_SUB) ? ALU_SUB :
+                   (opcode == ALU_AND) ? ALU_AND :
+                   (opcode == ALU_OR)  ? ALU_OR  :
+                   (opcode == ALU_XOR) ? ALU_XOR :
+                   (opcode == ALU_NOT) ? ALU_NOT :
+                   (opcode == ALU_SHL) ? ALU_SHL :
+                   (opcode == ALU_SHR) ? ALU_SHR :
+                   (opcode == ALU_MUL) ? ALU_MUL :
+                   (opcode == ALU_DIV) ? ALU_DIV :
+                   (opcode == ALU_MOD) ? ALU_MOD :
+                   (opcode == ALU_CMP) ? ALU_CMP :
+                   (opcode == ALU_SAR) ? ALU_SAR :
                    ALU_ADD; // Default ADD
     
     assign flags_in = flags_reg; // Use stored flags as input to ALU
