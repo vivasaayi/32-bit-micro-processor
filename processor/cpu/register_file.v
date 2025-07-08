@@ -37,11 +37,13 @@ module register_file (
     integer i;
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
+            $display("[register_file] Reset: Clearing all registers to 0");
             for (i = 1; i < 32; i = i + 1) begin
                 registers[i] <= 32'h00000000;
             end
         end else if (write_en && addr_w != 5'h0) begin
             // R0 cannot be written to (always zero)
+            $display("[register_file] Write: R%0d <= 0x%08h", addr_w, data_w);
             registers[addr_w] <= data_w;
         end
     end
@@ -49,5 +51,10 @@ module register_file (
     // Asynchronous read with R0 hardwired to zero
     assign data_a = (addr_a == 5'h0) ? 32'h00000000 : registers[addr_a];
     assign data_b = (addr_b == 5'h0) ? 32'h00000000 : registers[addr_b];
+
+    always @(*) begin
+        $display("[register_file] Read: R%0d = 0x%08h (port A), R%0d = 0x%08h (port B)",
+            addr_a, data_a, addr_b, data_b);
+    end
 
 endmodule

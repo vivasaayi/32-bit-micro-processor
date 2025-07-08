@@ -3,8 +3,6 @@ package tabs;
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
 import java.io.*;
 import javax.swing.SwingWorker;
 import util.AppState;
@@ -12,11 +10,11 @@ import util.InstructionDecoder;
 import main.CpuIDE;
 
 public class HexTab extends BaseTab {
-    private JTextArea hexArea;
+    private JTable hexGridTable;
+    private DefaultTableModel hexGridTableModel;
     private JTable disassemblyTable;
     private DefaultTableModel tableModel;
     private JTextArea explanationArea;
-    private JButton disassembleButton;
     private JButton explainButton;
     private JButton loadAndTestButton;
     private JLabel filePathLabel;
@@ -29,10 +27,18 @@ public class HexTab extends BaseTab {
     
     @Override
     protected void initializeComponents() {
-        // Hex content area
-        hexArea = new JTextArea();
-        hexArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 11));
-        hexArea.setBackground(new Color(248, 248, 248));
+        // Hex grid table for Hex and Binary columns
+        String[] hexGridColumns = {"Hex", "Binary"};
+        hexGridTableModel = new DefaultTableModel(hexGridColumns, 0) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                return false;
+            }
+        };
+        hexGridTable = new JTable(hexGridTableModel);
+        hexGridTable.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 11));
+        hexGridTable.setRowHeight(20);
+        hexGridTable.setBackground(new Color(248, 248, 248));
         
         // Disassembly table
         String[] columnNames = {"Address", "Opcode", "RD", "RS1", "RS2", "IMM", "Mnemonic", "Comment"};
@@ -55,15 +61,12 @@ public class HexTab extends BaseTab {
         explanationArea.setBackground(new Color(255, 255, 240));
         
         // Buttons
-        disassembleButton = new JButton("Disassemble Hex");
-        disassembleButton.addActionListener(e -> disassembleHex());
-        
         explainButton = new JButton("Explain Opcodes");
-        explainButton.addActionListener(e -> explainOpcodes());
+        explainButton.addActionListener(_ -> explainOpcodes());
         explainButton.setEnabled(false);
         
         loadAndTestButton = new JButton("Load and Test Hex");
-        loadAndTestButton.addActionListener(e -> loadAndTestHex());
+        loadAndTestButton.addActionListener(_ -> loadAndTestHex());
     }
     
     @Override
@@ -96,12 +99,9 @@ public class HexTab extends BaseTab {
         // Left panel: hex content with buttons
         JPanel leftPanel = new JPanel(new BorderLayout());
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        buttonPanel.add(disassembleButton);
         buttonPanel.add(explainButton);
-        // (No loadAndTestButton here anymore)
-
-        leftPanel.add(new JLabel("Raw Hex Content:"), BorderLayout.NORTH);
-        leftPanel.add(new JScrollPane(hexArea), BorderLayout.CENTER);
+        leftPanel.add(new JLabel("Raw Hex Content (Grid):"), BorderLayout.NORTH);
+        leftPanel.add(new JScrollPane(hexGridTable), BorderLayout.CENTER);
         leftPanel.add(buttonPanel, BorderLayout.SOUTH);
         
         // Right panel: table and explanation
@@ -129,26 +129,57 @@ public class HexTab extends BaseTab {
     
     @Override
     public void loadContent(String content) {
-        hexArea.setText(content);
+        // Fill the hex grid table
+        hexGridTableModel.setRowCount(0);
+        String[] lines = content.split("\n");
+        for (String line : lines) {
+            String hex = line.trim();
+            if (!hex.isEmpty() && hex.length() >= 8) {
+                String hexVal = hex.substring(0, 8);
+                String binVal = String.format("%32s", Long.toBinaryString(Long.parseLong(hexVal, 16))).replace(' ', '0');
+                hexGridTableModel.addRow(new Object[]{hexVal, binVal});
+            }
+        }
         tableModel.setRowCount(0); // Clear table
         explanationArea.setText("");
         explainButton.setEnabled(false);
         updateFilePath();
+        
+        // Auto-disassemble if content is available
+        if (!content.trim().isEmpty()) {
+            disassembleHex();
+        }
     }
     
     @Override
     public void saveContent() {
-        // Hex files are typically read-only, but allow saving if modified
+        // Save hex content from the grid
         if (appState.getCurrentFile() != null) {
             try (FileWriter writer = new FileWriter(appState.getCurrentFile())) {
-                writer.write(hexArea.getText());
+                for (int i = 0; i < hexGridTableModel.getRowCount(); i++) {
+                    Object hexVal = hexGridTableModel.getValueAt(i, 0);
+                    if (hexVal != null) {
+                        writer.write(hexVal.toString() + "\n");
+                    }
+                }
                 updateStatus("Saved: " + appState.getCurrentFile().getName());
             } catch (IOException e) {
                 showError("Save Error", "Failed to save file: " + e.getMessage());
             }
         }
     }
-    
+
+    private String getHexContentFromGrid() {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < hexGridTableModel.getRowCount(); i++) {
+            Object hexVal = hexGridTableModel.getValueAt(i, 0);
+            if (hexVal != null) {
+                sb.append(hexVal.toString()).append("\n");
+            }
+        }
+        return sb.toString();
+    }
+
     public void loadFromAssembly(String hexContent) {
         // Called when assembly is assembled to hex
         loadContent(hexContent);
@@ -160,13 +191,12 @@ public class HexTab extends BaseTab {
     }
     
     private void disassembleHex() {
-        String hexContent = hexArea.getText().trim();
+        String hexContent = getHexContentFromGrid().trim();
         if (hexContent.isEmpty()) {
             showError("Disassemble Error", "No hex content to disassemble");
             return;
         }
         
-        disassembleButton.setEnabled(false);
         updateStatus("Disassembling hex...");
         
         SwingWorker<Void, Object[]> worker = new SwingWorker<Void, Object[]>() {
@@ -190,8 +220,8 @@ public class HexTab extends BaseTab {
                             String hexInstr = line.substring(0, 8);
                             int instruction = (int) Long.parseLong(hexInstr, 16);
                             
-                            // Use basic decoding for now
-                            Object[] row = createBasicTableRow(address, instruction);
+                            // Use shared InstructionDecoder
+                            Object[] row = InstructionDecoder.decodeInstruction(address, instruction);
                             publish(row);
                             
                             address += 4; // Increment by 4 bytes
@@ -215,7 +245,6 @@ public class HexTab extends BaseTab {
             
             @Override
             protected void done() {
-                disassembleButton.setEnabled(true);
                 explainButton.setEnabled(true);
                 updateStatus("Disassembly complete");
             }
@@ -224,37 +253,9 @@ public class HexTab extends BaseTab {
         worker.execute();
     }
     
-    private Object[] createBasicTableRow(int address, int instruction) {
-        // Basic decode without custom decoder for now
-        int opcode = (instruction >>> 26) & 0x3F;  // [31:26]
-        int rd = (instruction >>> 19) & 0x1F;      // [23:19] 
-        int rs1 = (instruction >>> 14) & 0x1F;     // [18:14]
-        int rs2 = (instruction >>> 9) & 0x1F;      // [13:9]
-        int immediate = instruction & 0x1FF;       // [8:0]
-        
-        // Sign extend immediate
-        if ((immediate & 0x100) != 0) {
-            immediate |= 0xFFFFFE00;
-        }
-        
-        String mnemonic = "OP_" + String.format("%02X", opcode);
-        String comment = "Instruction at " + String.format("0x%08X", address);
-        
-        return new Object[] {
-            String.format("0x%08X", address),           // Address
-            String.format("0x%02X", opcode),            // Opcode
-            String.format("R%d", rd),                   // RD
-            String.format("R%d", rs1),                  // RS1
-            String.format("R%d", rs2),                  // RS2
-            String.valueOf(immediate),                  // IMM
-            mnemonic,                                   // Mnemonic
-            comment                                     // Comment
-        };
-    }
-    
     private void explainOpcodes() {
         if (tableModel.getRowCount() == 0) {
-            showInfo("No Instructions", "Please disassemble hex code first.");
+            showInfo("No Instructions", "No instructions to explain. Hex is automatically decoded.");
             return;
         }
         
@@ -293,7 +294,6 @@ public class HexTab extends BaseTab {
         
         for (int i = 0; i < tableModel.getRowCount(); i++) {
             String address = (String) tableModel.getValueAt(i, 0);
-            String opcode = (String) tableModel.getValueAt(i, 1);
             String mnemonic = (String) tableModel.getValueAt(i, 6);
             String comment = (String) tableModel.getValueAt(i, 7);
             
@@ -327,7 +327,7 @@ public class HexTab extends BaseTab {
     
     @Override
     public void clearContent() {
-        if (hexArea != null) hexArea.setText("");
+        if (hexGridTableModel != null) hexGridTableModel.setRowCount(0);
         if (tableModel != null) tableModel.setRowCount(0);
         if (explanationArea != null) explanationArea.setText("");
         if (explainButton != null) explainButton.setEnabled(false);
@@ -362,7 +362,7 @@ public class HexTab extends BaseTab {
     }
     
     private void loadAndTestHex() {
-        if (hexArea.getText().trim().isEmpty()) {
+        if (hexGridTableModel.getRowCount() == 0) {
             showError("Load and Test Hex", "No hex content to test. Please load or generate a hex file first.");
             return;
         }
@@ -430,5 +430,21 @@ public class HexTab extends BaseTab {
         } catch (Exception e) {
             showError("Load and Test Hex", "Error generating testbench: " + e.getMessage());
         }
+    }
+    
+    public DefaultTableModel getDisassemblyTableModel() {
+        return tableModel;
+    }
+    
+    public JTable getDisassemblyTable() {
+        return disassemblyTable;
+    }
+    
+    // Create a shared disassembly panel that can be used in other tabs
+    public JPanel createSharedDisassemblyPanel() {
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.add(new JLabel("Disassembled Instructions:"), BorderLayout.NORTH);
+        panel.add(new JScrollPane(disassemblyTable), BorderLayout.CENTER);
+        return panel;
     }
 }

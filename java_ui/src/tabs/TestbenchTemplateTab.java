@@ -94,78 +94,143 @@ public class TestbenchTemplateTab extends BaseTab {
     }
     
     private void loadDefaultTemplate() {
-        String defaultTemplate = 
-            "`timescale 1ns / 1ps\n\n" +
-            "module tb_{TEST_NAME};\n\n" +
-            "    // Clock and reset signals\n" +
-            "    reg clk = 0;\n" +
-            "    reg rst = 1;\n" +
-            "    \n" +
-            "    // CPU interface signals\n" +
-            "    wire [31:0] cpu_data_out;\n" +
-            "    wire [31:0] cpu_addr;\n" +
-            "    wire cpu_we;\n" +
-            "    wire cpu_re;\n" +
-            "    \n" +
-            "    // Memory signals\n" +
-            "    wire [31:0] mem_data_out;\n" +
-            "    wire mem_ready;\n" +
-            "    \n" +
-            "    // VCD dump\n" +
-            "    initial begin\n" +
-            "        $dumpfile(\"temp/c_generated_vcd/{TEST_NAME}.vcd\");\n" +
-            "        $dumpvars(0, tb_{TEST_NAME});\n" +
-            "    end\n" +
-            "    \n" +
+        String defaultTemplate = "`timescale 1ns / 1ps\n" +
+            "\n" +
+            "module tb_{TEST_NAME};\n" +
+            "    reg clk;\n" +
+            "    reg rst_n;\n" +
+            "    wire [31:0] debug_pc;\n" +
+            "    wire [31:0] debug_instruction;\n" +
+            "    wire [31:0] debug_reg_data;\n" +
+            "    wire [4:0] debug_reg_addr;\n" +
+            "    wire [31:0] debug_result;\n" +
+            "    wire debug_halted;\n" +
+            "\n" +
+            "    // Framebuffer parameters\n" +
+            "    parameter FB_WIDTH = 320;\n" +
+            "    parameter FB_HEIGHT = 240;\n" +
+            "    parameter FB_BASE_ADDR = 32'h800;\n" +
+            "    parameter FB_SIZE = FB_WIDTH * FB_HEIGHT * 4;\n" +
+            "    parameter DUMP_INTERVAL = 100;\n" +
+            "\n" +
+            "    integer cycle_count = 0;\n" +
+            "    integer dump_count = 0;\n" +
+            "    integer fb_dump_file;\n" +
+            "    integer last_dump_cycle = 0;\n" +
+            "    integer graphics_pixels = 0;\n" +
+            "    reg fb_dump_enable = 1;\n" +
+            "\n" +
             "    // Clock generation\n" +
-            "    always #5 clk = ~clk; // 100MHz clock\n" +
-            "    \n" +
+            "    initial begin\n" +
+            "        clk = 0;\n" +
+            "        forever #5 clk = ~clk;\n" +
+            "    end\n" +
+            "\n" +
+            "    always @(posedge clk) begin\n" +
+            "        cycle_count = cycle_count + 1;\n" +
+            "        if (fb_dump_enable && (cycle_count - last_dump_cycle) >= DUMP_INTERVAL) begin\n" +
+            "            dump_framebuffer();\n" +
+            "            last_dump_cycle = cycle_count;\n" +
+            "        end\n" +
+            "    end\n" +
+            "\n" +
+            "    // Framebuffer dump task\n" +
+            "    task dump_framebuffer;\n" +
+            "        integer x, y, pixel_addr, pixel_data;\n" +
+            "        integer r, g, b;\n" +
+            "        begin\n" +
+            "            $display(\"Dumping framebuffer at cycle %d...\", cycle_count);\n" +
+            "            fb_dump_file = $fopen(\"temp/reports/framebuffer.ppm\", \"w\");\n" +
+            "            if (fb_dump_file != 0) begin\n" +
+            "                $fwrite(fb_dump_file, \"P6\\n\");\n" +
+            "                $fwrite(fb_dump_file, \"# RISC CPU Framebuffer\\n\");\n" +
+            "                $fwrite(fb_dump_file, \"%d %d\\n\", FB_WIDTH, FB_HEIGHT);\n" +
+            "                $fwrite(fb_dump_file, \"255\\n\");\n" +
+            "                for (y = 0; y < FB_HEIGHT; y = y + 1) begin\n" +
+            "                    for (x = 0; x < FB_WIDTH; x = x + 1) begin\n" +
+            "                        pixel_addr = (FB_BASE_ADDR/4) + (y * FB_WIDTH + x);\n" +
+            "                        pixel_data = uut.internal_memory[pixel_addr];\n" +
+            "                        r = (pixel_data >> 24) & 8'hFF;\n" +
+            "                        g = (pixel_data >> 16) & 8'hFF;\n" +
+            "                        b = (pixel_data >> 8) & 8'hFF;\n" +
+            "                        $fwrite(fb_dump_file, \"%c%c%c\", r, g, b);\n" +
+            "                    end\n" +
+            "                end\n" +
+            "                $fclose(fb_dump_file);\n" +
+            "                dump_count = dump_count + 1;\n" +
+            "                $display(\"Framebuffer dump #%d complete\", dump_count);\n" +
+            "            end\n" +
+            "        end\n" +
+            "    endtask\n" +
+            "\n" +
+            "    // Log memory dump task\n" +
+            "    task dump_log_memory;\n" +
+            "        integer i, log_length, log_addr;\n" +
+            "        reg [7:0] log_char;\n" +
+            "        begin\n" +
+            "            log_length = uut.internal_memory[4096];\n" +
+            "            $display(\"=== LOG OUTPUT ===\");\n" +
+            "            if (log_length > 0 && log_length < 1024) begin\n" +
+            "                $write(\"Log: \");\n" +
+            "                for (i = 0; i < log_length; i = i + 1) begin\n" +
+            "                    log_addr = 3072 + (i / 4);\n" +
+            "                    case (i % 4)\n" +
+            "                        0: log_char = uut.internal_memory[log_addr][7:0];\n" +
+            "                        1: log_char = uut.internal_memory[log_addr][15:8];\n" +
+            "                        2: log_char = uut.internal_memory[log_addr][23:16];\n" +
+            "                        3: log_char = uut.internal_memory[log_addr][31:24];\n" +
+            "                    endcase\n" +
+            "                    if (log_char >= 32 && log_char <= 126) $write(\"%c\", log_char);\n" +
+            "                    else if (log_char == 10) $write(\"\\n\");\n" +
+            "                end\n" +
+            "                $display(\"\");\n" +
+            "            end\n" +
+            "            $display(\"=== END LOG ===\");\n" +
+            "        end\n" +
+            "    endtask\n" +
+            "\n" +
+            "    // Reset and test\n" +
+            "    initial begin\n" +
+            "        $dumpfile(\"/Users/rajanpanneerselvam/work/hdl/temp/{TEST_NAME}.vcd\");\n" +
+            "        $dumpvars(0, tb_{TEST_NAME});\n" +
+            "        $readmemh(\"{HEX_FILE_PATH}\", uut.internal_memory, 8192);\n" +
+            "        rst_n = 0;\n" +
+            "        #20;\n" +
+            "        rst_n = 1;\n" +
+            "        #1000;\n" +
+            "        dump_framebuffer();\n" +
+            "        #200000;\n" +
+            "        dump_framebuffer();\n" +
+            "        dump_log_memory();\n" +
+            "        $finish;\n" +
+            "    end\n" +
+            "\n" +
             "    // Instantiate the microprocessor system\n" +
             "    microprocessor_system uut (\n" +
             "        .clk(clk),\n" +
-            "        .rst(rst),\n" +
-            "        .cpu_data_out(cpu_data_out),\n" +
-            "        .cpu_addr(cpu_addr),\n" +
-            "        .cpu_we(cpu_we),\n" +
-            "        .cpu_re(cpu_re),\n" +
-            "        .mem_data_out(mem_data_out),\n" +
-            "        .mem_ready(mem_ready)\n" +
+            "        .rst_n(rst_n),\n" +
+            "        .ext_addr(),\n" +
+            "        .ext_data(),\n" +
+            "        .ext_mem_read(),\n" +
+            "        .ext_mem_write(),\n" +
+            "        .ext_mem_enable(),\n" +
+            "        .ext_mem_ready(1'b1),\n" +
+            "        .io_addr(),\n" +
+            "        .io_data(),\n" +
+            "        .io_read(),\n" +
+            "        .io_write(),\n" +
+            "        .external_interrupts(8'b0),\n" +
+            "        .system_halted(),\n" +
+            "        .pc_out(debug_pc),\n" +
+            "        .cpu_flags(),\n" +
+            "        .debug_pc(debug_pc),\n" +
+            "        .debug_instruction(debug_instruction),\n" +
+            "        .debug_reg_data(debug_reg_data),\n" +
+            "        .debug_reg_addr(debug_reg_addr),\n" +
+            "        .debug_result(debug_result),\n" +
+            "        .debug_halted(debug_halted)\n" +
             "    );\n" +
-            "    \n" +
-            "    // Load hex file into memory\n" +
-            "    initial begin\n" +
-            "        $readmemh(\"{HEX_FILE_PATH}\", uut.memory_controller.memory_array);\n" +
-            "    end\n" +
-            "    \n" +
-            "    // Test sequence\n" +
-            "    initial begin\n" +
-            "        // Reset sequence\n" +
-            "        #10 rst = 0;\n" +
-            "        \n" +
-            "        // Run for specified number of cycles\n" +
-            "        #10000;\n" +
-            "        \n" +
-            "        // Display final results\n" +
-            "        $display(\"Simulation completed for {TEST_NAME}\");\n" +
-            "        $display(\"Final PC: %h\", uut.cpu_core.pc);\n" +
-            "        $display(\"Register R1: %h\", uut.cpu_core.register_file.registers[1]);\n" +
-            "        $display(\"Register R2: %h\", uut.cpu_core.register_file.registers[2]);\n" +
-            "        \n" +
-            "        $finish;\n" +
-            "    end\n" +
-            "    \n" +
-            "    // Monitor key signals\n" +
-            "    always @(posedge clk) begin\n" +
-            "        if (!rst && cpu_we) begin\n" +
-            "            $display(\"Time %t: Memory Write - Addr: %h, Data: %h\", $time, cpu_addr, cpu_data_out);\n" +
-            "        end\n" +
-            "        if (!rst && cpu_re) begin\n" +
-            "            $display(\"Time %t: Memory Read - Addr: %h, Data: %h\", $time, cpu_addr, mem_data_out);\n" +
-            "        end\n" +
-            "    end\n" +
-            "    \n" +
             "endmodule\n";
-            
         templateArea.setText(defaultTemplate);
         templatePathLabel.setText("Default testbench template");
         currentTemplatePath = null;

@@ -4,13 +4,10 @@ import javax.swing.*;
 import javax.swing.filechooser.FileNameExtensionFilter;
 import java.awt.*;
 import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
 import java.awt.event.KeyEvent;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
-import java.util.HashMap;
-import java.util.Map;
 
 import tabs.*;
 import util.AppState;
@@ -39,6 +36,7 @@ public class CpuIDE extends JFrame {
     private SimulationLogTab simulationLogTab;
     private TerminalTab terminalTab;
     private VcdTab vcdTab;
+    private SimulationTab simulationTab;
     
     // Application state
     private AppState appState;
@@ -76,6 +74,7 @@ public class CpuIDE extends JFrame {
         simulationLogTab = new SimulationLogTab(appState, this);
         terminalTab = new TerminalTab(appState, this);
         vcdTab = new VcdTab(appState, this);
+        simulationTab = new SimulationTab(appState, this);
         
         // Add tabs to tabbed pane
         tabbedPane.addTab("C", cTab);
@@ -84,6 +83,7 @@ public class CpuIDE extends JFrame {
         tabbedPane.addTab("Hex", hexTab);
         tabbedPane.addTab("Testbench Template", testbenchTemplateTab);
         tabbedPane.addTab("V/VVP", vvpTab);
+        tabbedPane.addTab("Simulation", simulationTab); // Add after V/VVP
         tabbedPane.addTab("Sim Log", simulationLogTab);
         tabbedPane.addTab("Terminal", terminalTab);
         tabbedPane.addTab("VCD", vcdTab);
@@ -110,16 +110,16 @@ public class CpuIDE extends JFrame {
         JMenuItem openItem = new JMenuItem("Open...");
         openItem.setMnemonic(KeyEvent.VK_O);
         openItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_O, KeyEvent.CTRL_DOWN_MASK));
-        openItem.addActionListener(e -> openFile());
+        openItem.addActionListener(_ -> openFile());
         
         JMenuItem saveItem = new JMenuItem("Save");
         saveItem.setMnemonic(KeyEvent.VK_S);
         saveItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_S, KeyEvent.CTRL_DOWN_MASK));
-        saveItem.addActionListener(e -> saveCurrentFile());
+        saveItem.addActionListener(_ -> saveCurrentFile());
         
         JMenuItem exitItem = new JMenuItem("Exit");
         exitItem.setMnemonic(KeyEvent.VK_X);
-        exitItem.addActionListener(e -> System.exit(0));
+        exitItem.addActionListener(_ -> System.exit(0));
         
         fileMenu.add(openItem);
         fileMenu.add(saveItem);
@@ -133,7 +133,7 @@ public class CpuIDE extends JFrame {
         JMenuItem runSimItem = new JMenuItem("Run Simulation");
         runSimItem.setMnemonic(KeyEvent.VK_R);
         runSimItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_R, KeyEvent.CTRL_DOWN_MASK));
-        runSimItem.addActionListener(e -> runSimulation());
+        runSimItem.addActionListener(_ -> runSimulation());
         
         toolsMenu.add(runSimItem);
         
@@ -255,9 +255,11 @@ public class CpuIDE extends JFrame {
         // Always enable certain tabs
         tabbedPane.setEnabledAt(3, true); // Hex tab
         tabbedPane.setEnabledAt(4, true); // Testbench Template tab (always visible)
-        tabbedPane.setEnabledAt(6, true); // Simulation Log tab
-        tabbedPane.setEnabledAt(7, true); // Terminal tab
-        tabbedPane.setEnabledAt(8, true); // VCD tab
+        tabbedPane.setEnabledAt(5, true); // V/VVP tab (always enabled now)
+        tabbedPane.setEnabledAt(6, true); // Simulation tab (always enabled)
+        tabbedPane.setEnabledAt(7, true); // Sim Log tab
+        tabbedPane.setEnabledAt(8, true); // Terminal tab
+        tabbedPane.setEnabledAt(9, true); // VCD tab
         
         // Enable tabs based on file type and generated files
         if (fileType != null) {
@@ -341,7 +343,6 @@ public class CpuIDE extends JFrame {
             String content = new String(Files.readAllBytes(asmFile.toPath()));
             
             // Update app state to reflect the assembly file
-            File previousFile = appState.getCurrentFile();
             appState.setCurrentFile(asmFile);
             appState.setFileType("asm");
             
@@ -413,6 +414,10 @@ public class CpuIDE extends JFrame {
         return vvpTab;
     }
     
+    public VcdTab getVcdTab() {
+        return vcdTab;
+    }
+    
     public void switchToTab(String tabName) {
         for (int i = 0; i < tabbedPane.getTabCount(); i++) {
             if (tabbedPane.getTitleAt(i).equals(tabName)) {
@@ -420,6 +425,17 @@ public class CpuIDE extends JFrame {
                 break;
             }
         }
+    }
+    
+    public void showSimulationLog(String logContent) {
+        simulationLogTab.loadContent(logContent);
+        tabbedPane.setSelectedComponent(simulationLogTab);
+        updateStatus("Simulation complete. See Sim Log tab.");
+    }
+    
+    public void updateSimulationLogTab(String logContent) {
+        simulationLogTab.loadContent(logContent);
+        // Do not switch tabs
     }
     
     public static void main(String[] args) {

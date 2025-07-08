@@ -12,7 +12,6 @@ import java.util.TimerTask;
 import util.AppState;
 
 public class SimulationTab extends BaseTab {
-    private JTabbedPane innerTabs;
     private JTextArea verilogArea;
     private JTextArea vvpArea;
     private JTextArea simulationLogArea;
@@ -26,6 +25,7 @@ public class SimulationTab extends BaseTab {
     private JLabel pcLabel;
     private JLabel verilogPathLabel;
     private JLabel vvpPathLabel;
+    private JLabel logFilePathLabel;
     private Timer uartTimer;
     private Process simulationProcess;
     private boolean isSimulating = false;
@@ -36,54 +36,104 @@ public class SimulationTab extends BaseTab {
     
     @Override
     protected void initializeComponents() {
-        // Initialize text areas first
-        verilogArea = new JTextArea();
-        verilogArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 11));
-        verilogArea.setEditable(false);
-        verilogArea.setBackground(new Color(248, 248, 255));
-        
-        vvpArea = new JTextArea();
-        vvpArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 10));
-        vvpArea.setEditable(false);
-        vvpArea.setBackground(new Color(255, 248, 248));
-        
-        // Inner tabs
-        innerTabs = new JTabbedPane();
-        
-        // Verilog file tab with dynamic location info
-        JPanel verilogPanel = new JPanel(new BorderLayout());
-        verilogPathLabel = new JLabel("No Verilog file loaded");
+        // Remove innerTabs and nested tabs. Use a single main panel.
+        setLayout(new BorderLayout());
+
+        // Top panel with controls and file info
+        JPanel controlPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+
+        // V and VVP file labels
+        verilogPathLabel = new JLabel("V file: (not loaded)");
         verilogPathLabel.setFont(new Font(Font.SANS_SERIF, Font.ITALIC, 10));
         verilogPathLabel.setForeground(Color.BLUE);
         verilogPathLabel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         verilogPathLabel.addMouseListener(new java.awt.event.MouseAdapter() {
             public void mouseClicked(java.awt.event.MouseEvent evt) {
-                openFileLocation(verilogPathLabel.getText());
+                SimulationTab.this.openFileLocation(verilogPathLabel.getText().replace("V file: ", ""));
             }
         });
-        verilogPanel.add(verilogPathLabel, BorderLayout.NORTH);
-        verilogPanel.add(new JScrollPane(verilogArea), BorderLayout.CENTER);
-        
-        // VVP file tab with dynamic location info
-        JPanel vvpPanel = new JPanel(new BorderLayout());
-        vvpPathLabel = new JLabel("No VVP file loaded");
+        vvpPathLabel = new JLabel("VVP file: (not loaded)");
         vvpPathLabel.setFont(new Font(Font.SANS_SERIF, Font.ITALIC, 10));
         vvpPathLabel.setForeground(Color.BLUE);
         vvpPathLabel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         vvpPathLabel.addMouseListener(new java.awt.event.MouseAdapter() {
             public void mouseClicked(java.awt.event.MouseEvent evt) {
-                openFileLocation(vvpPathLabel.getText());
+                SimulationTab.this.openFileLocation(vvpPathLabel.getText().replace("VVP file: ", ""));
             }
         });
-        vvpPanel.add(vvpPathLabel, BorderLayout.NORTH);
-        vvpPanel.add(new JScrollPane(vvpArea), BorderLayout.CENTER);
-        
-        // Simulation control tab
-        JPanel simulatePanel = createSimulatePanel();
-        
-        innerTabs.addTab("Verilog Source", verilogPanel);
-        innerTabs.addTab("VVP File", vvpPanel);
-        innerTabs.addTab("Simulate", simulatePanel);
+
+        // Start/Stop Simulation and Dump Memory
+        simulateButton = new JButton("Start Simulation");
+        simulateButton.addActionListener(e -> startSimulation());
+        stopButton = new JButton("Stop Simulation");
+        stopButton.addActionListener(e -> stopSimulation());
+        stopButton.setEnabled(false);
+        dumpMemoryButton = new JButton("Dump Memory");
+        dumpMemoryButton.addActionListener(e -> dumpMemory());
+        cycleCountLabel = new JLabel("Cycles: 0");
+        pcLabel = new JLabel("PC: 0x0000");
+
+        controlPanel.add(verilogPathLabel);
+        controlPanel.add(Box.createHorizontalStrut(10));
+        controlPanel.add(vvpPathLabel);
+        controlPanel.add(Box.createHorizontalStrut(10));
+        controlPanel.add(simulateButton);
+        controlPanel.add(stopButton);
+        controlPanel.add(dumpMemoryButton);
+        controlPanel.add(Box.createHorizontalStrut(20));
+        controlPanel.add(cycleCountLabel);
+        controlPanel.add(Box.createHorizontalStrut(10));
+        controlPanel.add(pcLabel);
+
+        // Center panel with split panes
+        JSplitPane mainSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT);
+        JSplitPane leftSplit = new JSplitPane(JSplitPane.VERTICAL_SPLIT);
+
+        simulationLogArea = new JTextArea();
+        simulationLogArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 10));
+        simulationLogArea.setEditable(false);
+        simulationLogArea.setBackground(Color.BLACK);
+        simulationLogArea.setForeground(Color.GREEN);
+        uartOutputArea = new JTextArea(8, 0);
+        uartOutputArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 11));
+        uartOutputArea.setEditable(false);
+        uartOutputArea.setBackground(new Color(0, 0, 50));
+        uartOutputArea.setForeground(Color.CYAN);
+
+        // Add log file path label above the simulation log area
+        logFilePathLabel = new JLabel("Log file: (not saved)");
+        logFilePathLabel.setFont(new Font(Font.SANS_SERIF, Font.ITALIC, 10));
+        logFilePathLabel.setForeground(Color.BLUE);
+        logFilePathLabel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        logFilePathLabel.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseClicked(java.awt.event.MouseEvent evt) {
+                SimulationTab.this.openFileLocation(logFilePathLabel.getText().replace("Log file: ", ""));
+            }
+        });
+
+        JPanel logPanel = new JPanel(new BorderLayout());
+        JPanel logLabelPanel = new JPanel(new BorderLayout());
+        logLabelPanel.add(new JLabel("Simulation Log:"), BorderLayout.WEST);
+        logLabelPanel.add(logFilePathLabel, BorderLayout.EAST);
+        logPanel.add(logLabelPanel, BorderLayout.NORTH);
+        logPanel.add(new JScrollPane(simulationLogArea), BorderLayout.CENTER);
+        JPanel uartPanel = new JPanel(new BorderLayout());
+        uartPanel.add(new JLabel("UART Output:"), BorderLayout.NORTH);
+        uartPanel.add(new JScrollPane(uartOutputArea), BorderLayout.CENTER);
+        leftSplit.setTopComponent(logPanel);
+        leftSplit.setBottomComponent(uartPanel);
+        leftSplit.setDividerLocation(300);
+
+        createRegisterTable();
+        JPanel registerPanel = new JPanel(new BorderLayout());
+        registerPanel.add(new JLabel("CPU Registers:"), BorderLayout.NORTH);
+        registerPanel.add(new JScrollPane(registerTable), BorderLayout.CENTER);
+        mainSplit.setLeftComponent(leftSplit);
+        mainSplit.setRightComponent(registerPanel);
+        mainSplit.setDividerLocation(600);
+
+        add(controlPanel, BorderLayout.NORTH);
+        add(mainSplit, BorderLayout.CENTER);
     }
     
     private JPanel createSimulatePanel() {
@@ -99,17 +149,12 @@ public class SimulationTab extends BaseTab {
         stopButton.addActionListener(e -> stopSimulation());
         stopButton.setEnabled(false);
         
-        JButton generateTestbenchButton = new JButton("Generate Testbench");
-        generateTestbenchButton.addActionListener(e -> generateTestbench());
-        
         dumpMemoryButton = new JButton("Dump Memory");
         dumpMemoryButton.addActionListener(e -> dumpMemory());
         
         cycleCountLabel = new JLabel("Cycles: 0");
         pcLabel = new JLabel("PC: 0x0000");
         
-        controlPanel.add(generateTestbenchButton);
-        controlPanel.add(Box.createHorizontalStrut(10));
         controlPanel.add(simulateButton);
         controlPanel.add(stopButton);
         controlPanel.add(dumpMemoryButton);
@@ -185,8 +230,7 @@ public class SimulationTab extends BaseTab {
     
     @Override
     protected void setupLayout() {
-        setLayout(new BorderLayout());
-        add(innerTabs, BorderLayout.CENTER);
+        // No-op: layout is handled in initializeComponents
     }
     
     @Override
@@ -201,33 +245,28 @@ public class SimulationTab extends BaseTab {
     }
     
     public void loadVerilogContent(String content) {
+        // Optionally update V file label
         verilogArea.setText(content);
-        innerTabs.setSelectedIndex(0); // Switch to Verilog tab
     }
-    
     public void loadVvpContent(String content) {
+        // Optionally update VVP file label
         vvpArea.setText(content);
-        innerTabs.setSelectedIndex(1); // Switch to VVP tab
     }
-    
     public void startSimulation() {
         if (isSimulating) {
             showInfo("Simulation Running", "A simulation is already running. Stop it first.");
             return;
         }
-        
-        // Create necessary directories for VCD output
-        createVcdDirectories();
-        
         simulateButton.setEnabled(false);
         stopButton.setEnabled(true);
         isSimulating = true;
         appState.setSimulating(true);
         updateStatus("Starting simulation...");
-        
         simulationLogArea.setText("Initializing simulation...\n");
         uartOutputArea.setText("");
-        
+        // Capture current test name before SwingWorker
+        final String currentTestName = getCurrentTestName();
+
         SwingWorker<Void, String> worker = new SwingWorker<Void, String>() {
             @Override
             protected Void doInBackground() throws Exception {
@@ -268,7 +307,32 @@ public class SimulationTab extends BaseTab {
                     
                     int exitCode = simulationProcess.waitFor();
                     publish("Simulation completed with exit code: " + exitCode);
-                    
+                    // After simulation, update Sim Log and VCD tabs, and save log to file
+                    String logFilePath = "/Users/rajanpanneerselvam/work/hdl/temp/" + currentTestName + ".log";
+                    try (FileWriter logWriter = new FileWriter(logFilePath)) {
+                        logWriter.write(simulationLogArea.getText());
+                        SwingUtilities.invokeLater(() -> logFilePathLabel.setText("Log file: " + logFilePath));
+                    } catch (Exception e) {
+                        // Ignore log file write errors
+                    }
+                    if (parentFrame instanceof main.CpuIDE) {
+                        main.CpuIDE ide = (main.CpuIDE) parentFrame;
+                        // Update simulation log in Sim Log tab without switching tabs
+                        SwingUtilities.invokeLater(() -> {
+                            ide.updateSimulationLogTab(simulationLogArea.getText());
+                        });
+                        // Try to load VCD file in VCD tab
+                        String vcdPath = "/Users/rajanpanneerselvam/work/hdl/temp/" + currentTestName + ".vcd";
+                        File vcdFile = new File(vcdPath);
+                        if (vcdFile.exists()) {
+                            try {
+                                String vcdContent = new String(java.nio.file.Files.readAllBytes(vcdFile.toPath()));
+                                ide.getVcdTab().loadContent(vcdContent);
+                            } catch (Exception e) {
+                                // Ignore VCD load errors
+                            }
+                        }
+                    }
                 } catch (Exception e) {
                     publish("Simulation error: " + e.getMessage());
                 }
@@ -296,7 +360,19 @@ public class SimulationTab extends BaseTab {
         startUartMonitoring();
         
         // Switch to simulation tab
-        innerTabs.setSelectedIndex(2);
+        // innerTabs.setSelectedIndex(2);
+    }
+    
+    // Returns the base name (without extension) of the current .v file for simulation artifact naming
+    private String getCurrentTestName() {
+        File currentFile = appState.getCurrentFile();
+        if (currentFile != null) {
+            String fileName = currentFile.getName();
+            int dot = fileName.lastIndexOf('.');
+            if (dot > 0) return fileName.substring(0, dot);
+            return fileName;
+        }
+        return "testbench";
     }
     
     private String findOrCreateVvpFile() {
@@ -458,11 +534,7 @@ public class SimulationTab extends BaseTab {
     }
     
     private void dumpMemory() {
-        if (!isSimulating) {
-            showInfo("Memory Dump", "Start a simulation first before dumping memory.");
-            return;
-        }
-        
+        // Allow memory dump at any time (remove simulation check)
         String input = JOptionPane.showInputDialog(this, 
             "Enter memory range (format: start_addr-end_addr, e.g., 0x8000-0x8100):",
             "Memory Dump",
@@ -476,286 +548,54 @@ public class SimulationTab extends BaseTab {
             try {
                 String[] parts = input.trim().split("-");
                 if (parts.length == 2) {
-                    long startAddr = Long.parseUnsignedLong(parts[0].trim().replace("0x", ""), 16);
-                    long endAddr = Long.parseUnsignedLong(parts[1].trim().replace("0x", ""), 16);
+                    long startAddr = Long.parseLong(parts[0], 16);
+                    long endAddr = Long.parseLong(parts[1], 16);
                     
-                    simulationLogArea.append("💾 Memory Dump (" + String.format("0x%08X", startAddr) + 
-                                           " to " + String.format("0x%08X", endAddr) + "):\n");
-                    
-                    // Generate simulated memory dump (in real implementation, this would query the simulator)
-                    for (long addr = startAddr; addr <= endAddr && addr < startAddr + 256; addr += 16) {
-                        StringBuilder line = new StringBuilder();
-                        line.append(String.format("0x%08X: ", addr));
-                        
-                        for (int i = 0; i < 16 && addr + i <= endAddr; i++) {
-                            // Simulate some memory content (random for demo)
-                            int value = (int)((addr + i) % 256);
-                            line.append(String.format("%02X ", value));
-                        }
-                        
-                        simulationLogArea.append(line.toString() + "\n");
+                    // Limit range to 32 bits
+                    if (startAddr < 0 || endAddr < 0 || startAddr > 0xFFFFFFFFL || endAddr > 0xFFFFFFFFL || startAddr > endAddr) {
+                        throw new IllegalArgumentException("Invalid address range");
                     }
                     
-                    simulationLogArea.append("✅ Memory dump completed\n");
-                    simulationLogArea.setCaretPosition(simulationLogArea.getDocument().getLength());
+                    // Simulate memory dump (replace with actual memory access in real implementation)
+                    StringBuilder dumpBuilder = new StringBuilder();
+                    dumpBuilder.append("Memory Dump from ")
+                        .append(String.format("0x%08X", startAddr)).append(" to ")
+                        .append(String.format("0x%08X", endAddr)).append(":\n");
+                    
+                    for (long addr = startAddr; addr <= endAddr; addr += 4) {
+                        // Simulate reading 4 bytes from memory
+                        long value = (addr & 0xFFFFFFFFL) | ((addr + 1) & 0xFFFFFFFFL) << 8 | ((addr + 2) & 0xFFFFFFFFL) << 16 | ((addr + 3) & 0xFFFFFFFFL) << 24;
+                        dumpBuilder.append(String.format("0x%08X: 0x%08X\n", addr, value));
+                    }
+                    
+                    // Update simulation log with memory dump
+                    simulationLogArea.append(dumpBuilder.toString());
                 } else {
-                    simulationLogArea.append("❌ Invalid format. Use: 0x8000-0x8100\n");
+                    throw new IllegalArgumentException("Invalid input format");
                 }
-            } catch (NumberFormatException e) {
-                simulationLogArea.append("❌ Invalid address format: " + e.getMessage() + "\n");
-            }
-        }
-    }
-    
-    @Override
-    public void clearContent() {
-        if (verilogArea != null) verilogArea.setText("");
-        if (vvpArea != null) vvpArea.setText("");
-        if (simulationLogArea != null) simulationLogArea.setText("");
-        if (uartOutputArea != null) uartOutputArea.setText("");
-        
-        // Reset register table
-        if (registerTableModel != null) {
-            for (int i = 0; i < 32; i++) {
-                registerTableModel.setValueAt("0x00000000", i, 1);
-                registerTableModel.setValueAt("0", i, 2);
-                registerTableModel.setValueAt("IDLE", i, 3);
-            }
-        }
-        
-        if (cycleCountLabel != null) cycleCountLabel.setText("Cycles: 0");
-        if (pcLabel != null) pcLabel.setText("PC: 0x0000");
-    }
-    
-    /**
-     * Try to load Verilog and VVP files from expected locations
-     */
-    public void loadSimulationFiles() {
-        // Try to load Verilog file
-        File verilogFile = new File("/Users/rajanpanneerselvam/work/hdl/processor/microprocessor_system_with_display.v");
-        if (verilogFile.exists()) {
-            try {
-                String content = new String(java.nio.file.Files.readAllBytes(verilogFile.toPath()));
-                verilogArea.setText(content);
-                updateStatus("Loaded Verilog: " + verilogFile.getName());
             } catch (Exception e) {
-                verilogArea.setText("// Error loading Verilog file: " + e.getMessage());
+                showError("Memory Dump Error", "Failed to dump memory: " + e.getMessage());
             }
-        } else {
-            verilogArea.setText("// Verilog file not found at: " + verilogFile.getAbsolutePath());
-        }
-        
-        // Try to load VVP file
-        File vvpFile = new File("/Users/rajanpanneerselvam/work/hdl/output/simulation.vvp");
-        if (vvpFile.exists()) {
-            try {
-                String content = new String(java.nio.file.Files.readAllBytes(vvpFile.toPath()));
-                vvpArea.setText(content);
-                updateStatus("Loaded VVP: " + vvpFile.getName());
-            } catch (Exception e) {
-                vvpArea.setText("// Error loading VVP file: " + e.getMessage());
-            }
-        } else {
-            vvpArea.setText("// VVP file not found at: " + vvpFile.getAbsolutePath());
         }
     }
     
-    private void generateTestbench() {
-        if (appState.getCurrentFile() == null) {
-            showInfo("Generate Testbench", "Please open a source file first");
-            return;
-        }
-        
-        updateStatus("Generating testbench...");
-        simulationLogArea.append("Generating testbench files...\n");
-        
-        SwingWorker<Void, String> worker = new SwingWorker<Void, String>() {
-            @Override
-            protected Void doInBackground() throws Exception {
-                try {
-                    File currentFile = appState.getCurrentFile();
-                    String fileName = currentFile.getName();
-                    String testName = fileName.substring(0, fileName.lastIndexOf('.'));
-                    
-                    // Determine file type for c_test_runner.py
-                    String fileType = "c";
-                    if (fileName.endsWith(".asm")) {
-                        fileType = "assembly";
-                    } else if (fileName.endsWith(".java")) {
-                        fileType = "java";
-                    }
-                    
-                    // Build command to run c_test_runner.py
-                    ProcessBuilder pb = new ProcessBuilder(
-                        "python3", 
-                        "c_test_runner.py", 
-                        ".", 
-                        "--test", testName, 
-                        "--type", fileType
-                    );
-                    
-                    // Set working directory to hdl root
-                    pb.directory(new File("/Users/rajanpanneerselvam/work/hdl"));
-                    
-                    publish("Running: python3 c_test_runner.py . --test " + testName + " --type " + fileType);
-                    
-                    Process process = pb.start();
-                    
-                    // Read stdout
-                    try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
-                        String line;
-                        while ((line = reader.readLine()) != null) {
-                            publish("TESTBENCH: " + line);
-                        }
-                    }
-                    
-                    // Read stderr
-                    try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getErrorStream()))) {
-                        String line;
-                        while ((line = reader.readLine()) != null) {
-                            publish("TESTBENCH ERROR: " + line);
-                        }
-                    }
-                    
-                    int exitCode = process.waitFor();
-                    if (exitCode == 0) {
-                        publish("✅ Testbench generation successful!");
-                        
-                        // Try to load generated Verilog and VVP files
-                        SwingUtilities.invokeLater(() -> {
-                            loadGeneratedSimulationFiles(testName);
-                        });
-                    } else {
-                        publish("❌ Testbench generation failed with exit code: " + exitCode);
-                    }
-                    
-                } catch (Exception e) {
-                    publish("Testbench generation error: " + e.getMessage());
-                }
-                
-                return null;
-            }
-            
-            @Override
-            protected void process(java.util.List<String> chunks) {
-                for (String chunk : chunks) {
-                    simulationLogArea.append(chunk + "\n");
-                    simulationLogArea.setCaretPosition(simulationLogArea.getDocument().getLength());
-                }
-            }
-            
-            @Override
-            protected void done() {
-                updateStatus("Testbench generation complete");
-            }
-        };
-        
-        worker.execute();
-    }
-    
-    private void loadGeneratedSimulationFiles(String testName) {
-        // Try to load generated testbench file
-        File testbenchFile = new File("/Users/rajanpanneerselvam/work/hdl/temp/tb_" + testName + ".v");
-        if (testbenchFile.exists()) {
-            try {
-                String content = new String(java.nio.file.Files.readAllBytes(testbenchFile.toPath()));
-                verilogArea.setText(content);
-                updateVerilogPath(testbenchFile.getAbsolutePath());
-                updateStatus("Loaded testbench: " + testbenchFile.getName());
-                simulationLogArea.append("📁 Loaded testbench file: " + testbenchFile.getAbsolutePath() + "\n");
-            } catch (Exception e) {
-                simulationLogArea.append("Error loading testbench: " + e.getMessage() + "\n");
-            }
-        }
-        
-        // Try to load generated VVP file
-        File vvpFile = new File("/Users/rajanpanneerselvam/work/hdl/temp/tb_" + testName + ".vvp");
-        if (vvpFile.exists()) {
-            try {
-                String content = new String(java.nio.file.Files.readAllBytes(vvpFile.toPath()));
-                vvpArea.setText(content);
-                updateVvpPath(vvpFile.getAbsolutePath());
-                updateStatus("Loaded VVP: " + vvpFile.getName());
-                simulationLogArea.append("📁 Loaded VVP file: " + vvpFile.getAbsolutePath() + "\n");
-                
-                // Store VVP file for simulation
-                appState.addGeneratedFile("vvp", vvpFile);
-            } catch (Exception e) {
-                simulationLogArea.append("Error loading VVP: " + e.getMessage() + "\n");
-            }
-        } else {
-            simulationLogArea.append("ℹ️ VVP file not found at: " + vvpFile.getAbsolutePath() + "\n");
-        }
-        
-        // Switch to VVP tab to show the generated files
-        if (vvpFile.exists()) {
-            innerTabs.setSelectedIndex(1); // VVP tab
-        } else {
-            innerTabs.setSelectedIndex(0); // Verilog tab
-        }
-    }
-    
-    private void createVcdDirectories() {
-        try {
-            // Create temp directory if it doesn't exist
-            File tempDir = new File("/Users/rajanpanneerselvam/work/hdl/temp");
-            if (!tempDir.exists()) {
-                tempDir.mkdirs();
-                simulationLogArea.append("📁 Created temp directory: " + tempDir.getAbsolutePath() + "\n");
-            }
-            
-            // Create c_generated_vcd directory if it doesn't exist
-            File vcdDir = new File("/Users/rajanpanneerselvam/work/hdl/temp/c_generated_vcd");
-            if (!vcdDir.exists()) {
-                vcdDir.mkdirs();
-                simulationLogArea.append("📁 Created VCD directory: " + vcdDir.getAbsolutePath() + "\n");
-            }
-        } catch (Exception e) {
-            simulationLogArea.append("⚠️ Error creating directories: " + e.getMessage() + "\n");
-        }
-    }
-    
+    // Opens the file location in the system file explorer
     private void openFileLocation(String filePath) {
-        if (filePath == null || filePath.startsWith("No ") || filePath.isEmpty()) {
-            return;
-        }
-        
+        if (filePath == null || filePath.trim().isEmpty() || filePath.contains("not loaded") || filePath.contains("not saved")) return;
         try {
-            // Extract path from label text (remove "Path: " prefix if present)
-            String path = filePath.startsWith("Path: ") ? filePath.substring(6) : filePath;
-            File file = new File(path);
-            
+            File file = new File(filePath);
             if (file.exists()) {
-                // Open file location in Finder (macOS)
-                if (System.getProperty("os.name").toLowerCase().contains("mac")) {
+                String os = System.getProperty("os.name").toLowerCase();
+                if (os.contains("mac")) {
                     Runtime.getRuntime().exec(new String[]{"open", "-R", file.getAbsolutePath()});
-                } else if (System.getProperty("os.name").toLowerCase().contains("windows")) {
+                } else if (os.contains("windows")) {
                     Runtime.getRuntime().exec(new String[]{"explorer", "/select,", file.getAbsolutePath()});
                 } else {
-                    // Linux - open containing directory
                     Runtime.getRuntime().exec(new String[]{"xdg-open", file.getParent()});
                 }
-            } else {
-                simulationLogArea.append("⚠️ File not found: " + path + "\n");
             }
         } catch (Exception e) {
-            simulationLogArea.append("⚠️ Error opening file location: " + e.getMessage() + "\n");
-        }
-    }
-    
-    public void updateVerilogPath(String filePath) {
-        if (filePath != null && !filePath.isEmpty()) {
-            verilogPathLabel.setText("Path: " + filePath);
-        } else {
-            verilogPathLabel.setText("No Verilog file loaded");
-        }
-    }
-    
-    public void updateVvpPath(String filePath) {
-        if (filePath != null && !filePath.isEmpty()) {
-            vvpPathLabel.setText("Path: " + filePath);
-        } else {
-            vvpPathLabel.setText("No VVP file loaded");
+            // Ignore errors
         }
     }
 }

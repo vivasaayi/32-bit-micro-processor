@@ -19,6 +19,7 @@ public class VVvpTab extends BaseTab {
     private JLabel vvpPathLabel;
     private JButton generateVvpButton;
     private JButton saveVerilogButton;
+    private JButton runSimulationButton;
     
     public VVvpTab(AppState appState, JFrame parentFrame) {
         super(appState, parentFrame);
@@ -43,6 +44,9 @@ public class VVvpTab extends BaseTab {
         
         saveVerilogButton = new JButton("Save Verilog");
         saveVerilogButton.addActionListener(e -> saveVerilog());
+        
+        runSimulationButton = new JButton("Run Simulation");
+        runSimulationButton.addActionListener(e -> runSimulationOnVvp());
         
         // Inner tabs
         innerTabs = new JTabbedPane();
@@ -88,7 +92,13 @@ public class VVvpTab extends BaseTab {
                 openVvpFileLocation();
             }
         });
-        vvpPanel.add(vvpPathLabel, BorderLayout.NORTH);
+        // Add Run Simulation button to the VVP panel (top right)
+        JPanel vvpButtonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        vvpButtonPanel.add(runSimulationButton);
+        JPanel vvpTopPanel = new JPanel(new BorderLayout());
+        vvpTopPanel.add(vvpPathLabel, BorderLayout.WEST);
+        vvpTopPanel.add(vvpButtonPanel, BorderLayout.EAST);
+        vvpPanel.add(vvpTopPanel, BorderLayout.NORTH);
         vvpPanel.add(new JScrollPane(vvpArea), BorderLayout.CENTER);
         
         innerTabs.addTab("Verilog Testbench", verilogPanel);
@@ -290,6 +300,39 @@ public class VVvpTab extends BaseTab {
             } catch (Exception e) {
                 showError("Save Verilog", "Error saving file: " + e.getMessage());
             }
+        }
+    }
+    
+    private void runSimulationOnVvp() {
+        // Find the VVP file path from AppState
+        File vvpFile = appState.getGeneratedFile("vvp");
+        if (vvpFile == null || !vvpFile.exists()) {
+            showError("Run Simulation", "No VVP file found. Please generate VVP first.");
+            return;
+        }
+        // Run vvp and show output in Simulation Log tab
+        try {
+            ProcessBuilder pb = new ProcessBuilder("vvp", vvpFile.getAbsolutePath());
+            pb.directory(new File(System.getProperty("user.dir")));
+            Process process = pb.start();
+            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+            StringBuilder output = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) {
+                output.append(line).append("\n");
+            }
+            int exitCode = process.waitFor();
+            output.append("\n[Process exited with code " + exitCode + "]\n");
+            // Show in Simulation Log tab
+            if (parentFrame instanceof main.CpuIDE) {
+                main.CpuIDE ide = (main.CpuIDE) parentFrame;
+                // Switch to Simulation tab instead of Sim Log
+                ide.switchToTab("Simulation");
+                // Optionally, update the simulation log area in SimulationTab if needed
+                // ide.getSimulationTab().loadContent(output.toString());
+            }
+        } catch (Exception e) {
+            showError("Run Simulation", "Failed to run VVP: " + e.getMessage());
         }
     }
     
