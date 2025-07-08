@@ -15,31 +15,31 @@
 module alu (
     input wire [31:0] a,         // First operand (32-bit)
     input wire [31:0] b,         // Second operand (32-bit)
-    input wire [4:0] op,         // Operation code (5-bit for JVM support)
+    input wire [5:0] op,         // Operation code (6-bit, matches CPU)
     input wire [7:0] flags_in,   // Input flags
     output reg [31:0] result,    // Result (32-bit)
     output reg [7:0] flags_out   // Output flags
 );
 
-    // ALU operation codes (5-bit for JVM support)
-    localparam ALU_ADD  = 5'h0;
-    localparam ALU_SUB  = 5'h1;
-    localparam ALU_ADC  = 5'h2;
-    localparam ALU_SBC  = 5'h3;
-    localparam ALU_AND  = 5'h4;
-    localparam ALU_OR   = 5'h5;
-    localparam ALU_XOR  = 5'h6;
-    localparam ALU_NOT  = 5'h7;
-    localparam ALU_SHL  = 5'h8;
-    localparam ALU_SHR  = 5'h9;
-    localparam ALU_ROL  = 5'hA;
-    localparam ALU_ROR  = 5'hB;
-    localparam ALU_CMP  = 5'hC;
-    localparam ALU_PASS = 5'hD;
-    localparam ALU_MUL  = 5'hE;  // Multiply
-    localparam ALU_DIV  = 5'hF;  // Divide
-    // JVM Enhancement: Add modulo operation for IREM bytecode
-    localparam ALU_MOD  = 5'h10; // Modulo (remainder)
+    // ALU operation codes (6-bit for CPU alignment)
+    localparam ALU_ADD  = 6'h00;
+    localparam ALU_SUB  = 6'h01;
+    localparam ALU_ADC  = 6'h02;
+    localparam ALU_SBC  = 6'h03;
+    localparam ALU_AND  = 6'h04;
+    localparam ALU_OR   = 6'h05;
+    localparam ALU_XOR  = 6'h06;
+    localparam ALU_NOT  = 6'h07;
+    localparam ALU_SHL  = 6'h08;
+    localparam ALU_SHR  = 6'h09;
+    localparam ALU_ROL  = 6'h0A;
+    localparam ALU_ROR  = 6'h0B;
+    localparam ALU_CMP  = 6'h0C;
+    localparam ALU_PASS = 6'h0D;
+    localparam ALU_MUL  = 6'h0E;  // Multiply
+    localparam ALU_DIV  = 6'h0F;  // Divide
+    localparam ALU_MOD  = 6'h10; // Modulo (remainder)
+    localparam ALU_SAR  = 6'h11; // Arithmetic shift right (signed)
 
     // Flag bit positions
     localparam FLAG_CARRY     = 0;
@@ -54,7 +54,7 @@ module alu (
     reg [31:0] operand_b;
     
     // Debug signals
-    reg [4:0] debug_op;
+    reg [5:0] debug_op;
     
     always @(*) begin
         // Initialize
@@ -121,6 +121,12 @@ module alu (
             
             ALU_SHR: begin
                 result = {1'b0, a[31:1]};
+                flags_out[FLAG_CARRY] = a[0];
+            end
+            
+            // Arithmetic shift right (signed)
+            ALU_SAR: begin
+                result = $signed(a) >>> 1;
                 flags_out[FLAG_CARRY] = a[0];
             end
             
