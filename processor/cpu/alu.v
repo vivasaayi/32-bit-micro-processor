@@ -77,7 +77,7 @@ module alu (
                 result = temp_result[31:0];
                 flags_out[FLAG_CARRY] = temp_result[32];
                 flags_out[FLAG_OVERFLOW] = (operand_a[31] == operand_b[31]) && (result[31] != operand_a[31]);
-                $display("DEBUG ALU ADD: a=%0d b=%0d result=%0d", operand_a, operand_b, result);
+                // $display("DEBUG ALU ADD: a=%0d b=%0d result=%0d", operand_a, operand_b, result);
             end
             ALU_SUB: begin
                 temp_result = {1'b0, operand_a} - {1'b0, operand_b};
