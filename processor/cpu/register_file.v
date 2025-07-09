@@ -57,4 +57,15 @@ module register_file (
             addr_a, data_a, addr_b, data_b);
     end
 
+    // Task to dump all register values
+    task dump_regs;
+        integer j;
+        begin
+            $display("[register_file] Register Dump:");
+            for (j = 0; j < 32; j = j + 1) begin
+                $display("REG[%0d] = 0x%08h", j, (j == 0) ? 32'h00000000 : registers[j]);
+            end
+        end
+    endtask
+
 endmodule

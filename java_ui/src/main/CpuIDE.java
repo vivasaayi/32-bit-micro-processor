@@ -37,6 +37,8 @@ public class CpuIDE extends JFrame {
     private TerminalTab terminalTab;
     private VcdTab vcdTab;
     private SimulationTab simulationTab;
+    private InstructionDecoderTab instructionDecoderTab;
+    private OpcodeEncoderTab opcodeEncoderTab;
     
     // Application state
     private AppState appState;
@@ -75,12 +77,16 @@ public class CpuIDE extends JFrame {
         terminalTab = new TerminalTab(appState, this);
         vcdTab = new VcdTab(appState, this);
         simulationTab = new SimulationTab(appState, this);
+        instructionDecoderTab = new InstructionDecoderTab(appState, this);
+        opcodeEncoderTab = new OpcodeEncoderTab(appState, this);
         
         // Add tabs to tabbed pane
         tabbedPane.addTab("C", cTab);
         tabbedPane.addTab("Java", javaTab);
         tabbedPane.addTab("Assembly", assemblyTab);
         tabbedPane.addTab("Hex", hexTab);
+        tabbedPane.addTab("Instruction Decoder", instructionDecoderTab);
+        tabbedPane.addTab("Opcode Encoder", opcodeEncoderTab);
         tabbedPane.addTab("Testbench Template", testbenchTemplateTab);
         tabbedPane.addTab("V/VVP", vvpTab);
         tabbedPane.addTab("Simulation", simulationTab); // Add after V/VVP

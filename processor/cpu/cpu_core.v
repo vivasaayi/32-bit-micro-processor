@@ -100,7 +100,8 @@ module cpu_core (
     // Memory operation codes (0x20–0x2F)
     localparam [5:0]
         MEM_LOAD  = 6'h20,
-        MEM_STORE = 6'h21;
+        MEM_STORE = 6'h21,
+        MEM_LOADI = 6'h22; // LOADI: Load immediate value into register
 
     // Control/Branch opcodes (0x30–0x3F)
     localparam [5:0]
@@ -149,6 +150,14 @@ module cpu_core (
     // | 0x0A   | MOD      | a % b            |
     // | 0x0B   | CMP      | compare a, b     |
     // | 0x0C   | SAR      | a >>> b (arith)  |
+    // | 0x22   | LOADI    | R[rd] = immediate      |
+    // ----------------------------------------------------------------------
+    // Memory OPCODE TABLE (0x20–0x2F)
+    // | Opcode | Mnemonic | Operation         |
+    // |--------|----------|------------------|
+    // | 0x20   | LOAD     | R[rd] = MEM[imm] |
+    // | 0x21   | STORE    | MEM[imm] = R[rd] |
+    // | 0x22   | LOADI    | R[rd] = imm      |
     // ----------------------------------------------------------------------
     
     // Instantiate ALU
@@ -224,7 +233,6 @@ module cpu_core (
                             OP_SETGE: alu_result_reg <= !flags_reg[2] ? 32'h1 : 32'h0; // !N flag
                             OP_SETLE: alu_result_reg <= (flags_reg[2] || flags_reg[1]) ? 32'h1 : 32'h0; // N || Z
                             OP_SETGT: alu_result_reg <= (!flags_reg[2] && !flags_reg[1]) ? 32'h1 : 32'h0; // !N && !Z
-                            // No default case - leave alu_result_reg as set by line 134
                         endcase
                         $display("DEBUG CPU: SET instruction - opcode=%h, flags=0x%h, result=%d", 
                                 opcode, flags_reg, alu_result_reg);
@@ -234,7 +242,6 @@ module cpu_core (
                     end
                     // Branch/jump PC update
                     if (is_branch_jump && branch_taken) begin
-                        // PC-relative branch: immediate is offset in words (9-bit signed)
                         pc_reg <= pc_reg + ({{23{imm12[8]}}, imm12} << 2);
                         $display("DEBUG CPU: Branch taken from PC=0x%x to PC=0x%x, offset=%d", 
                                 pc_reg, pc_reg + ({{23{imm12[8]}}, imm12} << 2), {{23{imm12[8]}}, imm12});
@@ -250,14 +257,19 @@ module cpu_core (
                                 (opcode == 6'h04) ? rs2 : immediate,
                                 alu_result);
                     end
+                    // LOADI: Write immediate to register (no ALU)
+                    if (opcode == MEM_LOADI) begin
+                        alu_result_reg <= immediate;
+                        $display("DEBUG CPU: LOADI R%d = 0x%h", rd, immediate);
+                    end
                 end
                 
                 MEMORY: begin
-                    if (is_load_store && opcode == 6'h02) begin // LOAD
+                    if (is_load_store && opcode == MEM_LOAD) begin // LOAD
                         memory_data_reg <= data_bus;
                         $display("DEBUG CPU: LOAD from addr=0x%x, data=%d", immediate, data_bus);
                     end
-                    if (opcode == 6'h03) begin // STORE
+                    if (opcode == MEM_STORE) begin // STORE
                         $display("DEBUG CPU: STORE R%d=%d to addr=0x%x, mem_write=%b, data_bus=0x%x", 
                                 store_direct_addr ? rd : rs1, reg_data_a, immediate, mem_write, data_bus);
                     end
@@ -324,12 +336,12 @@ module cpu_core (
         1'b0;
 
     // Immediate value selection
-    assign immediate = (opcode == 6'h02) ? {13'h0000, imm20} :                         // LOAD: 19-bit address
-                      (opcode == 6'h03 && store_direct_addr) ? {13'h0000, imm20} :     // STORE direct: 19-bit address  
-                      (opcode == 6'h03 && !store_direct_addr) ? {{23{imm12[8]}}, imm12} : // STORE reg+offset: 9-bit offset
-                      (opcode == 6'h01) ? {13'h0000, imm20} :                          // LOADI: 19-bit immediate
+    assign immediate = (opcode == MEM_LOAD) ? {13'h0000, imm20} :                         // LOAD: 19-bit address
+                      (opcode == MEM_STORE && store_direct_addr) ? {13'h0000, imm20} :     // STORE direct: 19-bit address  
+                      (opcode == MEM_STORE && !store_direct_addr) ? {{23{imm12[8]}}, imm12} : // STORE reg+offset: 9-bit offset
+                      (opcode == MEM_LOADI) ? {13'h0000, imm20} :                         // LOADI: 19-bit immediate
                       ((opcode == 6'h05) || (opcode == 6'h07)) ? {{23{imm12[8]}}, imm12} : // ADDI/SUBI: 9-bit signed
-                      {{23{imm12[8]}}, imm12};                                         // Default: 9-bit signed
+                      {{23{imm12[8]}}, imm12};                                             // Default: 9-bit signed
     
     // ALU connections
     assign alu_a = reg_data_a;
@@ -356,11 +368,14 @@ module cpu_core (
     assign reg_addr_b = (opcode == 6'h03 && !store_direct_addr) ? rs1 : rs2;  // For STORE register addressing, address base is in rs1
     assign reg_addr_w = rd;   // Always use rd for write destination
     assign reg_data_w = (state == WRITEBACK) ? 
-                       ((opcode == 6'h02) ? memory_data_reg : alu_result_reg) : 32'h0;
+                       ((opcode == MEM_LOAD) ? memory_data_reg :
+                        (opcode == MEM_LOADI) ? immediate :
+                        alu_result_reg) : 32'h0;
     assign reg_write_en = (state == WRITEBACK) && 
-                         !(opcode == 6'h03) && !(opcode == 6'h1F) && !is_branch_jump ||
+                         !(opcode == MEM_STORE) && !(opcode == 6'h1F) && !is_branch_jump ||
                          (state == WRITEBACK) && (opcode == OP_SETEQ || opcode == OP_SETNE || 
-                          opcode == OP_SETLT || opcode == OP_SETGE || opcode == OP_SETLE || opcode == OP_SETGT);
+                          opcode == OP_SETLT || opcode == OP_SETGE || opcode == OP_SETLE || opcode == OP_SETGT) ||
+                         (state == WRITEBACK) && (opcode == MEM_LOADI);
 
     // Memory interface with intelligent addressing
     assign addr_bus = (state == FETCH) ? pc_reg : 

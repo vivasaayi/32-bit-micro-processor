@@ -11,20 +11,51 @@ public class InstructionDecoder {
     private static final Map<Integer, String> OPCODE_MAP = new HashMap<>();
     
     static {
-        // Common opcodes based on simulation log
-        OPCODE_MAP.put(0x00, "NOP");
-        OPCODE_MAP.put(0x02, "LOAD");
-        OPCODE_MAP.put(0x04, "ADD");
-        OPCODE_MAP.put(0x06, "SUB");
-        OPCODE_MAP.put(0x08, "MOV");
-        OPCODE_MAP.put(0x0A, "ADDI");
-        OPCODE_MAP.put(0x20, "SETEQ");
-        OPCODE_MAP.put(0x24, "SETC");
-        OPCODE_MAP.put(0x26, "SETZ");
-        OPCODE_MAP.put(0x36, "SETN");
-        OPCODE_MAP.put(0x38, "HALT");
-        OPCODE_MAP.put(0x3E, "SETV");
-        // Add more opcodes as needed
+        // ALU operations (0x00–0x1F)
+        OPCODE_MAP.put(0x00, "ADD");
+        OPCODE_MAP.put(0x01, "SUB");
+        OPCODE_MAP.put(0x02, "AND");
+        OPCODE_MAP.put(0x03, "OR");
+        OPCODE_MAP.put(0x04, "XOR");
+        OPCODE_MAP.put(0x05, "NOT");
+        OPCODE_MAP.put(0x06, "SHL");
+        OPCODE_MAP.put(0x07, "SHR");
+        OPCODE_MAP.put(0x08, "MUL");
+        OPCODE_MAP.put(0x09, "DIV");
+        OPCODE_MAP.put(0x0A, "MOD");
+        OPCODE_MAP.put(0x0B, "CMP");
+        OPCODE_MAP.put(0x0C, "SAR");
+        
+        // Memory operations (0x20–0x2F)
+        OPCODE_MAP.put(0x20, "LOAD");
+        OPCODE_MAP.put(0x21, "STORE");
+        OPCODE_MAP.put(0x22, "LOADI");
+        
+        // Control/Branch opcodes (0x30–0x3F)
+        OPCODE_MAP.put(0x30, "JMP");
+        OPCODE_MAP.put(0x31, "JZ");
+        OPCODE_MAP.put(0x32, "JNZ");
+        OPCODE_MAP.put(0x33, "JC");
+        OPCODE_MAP.put(0x34, "JNC");
+        OPCODE_MAP.put(0x35, "JLT");
+        OPCODE_MAP.put(0x36, "JGE");
+        OPCODE_MAP.put(0x37, "JLE");
+        OPCODE_MAP.put(0x38, "CALL");
+        OPCODE_MAP.put(0x39, "RET");
+        OPCODE_MAP.put(0x3A, "PUSH");
+        OPCODE_MAP.put(0x3B, "POP");
+        
+        // Set/Compare opcodes (0x40–0x4F)
+        OPCODE_MAP.put(0x40, "SETEQ");
+        OPCODE_MAP.put(0x41, "SETNE");
+        OPCODE_MAP.put(0x42, "SETLT");
+        OPCODE_MAP.put(0x43, "SETGE");
+        OPCODE_MAP.put(0x44, "SETLE");
+        OPCODE_MAP.put(0x45, "SETGT");
+        
+        // System/Privileged opcodes (0x50–0x5F)
+        OPCODE_MAP.put(0x50, "HALT");
+        OPCODE_MAP.put(0x51, "INT");
     }
     
     public static Object[] decodeInstruction(int address, int instruction) {
@@ -76,18 +107,76 @@ public class InstructionDecoder {
         switch (mnemonic) {
             case "ADD":
                 return String.format("R%d = R%d + R%d", rd, rs1, rs2);
-            case "ADDI":
-                return String.format("R%d = R%d + %d", rd, rs1, imm);
             case "SUB":
                 return String.format("R%d = R%d - R%d", rd, rs1, rs2);
-            case "MOV":
-                return String.format("R%d = R%d", rd, rs1);
+            case "AND":
+                return String.format("R%d = R%d & R%d", rd, rs1, rs2);
+            case "OR":
+                return String.format("R%d = R%d | R%d", rd, rs1, rs2);
+            case "XOR":
+                return String.format("R%d = R%d ^ R%d", rd, rs1, rs2);
+            case "NOT":
+                return String.format("R%d = ~R%d", rd, rs1);
+            case "SHL":
+                return String.format("R%d = R%d << R%d", rd, rs1, rs2);
+            case "SHR":
+                return String.format("R%d = R%d >> R%d", rd, rs1, rs2);
+            case "SAR":
+                return String.format("R%d = R%d >>> R%d", rd, rs1, rs2);
+            case "MUL":
+                return String.format("R%d = R%d * R%d", rd, rs1, rs2);
+            case "DIV":
+                return String.format("R%d = R%d / R%d", rd, rs1, rs2);
+            case "MOD":
+                return String.format("R%d = R%d %% R%d", rd, rs1, rs2);
+            case "CMP":
+                return String.format("Compare R%d with R%d", rs1, rs2);
             case "LOAD":
-                return String.format("R%d = MEM[R%d + %d]", rd, rs1, imm);
+                return String.format("R%d = MEM[0x%X]", rd, imm);
+            case "STORE":
+                return String.format("MEM[0x%X] = R%d", imm, rd);
+            case "LOADI":
+                return String.format("R%d = 0x%X (immediate)", rd, imm);
+            case "JMP":
+                return String.format("Jump to 0x%X", imm);
+            case "JZ":
+                return String.format("Jump to 0x%X if zero", imm);
+            case "JNZ":
+                return String.format("Jump to 0x%X if not zero", imm);
+            case "JC":
+                return String.format("Jump to 0x%X if carry", imm);
+            case "JNC":
+                return String.format("Jump to 0x%X if not carry", imm);
+            case "JLT":
+                return String.format("Jump to 0x%X if less than", imm);
+            case "JGE":
+                return String.format("Jump to 0x%X if greater/equal", imm);
+            case "JLE":
+                return String.format("Jump to 0x%X if less/equal", imm);
+            case "CALL":
+                return String.format("Call subroutine at 0x%X", imm);
+            case "RET":
+                return "Return from subroutine";
+            case "PUSH":
+                return String.format("Push R%d to stack", rd);
+            case "POP":
+                return String.format("Pop to R%d from stack", rd);
+            case "SETEQ":
+                return String.format("R%d = (R%d == R%d) ? 1 : 0", rd, rs1, rs2);
+            case "SETNE":
+                return String.format("R%d = (R%d != R%d) ? 1 : 0", rd, rs1, rs2);
+            case "SETLT":
+                return String.format("R%d = (R%d < R%d) ? 1 : 0", rd, rs1, rs2);
+            case "SETGE":
+                return String.format("R%d = (R%d >= R%d) ? 1 : 0", rd, rs1, rs2);
+            case "SETLE":
+                return String.format("R%d = (R%d <= R%d) ? 1 : 0", rd, rs1, rs2);
+            case "SETGT":
+                return String.format("R%d = (R%d > R%d) ? 1 : 0", rd, rs1, rs2);
             case "HALT":
                 return "Stop execution";
-            case "NOP":
-                return "No operation";
+            case "INT":
+                return "Software interrupt";
             default:
                 return String.format("Operation %s", mnemonic);
         }

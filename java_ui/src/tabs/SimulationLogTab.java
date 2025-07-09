@@ -245,10 +245,17 @@ public class SimulationLogTab extends BaseTab {
     protected void setupLayout() {
         setLayout(new BorderLayout());
         
+        // Top panel with Paste Log button
+        JPanel topPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        JButton pasteLogButton = new JButton("Paste Log");
+        pasteLogButton.addActionListener(_ -> showPasteLogDialog());
+        topPanel.add(pasteLogButton);
+        
         // Left panel: simulation log
         JPanel leftPanel = new JPanel(new BorderLayout());
-        leftPanel.add(new JLabel("Simulation Log:"), BorderLayout.NORTH);
-        leftPanel.add(new JScrollPane(logArea), BorderLayout.CENTER);
+        leftPanel.add(topPanel, BorderLayout.NORTH);
+        leftPanel.add(new JLabel("Simulation Log:"), BorderLayout.CENTER);
+        leftPanel.add(new JScrollPane(logArea), BorderLayout.SOUTH);
         
         // Right panel: decoded instructions
         JPanel decodedPanel = new JPanel(new BorderLayout());
@@ -288,47 +295,34 @@ public class SimulationLogTab extends BaseTab {
         mainSplitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, leftPanel, bottomSplitPane);
         mainSplitPane.setDividerLocation(400);
         mainSplitPane.setResizeWeight(0.3);
-        
         add(mainSplitPane, BorderLayout.CENTER);
         
         prevPageButton.addActionListener(e -> {
             if (currentPage > 0) {
                 currentPage--;
-                updateHistoryTablePage();
+                updateHistoryTable();
             }
         });
         nextPageButton.addActionListener(e -> {
             if (currentPage < totalPages - 1) {
                 currentPage++;
-                updateHistoryTablePage();
+                updateHistoryTable();
             }
         });
     }
-    
-    private void updateHistoryTablePage() {
-        // Remove all rows
-        historyTableModel.setRowCount(0);
-        int totalRows = instructionRegisterValues.size();
-        totalPages = (int) Math.ceil((double) totalRows / rowsPerPage);
-        if (totalPages == 0) totalPages = 1;
-        if (currentPage >= totalPages) currentPage = totalPages - 1;
-        int start = currentPage * rowsPerPage;
-        int end = Math.min(start + rowsPerPage, totalRows);
-        for (int i = start; i < end; i++) {
-            Map<Integer, Long> regSnapshot = instructionRegisterValues.get(i);
-            Set<Integer> changedRegs = instructionRegisterChanges.getOrDefault(i, new HashSet<>());
-            Object[] historyRow = new Object[36];
-            historyRow[0] = decodedTableModel.getRowCount() > i ? decodedTableModel.getValueAt(i, 2) : "";
-            historyRow[1] = regSnapshot != null ? String.format("0x%08X", regSnapshot.getOrDefault(0, 0L)) : "";
-            historyRow[2] = regSnapshot != null ? regSnapshot.getOrDefault(1, 0L).toString() : "";
-            for (int j = 0; j < 32; j++) {
-                historyRow[j + 3] = regSnapshot != null ? String.format("0x%08X", regSnapshot.getOrDefault(j + 2, 0L)) : "";
+
+    // Add this method to show the paste log dialog
+    private void showPasteLogDialog() {
+        JTextArea pasteArea = new JTextArea(20, 80);
+        pasteArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+        JScrollPane scrollPane = new JScrollPane(pasteArea);
+        int result = JOptionPane.showConfirmDialog(this, scrollPane, "Paste Simulation Log", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        if (result == JOptionPane.OK_OPTION) {
+            String pastedLog = pasteArea.getText();
+            if (pastedLog != null && !pastedLog.trim().isEmpty()) {
+                loadContent(pastedLog);
             }
-            historyTableModel.addRow(historyRow);
         }
-        pageInfoLabel.setText("Page " + (currentPage + 1) + " of " + totalPages);
-        prevPageButton.setEnabled(currentPage > 0);
-        nextPageButton.setEnabled(currentPage < totalPages - 1);
     }
     
     @Override
@@ -360,6 +354,32 @@ public class SimulationLogTab extends BaseTab {
         instructionRegisterChanges.clear();
         instructionRegisterValues.clear();
         currentInstructionRow = -1;
+    }
+    
+    private void updateHistoryTable() {
+        // Remove all rows
+        historyTableModel.setRowCount(0);
+        int totalRows = instructionRegisterValues.size();
+        totalPages = (int) Math.ceil((double) totalRows / rowsPerPage);
+        if (totalPages == 0) totalPages = 1;
+        if (currentPage >= totalPages) currentPage = totalPages - 1;
+        int start = currentPage * rowsPerPage;
+        int end = Math.min(start + rowsPerPage, totalRows);
+        for (int i = start; i < end; i++) {
+            Map<Integer, Long> regSnapshot = instructionRegisterValues.get(i);
+            Set<Integer> changedRegs = instructionRegisterChanges.getOrDefault(i, new HashSet<>());
+            Object[] historyRow = new Object[36];
+            historyRow[0] = decodedTableModel.getRowCount() > i ? decodedTableModel.getValueAt(i, 2) : "";
+            historyRow[1] = regSnapshot != null ? String.format("0x%08X", regSnapshot.getOrDefault(0, 0L)) : "";
+            historyRow[2] = regSnapshot != null ? regSnapshot.getOrDefault(1, 0L).toString() : "";
+            for (int j = 0; j < 32; j++) {
+                historyRow[j + 3] = regSnapshot != null ? String.format("0x%08X", regSnapshot.getOrDefault(j + 2, 0L)) : "";
+            }
+            historyTableModel.addRow(historyRow);
+        }
+        pageInfoLabel.setText("Page " + (currentPage + 1) + " of " + totalPages);
+        prevPageButton.setEnabled(currentPage > 0);
+        nextPageButton.setEnabled(currentPage < totalPages - 1);
     }
     
     private void parseSimulationLog(String content) {
@@ -480,7 +500,7 @@ public class SimulationLogTab extends BaseTab {
             instructionRegisterChanges.put(instructionCount - 1, currentChangedRegisters);
         }
         currentPage = 0;
-        updateHistoryTablePage();
+        updateHistoryTable();
         updateStatus("Parsed " + instructionCount + " instructions from simulation log");
     }
 }
