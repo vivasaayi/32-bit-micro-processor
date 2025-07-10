@@ -64,8 +64,8 @@ module cpu_core (
     wire reg_write_en;
     
     // Control signals
-    wire [5:0] opcode; // RAJAN: 6 bit opcode
-    wire [4:0] rd, rs1, rs2;  // RAJAN:  5-bit register addresses
+    wire [5:0] opcode; 
+    wire [4:0] rd, rs1, rs2; 
     wire [19:0] imm20;
     wire [11:0] imm12;
     wire [31:0] immediate;
@@ -199,33 +199,49 @@ module cpu_core (
             state <= next_state;
             case (state)
                 FETCH: begin
+                    $display("FETCH_BEGIN: PC=0x%x, IS=0x%x Opcode=%h, rd=%d, rs1=%d, rs2=%d, imm=%h, alu_result=%d", pc_reg, instruction_reg, opcode, rd, rs1, rs2, immediate, alu_result);
                     if (mem_ready) begin
                         instruction_reg <= data_bus;
                         pc_reg <= pc_reg + 32'h4;
                     end
+                    //Both log statements shows same result
+                    //$display("FETCH_DONE: PC=0x%x, IS=0x%x Opcode=%h, rd=%d, rs1=%d, rs2=%d, imm=%h, alu_result=%d", pc_reg, instruction_reg, opcode, rd, rs1, rs2, immediate, alu_result);
                 end
                 
                 DECODE: begin
+                    $display("DECODE_DONE: PC=0x%x, IS=0x%x Opcode=%h, rd=%d, rs1=%d, rs2=%d, imm=%h, alu_result=%d", pc_reg, instruction_reg, opcode, rd, rs1, rs2, immediate, alu_result);
                     // Decode happens combinatorially
                 end
                 
                 EXECUTE: begin
+                    $display("EXECUTE_BEGIN: PC=0x%x, IS=0x%x Opcode=%h, rd=%d, rs1=%d, rs2=%d, imm=%h, alu_result=%d", pc_reg, instruction_reg, opcode, rd, rs1, rs2, immediate, alu_result);
+                    
+                    // ------ BEGIN: Handle the result of ALU operations-----
                     alu_result_reg <= alu_result;
-                    $display("DEBUG CPU Execute: Instruction opcode=%h, alu_result=%d, alu_result_reg will be set to %d", 
-                            opcode, alu_result, alu_result);
+                    
                     // Update flags for ALU operations
-                    if (opcode == 6'h04 || opcode == 6'h05 || opcode == 6'h06 || opcode == 6'h07 || 
-                        opcode == 6'h08 || opcode == 6'h09 || opcode == 6'h0A || opcode == 6'h0D) begin
+                    if (opcode == ALU_ADD || opcode == ALU_SUB || opcode == ALU_AND || opcode == ALU_OR || 
+                        opcode == ALU_XOR || opcode == ALU_NOT || opcode == ALU_SHL || opcode == ALU_SHR ||
+                        opcode == ALU_MUL || opcode == ALU_DIV || opcode == ALU_MOD || opcode == ALU_CMP || opcode == ALU_SAR) begin
                         flags_reg <= flags_out;
-                        $display("DEBUG CPU: Flags updated to C=%b Z=%b N=%b V=%b", 
+                        $display("EXECUTE_DEBUG_ALU: Flags updated to C=%b Z=%b N=%b V=%b", 
                                 flags_out[0], flags_out[1], flags_out[2], flags_out[3]);
                     end
-                    // Handle set instructions
-                    $display("DEBUG: Checking SET condition: opcode=%h, OP_SETEQ=%h, condition=%b", 
-                            opcode, OP_SETEQ, (opcode == OP_SETEQ || opcode == OP_SETNE || opcode == OP_SETLT ||
-                            opcode == OP_SETGE || opcode == OP_SETLE || opcode == OP_SETGT));
+
+                    // ------ END: Handle the result of ALU operations-----
+
+                    // ------ BEGIN: Handle SET instructions -----
                     if (opcode == OP_SETEQ || opcode == OP_SETNE || opcode == OP_SETLT ||
                         opcode == OP_SETGE || opcode == OP_SETLE || opcode == OP_SETGT) begin
+                        $display("SET MATCHED..");
+                        $display("%h %h %h %h %h %h", opcode, OP_SETEQ, OP_SETNE, OP_SETLT, OP_SETGE, OP_SETLE, OP_SETGT);
+                        $display("OP_SETEQ: %h", opcode==OP_SETEQ);
+                        $display("OP_SETNE: %h", opcode==OP_SETNE);
+                        $display("OP_SETLT: %h", opcode==OP_SETLT);
+                        $display("OP_SETGE: %h", opcode==OP_SETGE);
+                        $display("OP_SETLE: %h", opcode==OP_SETLE);
+                        $display("OP_SETGT: %h", opcode==OP_SETGT);
+
                         case (opcode)
                             OP_SETEQ: alu_result_reg <= flags_reg[1] ? 32'h1 : 32'h0;  // Z flag
                             OP_SETNE: alu_result_reg <= !flags_reg[1] ? 32'h1 : 32'h0; // !Z flag
@@ -234,9 +250,16 @@ module cpu_core (
                             OP_SETLE: alu_result_reg <= (flags_reg[2] || flags_reg[1]) ? 32'h1 : 32'h0; // N || Z
                             OP_SETGT: alu_result_reg <= (!flags_reg[2] && !flags_reg[1]) ? 32'h1 : 32'h0; // !N && !Z
                         endcase
-                        $display("DEBUG CPU: SET instruction - opcode=%h, flags=0x%h, result=%d", 
+                        $display("EXECUTE_DEBUG_SET1: Checking SET condition: opcode=%h, OP_SETEQ=%h, condition=%b", 
+                            opcode, OP_SETEQ, (opcode == OP_SETEQ || opcode == OP_SETNE || opcode == OP_SETLT ||
+                            opcode == OP_SETGE || opcode == OP_SETLE || opcode == OP_SETGT));
+
+                        $display("EXECUTE_DEBUG_SET2: SET instruction - opcode=%h, flags=0x%h, result=%d", 
                                 opcode, flags_reg, alu_result_reg);
                     end
+                    // ------ END: Handle SET instructions -----
+
+
                     if (opcode == 6'h1F) begin // HALT
                         halted_reg <= 1'b1;
                     end
@@ -249,7 +272,8 @@ module cpu_core (
                         $display("DEBUG CPU: Branch not taken at PC=0x%x, condition failed", pc_reg);
                     end
                     // Debug output for ALU operations
-                    if (opcode == 6'h04 || opcode == 6'h05) begin // ADD/ADDI
+                    // FIX ADDI
+                    if (opcode == ALU_ADD || opcode == 6'h000000) begin // ADD/ADDI
                         $display("DEBUG ALU: ADD/ADDI - op=%s R%d = R%d + %s%d => %d", 
                                 (opcode == 6'h04) ? "ADD" : "ADDI",
                                 rd, rs1, 
@@ -262,9 +286,11 @@ module cpu_core (
                         alu_result_reg <= immediate;
                         $display("DEBUG CPU: LOADI R%d = 0x%h", rd, immediate);
                     end
+                    $display("EXECUTE_DONE: PC=0x%x, IS=0x%x Opcode=%h, rd=%d, rs1=%d, rs2=%d, imm=%h", pc_reg, instruction_reg, opcode, rd, rs1, rs2, immediate);
                 end
                 
                 MEMORY: begin
+                    $display("STATE_MEMORY:");
                     if (is_load_store && opcode == MEM_LOAD) begin // LOAD
                         memory_data_reg <= data_bus;
                         $display("DEBUG CPU: LOAD from addr=0x%x, data=%d", immediate, data_bus);
@@ -276,6 +302,7 @@ module cpu_core (
                 end
                 
                 WRITEBACK: begin
+                    $display("STATE_WRITEBACK:");
                     // Write back happens combinatorially
                 end
             endcase
@@ -371,11 +398,20 @@ module cpu_core (
                        ((opcode == MEM_LOAD) ? memory_data_reg :
                         (opcode == MEM_LOADI) ? immediate :
                         alu_result_reg) : 32'h0;
+    // DEBUG: Show what is being written to the register file
+    always @(*) begin
+        if (state == WRITEBACK) begin
+            $display("DEBUG reg_data_w: state=WRITEBACK, reg_data_w=0x%h, opcode=0x%h, alu_result_reg=0x%h, memory_data_reg=0x%h, immediate=0x%h", reg_data_w, opcode, alu_result_reg, memory_data_reg, immediate);
+        end
+    end
+    
     assign reg_write_en = (state == WRITEBACK) && 
                          !(opcode == MEM_STORE) && !(opcode == 6'h1F) && !is_branch_jump ||
                          (state == WRITEBACK) && (opcode == OP_SETEQ || opcode == OP_SETNE || 
                           opcode == OP_SETLT || opcode == OP_SETGE || opcode == OP_SETLE || opcode == OP_SETGT) ||
                          (state == WRITEBACK) && (opcode == MEM_LOADI);
+
+                         
 
     // Memory interface with intelligent addressing
     assign addr_bus = (state == FETCH) ? pc_reg : 
@@ -395,17 +431,16 @@ module cpu_core (
     always @(posedge clk) begin
         if (!rst_n) begin
             // Reset debug state
-        end else if (state == EXECUTE) begin
-            $display("DEBUG CPU Execute: PC=0x%x, Opcode=%h, rd=%d, rs1=%d, rs2=%d, imm=%h",
-                    pc_reg, opcode, rd, rs1, rs2, immediate);
-            if (opcode == 6'h04 || opcode == 6'h05) begin
-                $display("DEBUG CPU ALU: %s rd=%d, rs1=%d, val2=%d, result=%d",
-                        opcode == 6'h04 ? "ADD" : "ADDI",
-                        rd, rs1, opcode == 6'h04 ? reg_data_b : immediate,
-                        alu_result);
+        end else begin
+            //$display("DEBUG CPU State: state=%b, next_state=%b, opcode=0x%h, pc=0x%h, alu_result_reg=0x%h, reg_write_en=%b, reg_addr_w=%d, reg_data_w=0x%h", state, next_state, opcode, pc_reg, alu_result_reg, reg_write_en, reg_addr_w, reg_data_w);
+            if (state == EXECUTE) begin
+                $display("DEBUG_EXECUTE: PC=0x%x, Opcode=%h, rd=%d, rs1=%d, rs2=%d, imm=%h", pc_reg, opcode, rd, rs1, rs2, immediate);
+                if (opcode == 6'h04 || opcode == 6'h05) begin
+                    $display("DEBUG CPU ALU: %s rd=%d, rs1=%d, val2=%d, result=%d", opcode == 6'h04 ? "ADD" : "ADDI", rd, rs1, opcode == 6'h04 ? reg_data_b : immediate, alu_result);
+               end
+            end else if (state == WRITEBACK && reg_write_en) begin
+                $display("DEBUG CPU Writeback: Writing %d to R%d", reg_data_w, reg_addr_w);
             end
-        end else if (state == WRITEBACK && reg_write_en) begin
-            $display("DEBUG CPU Writeback: Writing %d to R%d", reg_data_w, reg_addr_w);
         end
     end
     
