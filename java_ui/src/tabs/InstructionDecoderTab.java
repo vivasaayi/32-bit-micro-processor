@@ -13,6 +13,7 @@ import util.InstructionDecoder;
  */
 public class InstructionDecoderTab extends BaseTab {
     private JTextField inputField;
+    private JTextField binaryField; // For copiable binary
     private JLabel binaryLabel;
     private JTextArea decodedOutput;
     private JPanel fieldsPanel;
@@ -20,13 +21,11 @@ public class InstructionDecoderTab extends BaseTab {
     private JButton clearButton;
     
     // Field display labels
-    private JLabel opcodeLabel;
-    private JLabel rdLabel;
-    private JLabel rs1Label;
-    private JLabel rs2Label;
-    private JLabel imm19Label;
-    private JLabel imm9Label;
-    private JLabel mnemonicLabel;
+    private JTextField opcodeField, rdField, rs1Field, rs2Field, imm19Field, imm9Field, mnemonicField;
+    private JTextArea historyArea;
+    
+    // Binary breakdown fields (copiable)
+    private JTextField opcodeBinField, rdBinField, rs1BinField, rs2BinField, imm19BinField, imm9BinField;
     
     public InstructionDecoderTab(AppState appState, JFrame parentFrame) {
         super(appState, parentFrame);
@@ -38,50 +37,75 @@ public class InstructionDecoderTab extends BaseTab {
         inputField = new JTextField(25);
         inputField.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
         inputField.addActionListener(_ -> decodeInstruction());
-        
-        // Binary display
-        binaryLabel = new JLabel("32-bit Binary: ");
-        binaryLabel.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
-        
+
+        // Binary display (copiable)
+        binaryField = new JTextField();
+        binaryField.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+        binaryField.setEditable(false);
+        binaryField.setBackground(new Color(248, 248, 248));
+        binaryField.setBorder(new EmptyBorder(2, 2, 2, 2));
+        binaryField.setDragEnabled(true);
+
         // Buttons
         decodeButton = new JButton("Decode");
         decodeButton.addActionListener(_ -> decodeInstruction());
-        
         clearButton = new JButton("Clear");
         clearButton.addActionListener(_ -> clearAll());
-        
-        // Fields panel
+
+        // Fields panel as grid of labels and text fields
         fieldsPanel = new JPanel(new GridLayout(7, 2, 5, 5));
         fieldsPanel.setBorder(new TitledBorder("Instruction Fields"));
-        
-        // Field labels
-        opcodeLabel = createFieldLabel("Opcode (31:26):");
-        rdLabel = createFieldLabel("RD (23:19):");
-        rs1Label = createFieldLabel("RS1 (18:14):");
-        rs2Label = createFieldLabel("RS2 (13:9):");
-        imm19Label = createFieldLabel("IMM[18:0] (18:0):");
-        imm9Label = createFieldLabel("IMM[8:0] (8:0):");
-        mnemonicLabel = createFieldLabel("Mnemonic:");
-        
-        // Decoded output area
-        decodedOutput = new JTextArea(8, 50);
+        opcodeField = createFieldText();
+        rdField = createFieldText();
+        rs1Field = createFieldText();
+        rs2Field = createFieldText();
+        imm19Field = createFieldText();
+        imm9Field = createFieldText();
+        mnemonicField = createFieldText();
+        fieldsPanel.add(new JLabel("Opcode (bits 31:26):")); fieldsPanel.add(opcodeField);
+        fieldsPanel.add(new JLabel("RD (bits 23:19):")); fieldsPanel.add(rdField);
+        fieldsPanel.add(new JLabel("RS1 (bits 18:14):")); fieldsPanel.add(rs1Field);
+        fieldsPanel.add(new JLabel("RS2 (bits 13:9):")); fieldsPanel.add(rs2Field);
+        fieldsPanel.add(new JLabel("IMM[18:0] (bits 18:0):")); fieldsPanel.add(imm19Field);
+        fieldsPanel.add(new JLabel("IMM[8:0] (bits 8:0):")); fieldsPanel.add(imm9Field);
+        fieldsPanel.add(new JLabel("Mnemonic:")); fieldsPanel.add(mnemonicField);
+
+        // Decoded output area (taller)
+        decodedOutput = new JTextArea(16, 50);
         decodedOutput.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
         decodedOutput.setEditable(false);
         decodedOutput.setBackground(new Color(248, 248, 248));
         decodedOutput.setBorder(new EmptyBorder(5, 5, 5, 5));
+
+        // History area
+        historyArea = new JTextArea(8, 50);
+        historyArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+        historyArea.setEditable(false);
+        historyArea.setBackground(new Color(240, 240, 255));
+        historyArea.setBorder(new TitledBorder("Decode History"));
+
+        // Binary breakdown fields (copiable)
+        opcodeBinField = createFieldText();
+        rdBinField = createFieldText();
+        rs1BinField = createFieldText();
+        rs2BinField = createFieldText();
+        imm19BinField = createFieldText();
+        imm9BinField = createFieldText();
     }
-    
-    private JLabel createFieldLabel(String text) {
-        JLabel label = new JLabel(text);
-        label.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
-        return label;
+
+    private JTextField createFieldText() {
+        JTextField tf = new JTextField();
+        tf.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+        tf.setEditable(false);
+        tf.setBackground(new Color(248, 248, 248));
+        tf.setBorder(new EmptyBorder(2, 2, 2, 2));
+        return tf;
     }
     
     @Override
     protected void setupLayout() {
         setLayout(new BorderLayout());
         setBorder(new EmptyBorder(10, 10, 10, 10));
-        
         // Top panel - Input
         JPanel topPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
         topPanel.setBorder(new TitledBorder("Input"));
@@ -89,41 +113,37 @@ public class InstructionDecoderTab extends BaseTab {
         topPanel.add(inputField);
         topPanel.add(decodeButton);
         topPanel.add(clearButton);
-        
-        // Middle panel - Binary display
-        JPanel middlePanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        // Middle panel - Binary display (copiable)
+        JPanel middlePanel = new JPanel();
+        middlePanel.setLayout(new BoxLayout(middlePanel, BoxLayout.Y_AXIS));
         middlePanel.setBorder(new TitledBorder("Binary Representation"));
-        middlePanel.add(binaryLabel);
-        
-        // Fields panel setup
-        fieldsPanel.add(new JLabel("Opcode (bits 31:26):"));
-        fieldsPanel.add(opcodeLabel);
-        fieldsPanel.add(new JLabel("RD (bits 23:19):"));
-        fieldsPanel.add(rdLabel);
-        fieldsPanel.add(new JLabel("RS1 (bits 18:14):"));
-        fieldsPanel.add(rs1Label);
-        fieldsPanel.add(new JLabel("RS2 (bits 13:9):"));
-        fieldsPanel.add(rs2Label);
-        fieldsPanel.add(new JLabel("IMM[18:0] (bits 18:0):"));
-        fieldsPanel.add(imm19Label);
-        fieldsPanel.add(new JLabel("IMM[8:0] (bits 8:0):"));
-        fieldsPanel.add(imm9Label);
-        fieldsPanel.add(new JLabel("Mnemonic:"));
-        fieldsPanel.add(mnemonicLabel);
-        
-        // Bottom panel - Detailed output
+        middlePanel.add(binaryField);
+        JPanel binGrid = new JPanel(new GridLayout(2, 6, 4, 2));
+        binGrid.add(new JLabel("Opcode"));
+        binGrid.add(new JLabel("RD"));
+        binGrid.add(new JLabel("RS1"));
+        binGrid.add(new JLabel("RS2"));
+        binGrid.add(new JLabel("IMM[18:0]"));
+        binGrid.add(new JLabel("IMM[8:0]"));
+        binGrid.add(opcodeBinField);
+        binGrid.add(rdBinField);
+        binGrid.add(rs1BinField);
+        binGrid.add(rs2BinField);
+        binGrid.add(imm19BinField);
+        binGrid.add(imm9BinField);
+        middlePanel.add(binGrid);
+        // Fields panel (already set up)
+        // Bottom panel - Detailed output and history
         JPanel bottomPanel = new JPanel(new BorderLayout());
-        bottomPanel.setBorder(new TitledBorder("Detailed Breakdown"));
+        bottomPanel.setBorder(new TitledBorder("Detailed Breakdown & History"));
         bottomPanel.add(new JScrollPane(decodedOutput), BorderLayout.CENTER);
-        
+        bottomPanel.add(new JScrollPane(historyArea), BorderLayout.SOUTH);
         // Layout
         add(topPanel, BorderLayout.NORTH);
-        
         JPanel centerPanel = new JPanel(new BorderLayout());
         centerPanel.add(middlePanel, BorderLayout.NORTH);
         centerPanel.add(fieldsPanel, BorderLayout.CENTER);
         add(centerPanel, BorderLayout.CENTER);
-        
         add(bottomPanel, BorderLayout.SOUTH);
     }
     
@@ -133,7 +153,6 @@ public class InstructionDecoderTab extends BaseTab {
             showError("Input Error", "Please enter a value.");
             return;
         }
-        
         int value;
         try {
             if (input.startsWith("0x") || input.startsWith("0X")) {
@@ -141,52 +160,51 @@ public class InstructionDecoderTab extends BaseTab {
             } else if (input.matches("[01]{1,32}")) {
                 value = Integer.parseUnsignedInt(input, 2);
             } else {
-                // Try to parse as hex without 0x prefix
                 value = (int)Long.parseLong(input, 16);
             }
         } catch (Exception ex) {
             showError("Parse Error", "Invalid input. Please enter a valid 32-bit hex or binary value.");
             return;
         }
-        
-        // Display binary representation
+        // Display binary representation (copiable)
         String binStr = String.format("%32s", Integer.toBinaryString(value)).replace(' ', '0');
-        binaryLabel.setText("32-bit Binary: " + binStr);
-        
+        binaryField.setText(binStr);
         // Extract fields
-        int opcode = (value >>> 26) & 0x3F;  // 6 bits
-        int rd = (value >>> 19) & 0x1F;      // 5 bits
-        int rs1 = (value >>> 14) & 0x1F;     // 5 bits
-        int rs2 = (value >>> 9) & 0x1F;      // 5 bits
-        int imm19 = value & 0x7FFFF;         // 19 bits
-        int imm9 = value & 0x1FF;            // 9 bits
-        
-        // Update field labels
-        opcodeLabel.setText(String.format("0x%02X (%d)", opcode, opcode));
-        rdLabel.setText(String.format("R%d", rd));
-        rs1Label.setText(String.format("R%d", rs1));
-        rs2Label.setText(String.format("R%d", rs2));
-        imm19Label.setText(String.format("0x%05X (%d)", imm19, imm19));
-        imm9Label.setText(String.format("0x%03X (%d)", imm9, imm9));
-        mnemonicLabel.setText(InstructionDecoder.getOpcodeName(opcode));
-        
+        int opcode = (value >>> 26) & 0x3F;
+        int rd = (value >>> 19) & 0x1F;
+        int rs1 = (value >>> 14) & 0x1F;
+        int rs2 = (value >>> 9) & 0x1F;
+        int imm19 = value & 0x7FFFF;
+        int imm9 = value & 0x1FF;
+        // Set binary fields (copiable)
+        opcodeBinField.setText(String.format("%6s", Integer.toBinaryString(opcode)).replace(' ', '0'));
+        rdBinField.setText(String.format("%5s", Integer.toBinaryString(rd)).replace(' ', '0'));
+        rs1BinField.setText(String.format("%5s", Integer.toBinaryString(rs1)).replace(' ', '0'));
+        rs2BinField.setText(String.format("%5s", Integer.toBinaryString(rs2)).replace(' ', '0'));
+        imm19BinField.setText(String.format("%19s", Integer.toBinaryString(imm19)).replace(' ', '0'));
+        imm9BinField.setText(String.format("%9s", Integer.toBinaryString(imm9)).replace(' ', '0'));
+        // Update field text fields
+        opcodeField.setText(String.format("0x%02X (%d)", opcode, opcode));
+        rdField.setText(String.format("R%d", rd));
+        rs1Field.setText(String.format("R%d", rs1));
+        rs2Field.setText(String.format("R%d", rs2));
+        imm19Field.setText(String.format("0x%05X (%d)", imm19, imm19));
+        imm9Field.setText(String.format("0x%03X (%d)", imm9, imm9));
+        mnemonicField.setText(util.InstructionDecoder.getOpcodeName(opcode));
         // Generate detailed breakdown
         StringBuilder sb = new StringBuilder();
         sb.append("Instruction: 0x").append(String.format("%08X", value)).append("\n");
         sb.append("Binary:      ").append(binStr).append("\n");
         sb.append("             ").append("^^^^^^  ^^^^^ ^^^^^ ^^^^^ ^^^^^^^^^^^^^^^^^^^\n");
         sb.append("             ").append("opcode   rd   rs1   rs2     immediate\n\n");
-        
         sb.append("Field Breakdown:\n");
-        sb.append("  Opcode (31:26): ").append(String.format("0x%02X", opcode)).append(" (").append(opcode).append(") - ").append(InstructionDecoder.getOpcodeName(opcode)).append("\n");
+        sb.append("  Opcode (31:26): ").append(String.format("0x%02X", opcode)).append(" (").append(opcode).append(") - ").append(util.InstructionDecoder.getOpcodeName(opcode)).append("\n");
         sb.append("  RD     (23:19): ").append(String.format("R%d", rd)).append(" (register ").append(rd).append(")\n");
         sb.append("  RS1    (18:14): ").append(String.format("R%d", rs1)).append(" (register ").append(rs1).append(")\n");
         sb.append("  RS2    (13:9):  ").append(String.format("R%d", rs2)).append(" (register ").append(rs2).append(")\n");
         sb.append("  IMM[18:0]  (18:0): ").append(String.format("0x%05X", imm19)).append(" (").append(imm19).append(")\n");
         sb.append("  IMM[8:0]   (8:0):  ").append(String.format("0x%03X", imm9)).append(" (").append(imm9).append(")\n\n");
-        
-        // Add instruction format information
-        String mnemonic = InstructionDecoder.getOpcodeName(opcode);
+        String mnemonic = util.InstructionDecoder.getOpcodeName(opcode);
         sb.append("Instruction Format:\n");
         if (opcode >= 0x00 && opcode <= 0x1F) {
             sb.append("  Type: ALU Operation\n");
@@ -214,8 +232,9 @@ public class InstructionDecoderTab extends BaseTab {
             sb.append("  Type: System/Privileged Operation\n");
             sb.append("  Format: ").append(mnemonic).append("\n");
         }
-        
         decodedOutput.setText(sb.toString());
+        // Add to history
+        historyArea.append("[" + input + "]\n" + sb.toString() + "\n-----------------------------\n");
         updateStatus("Instruction decoded successfully");
     }
     
@@ -240,16 +259,23 @@ public class InstructionDecoderTab extends BaseTab {
     
     private void clearAll() {
         inputField.setText("");
-        binaryLabel.setText("32-bit Binary: ");
-        opcodeLabel.setText("");
-        rdLabel.setText("");
-        rs1Label.setText("");
-        rs2Label.setText("");
-        imm19Label.setText("");
-        imm9Label.setText("");
-        mnemonicLabel.setText("");
+        binaryField.setText("");
+        opcodeField.setText("");
+        rdField.setText("");
+        rs1Field.setText("");
+        rs2Field.setText("");
+        imm19Field.setText("");
+        imm9Field.setText("");
+        mnemonicField.setText("");
         decodedOutput.setText("");
-        updateStatus("Cleared");
+        // Clear binary fields (copiable)
+        opcodeBinField.setText("");
+        rdBinField.setText("");
+        rs1BinField.setText("");
+        rs2BinField.setText("");
+        imm19BinField.setText("");
+        imm9BinField.setText("");
+        // Do not clear history
     }
     
     @Override

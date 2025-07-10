@@ -10,6 +10,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.HashSet;
+import java.util.List;
+import java.util.ArrayList;
 import util.AppState;
 import util.InstructionDecoder;
 import java.util.Objects;
@@ -30,7 +32,7 @@ public class SimulationLogTab extends BaseTab {
     private Map<Integer, Map<Integer, Long>> instructionRegisterValues = new HashMap<>();
     private int currentInstructionRow = -1;
     private Map<Integer, Long> currentRegisterValues = new HashMap<>();
-    private JLabel[] registerLabels = new JLabel[34]; // PC + Flags + R0-R31
+    private JLabel[] registerLabels; // PC + Flags + R0-R31
     
     // Paging for history table
     private int currentPage = 0;
@@ -42,10 +44,17 @@ public class SimulationLogTab extends BaseTab {
     
     public SimulationLogTab(AppState appState, JFrame parentFrame) {
         super(appState, parentFrame);
+
+        System.out.println("Length of JLables:" + registerLabels.length);
     }
     
     @Override
     protected void initializeComponents() {
+        // Always initialize registerLabels here!
+        registerLabels = new JLabel[34];
+        System.out.println("Initializing components...");
+        System.out.println("Length of JLabels:" + registerLabels.length);
+
         logArea = new JTextArea();
         logArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 11));
         logArea.setEditable(false);
@@ -78,7 +87,10 @@ public class SimulationLogTab extends BaseTab {
         // Create history table for register states after each instruction
         createHistoryTable();
         
-        // Add selection listener to decoded table
+        // Add selection listeners after tables are created
+        addTableSelectionListeners();
+    }
+    private void addTableSelectionListeners() {
         decodedTable.getSelectionModel().addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) {
                 int selectedRow = decodedTable.getSelectedRow();
@@ -86,6 +98,20 @@ public class SimulationLogTab extends BaseTab {
                     currentInstructionRow = selectedRow;
                     updateCurrentRegisterDisplay();
                     highlightHistoryRow(selectedRow);
+                    currentRegisterPanel.revalidate();
+                    currentRegisterPanel.repaint();
+                }
+            }
+        });
+        historyTable.getSelectionModel().addListSelectionListener(e -> {
+            if (!e.getValueIsAdjusting()) {
+                int selectedRow = historyTable.getSelectedRow();
+                if (selectedRow >= 0) {
+                    decodedTable.setRowSelectionInterval(selectedRow, selectedRow);
+                    currentInstructionRow = selectedRow;
+                    updateCurrentRegisterDisplay();
+                    currentRegisterPanel.revalidate();
+                    currentRegisterPanel.repaint();
                 }
             }
         });
@@ -96,10 +122,8 @@ public class SimulationLogTab extends BaseTab {
         currentRegisterPanel.setLayout(new GridLayout(6, 6, 2, 2)); // 6x6 grid for 34 registers + padding
         currentRegisterPanel.setBorder(BorderFactory.createTitledBorder("Current Register State (Hex | Binary | Decimal)"));
         
-        // Initialize register labels array
-        if (registerLabels == null) {
-            registerLabels = new JLabel[34];
-        }
+        // Initialize register labels array only if not already created
+        // Do NOT re-initialize if it already exists - this would clear all references!
         
         // Create labels for each register
         String[] registerNames = new String[34];
@@ -110,6 +134,7 @@ public class SimulationLogTab extends BaseTab {
         }
         
         for (int i = 0; i < 34; i++) {
+            System.out.println("Creating label for register: " + registerNames[i]);
             registerLabels[i] = createRegisterLabel(registerNames[i], 0L);
             currentRegisterPanel.add(registerLabels[i]);
         }
@@ -129,27 +154,26 @@ public class SimulationLogTab extends BaseTab {
     }
     
     private void updateRegisterLabel(JLabel label, String name, long value, boolean changed) {
+        System.out.println("Update Register label called");
+        System.out.println(label);
+        System.out.println(name);
+        System.out.println(value);
+        System.out.println(changed);
+
         if (label == null) return;
         int intValue = (int) value;
         String hex = String.format("0x%08X", intValue);
         String binary = String.format("%32s", Integer.toBinaryString(intValue)).replace(' ', '0');
         String decimal = String.valueOf(intValue);
-        
-        // Split binary into 4-bit groups for readability
-        StringBuilder binaryFormatted = new StringBuilder();
-        for (int i = 0; i < binary.length(); i += 4) {
-            if (i > 0) binaryFormatted.append(" ");
-            binaryFormatted.append(binary.substring(i, Math.min(i + 4, binary.length())));
-        }
-        
-        String html = String.format(
-            "<html><center><b>%s</b><br>%s<br><small>%s</small><br>%s</center></html>",
-            name, hex, binaryFormatted.toString(), decimal
-        );
-        
-        label.setText(html);
+        // Plain text, 4 lines: name, hex, binary, decimal
+        String text = name + "\n" + hex + "\n" + binary + "\n" + decimal;
+        System.out.println(text);
+        label.setText("<html>" + text.replace("\n", "<br>") + "</html>"); // Use <br> for multiline, but no other HTML
         label.setBackground(changed ? Color.GREEN : Color.WHITE);
         label.setForeground(Color.BLACK);
+        label.setPreferredSize(new Dimension(110, 55));
+        label.revalidate();
+        label.repaint();
     }
     
     private void createHistoryTable() {
@@ -217,21 +241,36 @@ public class SimulationLogTab extends BaseTab {
     
     private void updateCurrentRegisterDisplay() {
         if (currentInstructionRow < 0 || !instructionRegisterValues.containsKey(currentInstructionRow)) {
+            for (int i = 0; i < registerLabels.length; i++) {
+                if (registerLabels[i] == null) {
+                    System.err.println("[WARN] registerLabels[" + i + "] is null in reset");
+                    continue;
+                }
+                updateRegisterLabel(registerLabels[i], (i == 0 ? "PC" : i == 1 ? "FL" : "R" + (i - 2)), 0L, false);
+            }
+            currentRegisterPanel.revalidate();
+            currentRegisterPanel.repaint();
             return;
         }
-        
         Map<Integer, Long> regValues = instructionRegisterValues.get(currentInstructionRow);
         Set<Integer> changedRegs = instructionRegisterChanges.getOrDefault(currentInstructionRow, new HashSet<>());
-        
-        // Update PC and Flags
-        updateRegisterLabel(registerLabels[0], "PC", regValues.getOrDefault(0, 0L), false);
-        updateRegisterLabel(registerLabels[1], "FL", regValues.getOrDefault(1, 0L), false);
-        
-        // Update R0-R31
-        for (int i = 0; i < 32; i++) {
-            boolean changed = changedRegs.contains(i);
-            updateRegisterLabel(registerLabels[i + 2], "R" + i, regValues.getOrDefault(i + 2, 0L), changed);
+        // Debug output
+        System.out.println("[DEBUG] updateCurrentRegisterDisplay: row=" + currentInstructionRow);
+        for (int i = 0; i < 34; i++) {
+            long val = regValues.getOrDefault(i, 0L);
+            System.out.println("  reg[" + i + "] = " + val);
         }
+        for (int i = 0; i < 34; i++) {
+            if (registerLabels[i] == null) {
+                System.err.println("[WARN] registerLabels[" + i + "] is null in update");
+                continue;
+            }
+            String name = (i == 0 ? "PC" : i == 1 ? "FL" : "R" + (i - 2));
+            boolean changed = (i >= 2) ? changedRegs.contains(i - 2) : false;
+            updateRegisterLabel(registerLabels[i], name, regValues.getOrDefault(i, 0L), changed);
+        }
+        currentRegisterPanel.revalidate();
+        currentRegisterPanel.repaint();
     }
     
     private void highlightHistoryRow(int row) {
@@ -262,9 +301,9 @@ public class SimulationLogTab extends BaseTab {
         decodedPanel.add(new JLabel("Decoded Instructions:"), BorderLayout.NORTH);
         decodedPanel.add(new JScrollPane(decodedTable), BorderLayout.CENTER);
         
-        // Bottom left: current register state
-        JPanel currentRegPanel = new JPanel(new BorderLayout());
-        currentRegPanel.add(currentRegisterPanel, BorderLayout.CENTER);
+        // Bottom left: current register state (directly add currentRegisterPanel)
+        // JPanel currentRegPanel = new JPanel(new BorderLayout());
+        // currentRegPanel.add(currentRegisterPanel, BorderLayout.CENTER);
         
         // Bottom right: history table
         JPanel pagingPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
@@ -283,7 +322,7 @@ public class SimulationLogTab extends BaseTab {
         // Create split panes
         rightSplitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT);
         rightSplitPane.setTopComponent(decodedPanel);
-        rightSplitPane.setBottomComponent(currentRegPanel);
+        rightSplitPane.setBottomComponent(currentRegisterPanel); // Use currentRegisterPanel directly
         rightSplitPane.setDividerLocation(300);
         
         bottomSplitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT);
@@ -341,8 +380,8 @@ public class SimulationLogTab extends BaseTab {
         if (logArea != null) logArea.setText("");
         if (decodedTableModel != null) decodedTableModel.setRowCount(0);
         if (historyTableModel != null) historyTableModel.setRowCount(0);
-        
-        // Reset register values
+
+        // Only reset label values, do NOT re-initialize or null out registerLabels!
         for (int i = 0; i < 34; i++) {
             currentRegisterValues.put(i, 0L);
             if (registerLabels[i] != null) {
@@ -350,7 +389,7 @@ public class SimulationLogTab extends BaseTab {
                 updateRegisterLabel(registerLabels[i], name, 0L, false);
             }
         }
-        
+
         instructionRegisterChanges.clear();
         instructionRegisterValues.clear();
         currentInstructionRow = -1;
@@ -380,6 +419,13 @@ public class SimulationLogTab extends BaseTab {
         pageInfoLabel.setText("Page " + (currentPage + 1) + " of " + totalPages);
         prevPageButton.setEnabled(currentPage > 0);
         nextPageButton.setEnabled(currentPage < totalPages - 1);
+        // After updating table/page, update register display for selected row
+        if (decodedTable.getSelectedRow() >= 0) {
+            currentInstructionRow = decodedTable.getSelectedRow();
+            updateCurrentRegisterDisplay();
+            currentRegisterPanel.revalidate();
+            currentRegisterPanel.repaint();
+        }
     }
     
     private void parseSimulationLog(String content) {
@@ -387,35 +433,39 @@ public class SimulationLogTab extends BaseTab {
         historyTableModel.setRowCount(0);
         instructionRegisterChanges.clear();
         instructionRegisterValues.clear();
-        
         String[] lines = content.split("\n");
         
         // Patterns for parsing simulation log
-        Pattern executePattern = Pattern.compile("SIM: DEBUG CPU Execute: PC=(0x[0-9A-Fa-f]+), Opcode=([0-9A-Fa-f]+), rd=\\s*(\\d+), rs1=\\s*(\\d+), rs2=\\s*(\\d+), imm=([0-9A-Fa-f]+)");
-        Pattern writebackPattern = Pattern.compile("SIM: DEBUG CPU Writeback: Writing\\s+(\\d+) to R (\\d+)");
-        Pattern flagsPattern = Pattern.compile("SIM: DEBUG CPU: Flags updated to C=(\\d+) Z=(\\d+) N=(\\d+) V=(\\d+)");
-        Pattern regfileWritePattern = Pattern.compile("SIM: \\[register_file] Write: R(\\d+) <= 0x([0-9A-Fa-f]{8})");
-        Pattern regfileReadPattern = Pattern.compile("SIM: \\[register_file] Read: R(\\d+) = 0x([0-9A-Fa-f]{8}) \\(port A\\), R(\\d+) = 0x([0-9A-Fa-f]{8}) \\(port B\\)");
+        Pattern executePattern = Pattern.compile("DEBUG CPU Execute: PC=(0x[0-9A-Fa-f]+), Opcode=([0-9A-Fa-f]+), rd=\\s*(\\d+), rs1=\\s*(\\d+), rs2=\\s*(\\d+), imm=([0-9A-Fa-f]+)");
+        Pattern writebackPattern = Pattern.compile("DEBUG CPU Writeback: Writing\\s+(\\d+) to R (\\d+)");
+        Pattern flagsPattern = Pattern.compile("DEBUG CPU: Flags updated to C=(\\d+) Z=(\\d+) N=(\\d+) V=(\\d+)");
+        Pattern regfileWritePattern = Pattern.compile("\\[register_file] Write: R(\\d+) <= 0x([0-9A-Fa-f]{8})");
         
-        int instructionCount = 0;
-        Set<Integer> currentChangedRegisters = new HashSet<>();
+        List<InstructionInfo> instructions = new ArrayList<>();
         Map<Integer, Long> regValues = new HashMap<>();
-        // Initialize all registers to 0
         for (int i = 0; i < 34; i++) regValues.put(i, 0L);
         String lastFlags = "0000";
         
-        for (String line : lines) {
-            line = line.trim();
+        InstructionInfo currentInstruction = null;
+        
+        for (String origLine : lines) {
+            String line = stripLogPrefix(origLine);
             
             // Parse instruction execution
             Matcher executeMatcher = executePattern.matcher(line);
             if (executeMatcher.find()) {
+                // Save previous instruction if it exists
+                if (currentInstruction != null) {
+                    currentInstruction.finalizeRegisters(regValues, lastFlags);
+                    instructions.add(currentInstruction);
+                }
+                
+                // Start new instruction
                 String pc = executeMatcher.group(1);
                 int opcode = Integer.parseInt(executeMatcher.group(2), 16);
                 int rd = Integer.parseInt(executeMatcher.group(3));
                 int rs1 = Integer.parseInt(executeMatcher.group(4));
                 int rs2 = Integer.parseInt(executeMatcher.group(5));
-                // Parse immediate value as hex, handle potential sign extension
                 String immStr = executeMatcher.group(6);
                 int imm = 0;
                 try {
@@ -426,29 +476,11 @@ public class SimulationLogTab extends BaseTab {
                 } catch (NumberFormatException e) {
                     imm = 0;
                 }
-                // Decode instruction using shared decoder
-                Object[] row = InstructionDecoder.decodeFromSimLog(pc, opcode, rd, rs1, rs2, imm);
-                decodedTableModel.addRow(row);
-                // Store the instruction index for register tracking
-                instructionRegisterChanges.put(instructionCount, new HashSet<>(currentChangedRegisters));
-                // Save a copy of the register values for this instruction
-                Map<Integer, Long> regSnapshot = new HashMap<>(regValues);
-                // PC and Flags
-                regSnapshot.put(0, Long.decode(pc));
-                regSnapshot.put(1, Long.parseLong(lastFlags));
-                instructionRegisterValues.put(instructionCount, regSnapshot);
-                // Add to history table
-                Object[] historyRow = new Object[36];
-                historyRow[0] = row[2]; // Mnemonic as instruction
-                historyRow[1] = pc;
-                historyRow[2] = lastFlags;
-                for (int i = 0; i < 32; i++) {
-                    historyRow[i + 3] = String.format("0x%08X", regSnapshot.getOrDefault(i + 2, 0L));
-                }
-                historyTableModel.addRow(historyRow);
-                currentChangedRegisters.clear();
-                instructionCount++;
+                
+                currentInstruction = new InstructionInfo(pc, opcode, rd, rs1, rs2, imm);
+                continue;
             }
+            
             // Parse register writeback
             Matcher writebackMatcher = writebackPattern.matcher(line);
             if (writebackMatcher.find()) {
@@ -457,12 +489,15 @@ public class SimulationLogTab extends BaseTab {
                     int regNum = Integer.parseInt(writebackMatcher.group(2));
                     if (regNum >= 0 && regNum < 32) {
                         regValues.put(regNum + 2, value);
-                        currentChangedRegisters.add(regNum);
+                        if (currentInstruction != null) {
+                            currentInstruction.changedRegisters.add(regNum);
+                        }
                     }
                 } catch (NumberFormatException e) {
                     continue;
                 }
             }
+            
             // Parse flags update
             Matcher flagsMatcher = flagsPattern.matcher(line);
             if (flagsMatcher.find()) {
@@ -473,6 +508,7 @@ public class SimulationLogTab extends BaseTab {
                 lastFlags = c + z + n + v;
                 regValues.put(1, Long.parseLong(lastFlags));
             }
+            
             // Parse register_file write
             Matcher regfileWriteMatcher = regfileWritePattern.matcher(line);
             if (regfileWriteMatcher.find()) {
@@ -480,27 +516,83 @@ public class SimulationLogTab extends BaseTab {
                 long value = Long.parseLong(regfileWriteMatcher.group(2), 16);
                 if (regNum >= 0 && regNum < 32) {
                     regValues.put(regNum + 2, value);
-                    currentChangedRegisters.add(regNum);
+                    if (currentInstruction != null) {
+                        currentInstruction.changedRegisters.add(regNum);
+                    }
                 }
-                continue;
-            }
-            // Parse register_file read (optional: for future UI/debug)
-            Matcher regfileReadMatcher = regfileReadPattern.matcher(line);
-            if (regfileReadMatcher.find()) {
-                // int regA = Integer.parseInt(regfileReadMatcher.group(1));
-                // long valA = Long.parseLong(regfileReadMatcher.group(2), 16);
-                // int regB = Integer.parseInt(regfileReadMatcher.group(3));
-                // long valB = Long.parseLong(regfileReadMatcher.group(4), 16);
-                // Optionally: log or display these values
-                continue;
             }
         }
-        // Store final changed registers for last instruction
-        if (instructionCount > 0) {
-            instructionRegisterChanges.put(instructionCount - 1, currentChangedRegisters);
+        
+        // Save the last instruction
+        if (currentInstruction != null) {
+            currentInstruction.finalizeRegisters(regValues, lastFlags);
+            instructions.add(currentInstruction);
         }
+        
+        // Now populate the tables with the collected instruction info
+        int instructionCount = 0;
+        for (InstructionInfo inst : instructions) {
+            // Add to decoded table
+            Object[] row = InstructionDecoder.decodeFromSimLog(inst.pc, inst.opcode, inst.rd, inst.rs1, inst.rs2, inst.imm);
+            decodedTableModel.addRow(row);
+            
+            // Store register tracking info
+            instructionRegisterChanges.put(instructionCount, new HashSet<>(inst.changedRegisters));
+            instructionRegisterValues.put(instructionCount, new HashMap<>(inst.registerSnapshot));
+            
+            // Add to history table
+            Object[] historyRow = new Object[36];
+            historyRow[0] = row[2]; // Mnemonic as instruction
+            historyRow[1] = inst.pc;
+            historyRow[2] = inst.flags;
+            for (int i = 0; i < 32; i++) {
+                historyRow[i + 3] = String.format("0x%08X", (int)(long)inst.registerSnapshot.getOrDefault(i + 2, 0L));
+            }
+            historyRow[35] = String.format("Inst %d", instructionCount);
+            historyTableModel.addRow(historyRow);
+            
+            instructionCount++;
+        }
+        
         currentPage = 0;
         updateHistoryTable();
+        if (decodedTable.getRowCount() > 0) {
+            decodedTable.setRowSelectionInterval(0, 0);
+            currentInstructionRow = 0;
+            updateCurrentRegisterDisplay();
+            currentRegisterPanel.revalidate();
+            currentRegisterPanel.repaint();
+        }
         updateStatus("Parsed " + instructionCount + " instructions from simulation log");
+    }
+    
+    // Helper class to track instruction information
+    private static class InstructionInfo {
+        String pc;
+        int opcode, rd, rs1, rs2, imm;
+        Set<Integer> changedRegisters = new HashSet<>();
+        Map<Integer, Long> registerSnapshot;
+        String flags;
+        
+        InstructionInfo(String pc, int opcode, int rd, int rs1, int rs2, int imm) {
+            this.pc = pc;
+            this.opcode = opcode;
+            this.rd = rd;
+            this.rs1 = rs1;
+            this.rs2 = rs2;
+            this.imm = imm;
+        }
+        
+        void finalizeRegisters(Map<Integer, Long> regValues, String flags) {
+            this.registerSnapshot = new HashMap<>(regValues);
+            this.registerSnapshot.put(0, Long.decode(pc)); // PC
+            this.registerSnapshot.put(1, Long.parseLong(flags)); // Flags
+            this.flags = flags;
+        }
+    }
+    
+    private String stripLogPrefix(String line) {
+        // Remove SIM:, M:, or any prefix ending with ':' and whitespace
+        return line.replaceFirst("^(SIM:|M:|[A-Z]+:)\\s*", "").trim();
     }
 }
