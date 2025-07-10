@@ -89,6 +89,9 @@ public class SimulationLogTab extends BaseTab {
         
         // Add selection listeners after tables are created
         addTableSelectionListeners();
+        
+        // Add modern features to history table
+        addModernHistoryTableFeatures();
     }
     private void addTableSelectionListeners() {
         decodedTable.getSelectionModel().addListSelectionListener(e -> {
@@ -177,7 +180,7 @@ public class SimulationLogTab extends BaseTab {
     }
     
     private void createHistoryTable() {
-        // Create history table with one row per instruction
+        // Create modern history table with one row per instruction
         String[] historyColumns = new String[36]; // Instruction + PC + Flags + R0-R31
         historyColumns[0] = "Instruction";
         historyColumns[1] = "PC";
@@ -194,17 +197,30 @@ public class SimulationLogTab extends BaseTab {
         };
         
         historyTable = new JTable(historyTableModel);
-        historyTable.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 8));
+        historyTable.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 11));
+        historyTable.setRowHeight(22);
         historyTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        historyTable.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
+        historyTable.getTableHeader().setFont(new Font(Font.MONOSPACED, Font.BOLD, 11));
+        historyTable.getTableHeader().setBackground(new Color(240, 240, 240));
         
-        // Custom renderer for highlighting changes between rows
+        // Set modern column widths
+        historyTable.getColumnModel().getColumn(0).setPreferredWidth(80);  // Instruction
+        historyTable.getColumnModel().getColumn(1).setPreferredWidth(80);  // PC
+        historyTable.getColumnModel().getColumn(2).setPreferredWidth(50);  // Flags
+        for (int i = 3; i < historyColumns.length; i++) {
+            historyTable.getColumnModel().getColumn(i).setPreferredWidth(75); // Registers
+        }
+        
+        // Modern custom renderer with improved styling
         historyTable.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
             @Override
             public Component getTableCellRendererComponent(JTable table, Object value,
                     boolean isSelected, boolean hasFocus, int row, int column) {
                 Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+                
                 if (isSelected) {
-                    c.setBackground(Color.BLUE);
+                    c.setBackground(new Color(51, 153, 255));
                     c.setForeground(Color.WHITE);
                 } else {
                     // Check if this register changed from previous row
@@ -214,18 +230,29 @@ public class SimulationLogTab extends BaseTab {
                         changed = !Objects.equals(value, prevValue);
                     }
                     if (changed) {
-                        c.setBackground(Color.YELLOW);
+                        c.setBackground(new Color(255, 255, 180)); // Light yellow for changes
+                        c.setForeground(Color.BLACK);
+                    } else if (row % 2 == 0) {
+                        c.setBackground(new Color(248, 248, 248)); // Alternating row colors
                         c.setForeground(Color.BLACK);
                     } else {
                         c.setBackground(Color.WHITE);
                         c.setForeground(Color.BLACK);
                     }
                 }
+                
+                // Center align register values, left align instruction names
+                if (column == 0) {
+                    setHorizontalAlignment(SwingConstants.LEFT);
+                } else {
+                    setHorizontalAlignment(SwingConstants.CENTER);
+                }
+                
                 return c;
             }
         });
         
-        // Add selection listener to history table
+        // Add modern selection listener to history table
         historyTable.getSelectionModel().addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) {
                 int selectedRow = historyTable.getSelectedRow();
@@ -237,6 +264,111 @@ public class SimulationLogTab extends BaseTab {
                 }
             }
         });
+    }
+    
+    // Add modern context menu and enhanced features
+    private void addModernHistoryTableFeatures() {
+        // Add modern context menu for copy functionality
+        JPopupMenu contextMenu = new JPopupMenu();
+        
+        JMenuItem copyCell = new JMenuItem("Copy Cell Value");
+        copyCell.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
+        copyCell.addActionListener(_ -> {
+            int row = historyTable.getSelectedRow();
+            int col = historyTable.getSelectedColumn();
+            if (row >= 0 && col >= 0) {
+                Object value = historyTable.getValueAt(row, col);
+                if (value != null) {
+                    java.awt.Toolkit.getDefaultToolkit().getSystemClipboard()
+                        .setContents(new java.awt.datatransfer.StringSelection(value.toString()), null);
+                }
+            }
+        });
+        
+        JMenuItem copyRow = new JMenuItem("Copy Entire Row");
+        copyRow.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
+        copyRow.addActionListener(_ -> {
+            int row = historyTable.getSelectedRow();
+            if (row >= 0) {
+                StringBuilder sb = new StringBuilder();
+                for (int col = 0; col < historyTable.getColumnCount(); col++) {
+                    if (col > 0) sb.append("\t");
+                    Object value = historyTable.getValueAt(row, col);
+                    sb.append(value != null ? value.toString() : "");
+                }
+                java.awt.Toolkit.getDefaultToolkit().getSystemClipboard()
+                    .setContents(new java.awt.datatransfer.StringSelection(sb.toString()), null);
+            }
+        });
+        
+        JMenuItem exportData = new JMenuItem("Export History...");
+        exportData.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
+        exportData.addActionListener(_ -> exportHistoryData());
+        
+        contextMenu.add(copyCell);
+        contextMenu.add(copyRow);
+        contextMenu.addSeparator();
+        contextMenu.add(exportData);
+        
+        historyTable.setComponentPopupMenu(contextMenu);
+        
+        // Add modern keyboard shortcuts
+        historyTable.getInputMap(JComponent.WHEN_FOCUSED).put(
+            KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_C, java.awt.event.InputEvent.META_DOWN_MASK), 
+            "copy");
+        historyTable.getActionMap().put("copy", new AbstractAction() {
+            @Override
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                copyCell.doClick();
+            }
+        });
+        
+        // Add modern mouse hover effects
+        historyTable.addMouseMotionListener(new java.awt.event.MouseMotionAdapter() {
+            @Override
+            public void mouseMoved(java.awt.event.MouseEvent e) {
+                int row = historyTable.rowAtPoint(e.getPoint());
+                if (row != historyTable.getSelectedRow()) {
+                    historyTable.setToolTipText("Row " + (row + 1) + " - Click to view register state");
+                }
+            }
+        });
+    }
+    
+    private void exportHistoryData() {
+        JFileChooser fileChooser = new JFileChooser();
+        fileChooser.setDialogTitle("Export Register History");
+        fileChooser.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("CSV Files", "csv"));
+        
+        if (fileChooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
+            try (java.io.PrintWriter writer = new java.io.PrintWriter(fileChooser.getSelectedFile())) {
+                // Write header
+                for (int col = 0; col < historyTable.getColumnCount(); col++) {
+                    if (col > 0) writer.print(",");
+                    writer.print("\"" + historyTable.getColumnName(col) + "\"");
+                }
+                writer.println();
+                
+                // Write data
+                for (int row = 0; row < historyTable.getRowCount(); row++) {
+                    for (int col = 0; col < historyTable.getColumnCount(); col++) {
+                        if (col > 0) writer.print(",");
+                        Object value = historyTable.getValueAt(row, col);
+                        writer.print("\"" + (value != null ? value.toString() : "") + "\"");
+                    }
+                    writer.println();
+                }
+                
+                JOptionPane.showMessageDialog(this, 
+                    "History exported successfully to " + fileChooser.getSelectedFile().getName(),
+                    "Export Complete", JOptionPane.INFORMATION_MESSAGE);
+                    
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(this, 
+                    "Error exporting history: " + ex.getMessage(),
+                    "Export Error", JOptionPane.ERROR_MESSAGE);
+            }
+        }
     }
     
     private void updateCurrentRegisterDisplay() {
@@ -305,19 +437,55 @@ public class SimulationLogTab extends BaseTab {
         // JPanel currentRegPanel = new JPanel(new BorderLayout());
         // currentRegPanel.add(currentRegisterPanel, BorderLayout.CENTER);
         
-        // Bottom right: history table
-        JPanel pagingPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
-        prevPageButton = new JButton("Previous Page");
-        nextPageButton = new JButton("Next Page");
-        pageInfoLabel = new JLabel();
-        pagingPanel.add(prevPageButton);
-        pagingPanel.add(pageInfoLabel);
-        pagingPanel.add(nextPageButton);
+        // Bottom right: modernized history table with enhanced styling
+        JPanel modernHistoryPanel = new JPanel(new BorderLayout());
+        modernHistoryPanel.setBorder(BorderFactory.createTitledBorder(
+            BorderFactory.createEtchedBorder(), 
+            "Register History (Yellow = Changed from Previous)",
+            0, 0, new Font(Font.SANS_SERIF, Font.BOLD, 12)
+        ));
         
-        JPanel historyPanel = new JPanel(new BorderLayout());
-        historyPanel.add(new JLabel("Register History (Yellow = Changed from Previous):"), BorderLayout.NORTH);
-        historyPanel.add(pagingPanel, BorderLayout.CENTER);
-        historyPanel.add(new JScrollPane(historyTable), BorderLayout.SOUTH);
+        // Create modern paging controls
+        JPanel modernPagingPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
+        modernPagingPanel.setBackground(new Color(245, 245, 245));
+        modernPagingPanel.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10));
+        
+        prevPageButton = new JButton("◀ Previous");
+        nextPageButton = new JButton("Next ▶");
+        pageInfoLabel = new JLabel();
+        
+        // Style the paging buttons
+        prevPageButton.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
+        nextPageButton.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
+        pageInfoLabel.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 11));
+        
+        prevPageButton.setBackground(new Color(230, 230, 230));
+        nextPageButton.setBackground(new Color(230, 230, 230));
+        prevPageButton.setBorder(BorderFactory.createRaisedBevelBorder());
+        nextPageButton.setBorder(BorderFactory.createRaisedBevelBorder());
+        
+        modernPagingPanel.add(prevPageButton);
+        modernPagingPanel.add(Box.createHorizontalStrut(15));
+        modernPagingPanel.add(pageInfoLabel);
+        modernPagingPanel.add(Box.createHorizontalStrut(15));
+        modernPagingPanel.add(nextPageButton);
+        
+        // Create scrollable table view
+        JScrollPane modernHistoryScrollPane = new JScrollPane(historyTable);
+        modernHistoryScrollPane.setPreferredSize(new Dimension(800, 250));
+        modernHistoryScrollPane.getViewport().setBackground(Color.WHITE);
+        modernHistoryScrollPane.setBorder(BorderFactory.createLoweredBevelBorder());
+        
+        modernHistoryPanel.add(modernPagingPanel, BorderLayout.NORTH);
+        modernHistoryPanel.add(modernHistoryScrollPane, BorderLayout.CENTER);
+        
+        // Add status bar to history panel
+        JLabel statusLabel = new JLabel("Ready - Select an instruction to view register changes");
+        statusLabel.setFont(new Font(Font.SANS_SERIF, Font.ITALIC, 10));
+        statusLabel.setBorder(BorderFactory.createEmptyBorder(3, 10, 3, 10));
+        statusLabel.setBackground(new Color(240, 240, 240));
+        statusLabel.setOpaque(true);
+        modernHistoryPanel.add(statusLabel, BorderLayout.SOUTH);
         
         // Create split panes
         rightSplitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT);
@@ -327,7 +495,7 @@ public class SimulationLogTab extends BaseTab {
         
         bottomSplitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT);
         bottomSplitPane.setLeftComponent(rightSplitPane);
-        bottomSplitPane.setRightComponent(historyPanel);
+        bottomSplitPane.setRightComponent(modernHistoryPanel);
         bottomSplitPane.setDividerLocation(600);
         
         // Main split pane
@@ -336,13 +504,13 @@ public class SimulationLogTab extends BaseTab {
         mainSplitPane.setResizeWeight(0.3);
         add(mainSplitPane, BorderLayout.CENTER);
         
-        prevPageButton.addActionListener(e -> {
+        prevPageButton.addActionListener(_ -> {
             if (currentPage > 0) {
                 currentPage--;
                 updateHistoryTable();
             }
         });
-        nextPageButton.addActionListener(e -> {
+        nextPageButton.addActionListener(_ -> {
             if (currentPage < totalPages - 1) {
                 currentPage++;
                 updateHistoryTable();
@@ -406,7 +574,7 @@ public class SimulationLogTab extends BaseTab {
         int end = Math.min(start + rowsPerPage, totalRows);
         for (int i = start; i < end; i++) {
             Map<Integer, Long> regSnapshot = instructionRegisterValues.get(i);
-            Set<Integer> changedRegs = instructionRegisterChanges.getOrDefault(i, new HashSet<>());
+            // Note: changedRegs preserved for future functionality
             Object[] historyRow = new Object[36];
             historyRow[0] = decodedTableModel.getRowCount() > i ? decodedTableModel.getValueAt(i, 2) : "";
             historyRow[1] = regSnapshot != null ? String.format("0x%08X", regSnapshot.getOrDefault(0, 0L)) : "";
