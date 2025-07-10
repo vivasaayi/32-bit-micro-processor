@@ -23,9 +23,6 @@ public class SimulationLogTab extends BaseTab {
     private JPanel currentRegisterPanel;
     private JTable historyTable;
     private DefaultTableModel historyTableModel;
-    private JSplitPane mainSplitPane;
-    private JSplitPane rightSplitPane;
-    private JSplitPane bottomSplitPane;
     
     // For tracking register changes
     private Map<Integer, Set<Integer>> instructionRegisterChanges = new HashMap<>();
@@ -197,19 +194,19 @@ public class SimulationLogTab extends BaseTab {
         };
         
         historyTable = new JTable(historyTableModel);
-        historyTable.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 11));
-        historyTable.setRowHeight(22);
+        historyTable.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 10)); // Smaller font
+        historyTable.setRowHeight(20);
         historyTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        historyTable.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
-        historyTable.getTableHeader().setFont(new Font(Font.MONOSPACED, Font.BOLD, 11));
+        historyTable.setAutoResizeMode(JTable.AUTO_RESIZE_OFF); // Allow horizontal scroll
+        historyTable.getTableHeader().setFont(new Font(Font.MONOSPACED, Font.BOLD, 10));
         historyTable.getTableHeader().setBackground(new Color(240, 240, 240));
         
-        // Set modern column widths
-        historyTable.getColumnModel().getColumn(0).setPreferredWidth(80);  // Instruction
-        historyTable.getColumnModel().getColumn(1).setPreferredWidth(80);  // PC
-        historyTable.getColumnModel().getColumn(2).setPreferredWidth(50);  // Flags
+        // Set wider column widths for full value display
+        historyTable.getColumnModel().getColumn(0).setPreferredWidth(90);  // Instruction
+        historyTable.getColumnModel().getColumn(1).setPreferredWidth(110); // PC
+        historyTable.getColumnModel().getColumn(2).setPreferredWidth(60);  // Flags
         for (int i = 3; i < historyColumns.length; i++) {
-            historyTable.getColumnModel().getColumn(i).setPreferredWidth(75); // Registers
+            historyTable.getColumnModel().getColumn(i).setPreferredWidth(120); // Registers
         }
         
         // Modern custom renderer with improved styling
@@ -240,15 +237,25 @@ public class SimulationLogTab extends BaseTab {
                         c.setForeground(Color.BLACK);
                     }
                 }
-                
                 // Center align register values, left align instruction names
                 if (column == 0) {
                     setHorizontalAlignment(SwingConstants.LEFT);
                 } else {
                     setHorizontalAlignment(SwingConstants.CENTER);
                 }
-                
                 return c;
+            }
+        });
+        
+        // Add tooltips for full cell values
+        historyTable.addMouseMotionListener(new java.awt.event.MouseMotionAdapter() {
+            public void mouseMoved(java.awt.event.MouseEvent e) {
+                int row = historyTable.rowAtPoint(e.getPoint());
+                int col = historyTable.columnAtPoint(e.getPoint());
+                if (row >= 0 && col >= 0) {
+                    Object value = historyTable.getValueAt(row, col);
+                    historyTable.setToolTipText(value != null ? value.toString() : null);
+                }
             }
         });
         
@@ -416,34 +423,110 @@ public class SimulationLogTab extends BaseTab {
     protected void setupLayout() {
         setLayout(new BorderLayout());
         
-        // Top panel with Paste Log button
-        JPanel topPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        JButton pasteLogButton = new JButton("Paste Log");
+        // Create collapsible panels for modern UX
+        createCollapsibleLayout();
+    }
+    
+    private void createCollapsibleLayout() {
+        // Main container with collapsible panels
+        JPanel mainContainer = new JPanel(new BorderLayout());
+        
+        // Top panel with controls
+        JPanel controlPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        controlPanel.setBackground(new Color(245, 245, 245));
+        controlPanel.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10));
+        
+        JButton pasteLogButton = new JButton("📋 Paste Log");
+        pasteLogButton.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
         pasteLogButton.addActionListener(_ -> showPasteLogDialog());
-        topPanel.add(pasteLogButton);
         
-        // Left panel: simulation log
-        JPanel leftPanel = new JPanel(new BorderLayout());
-        leftPanel.add(topPanel, BorderLayout.NORTH);
-        leftPanel.add(new JLabel("Simulation Log:"), BorderLayout.CENTER);
-        leftPanel.add(new JScrollPane(logArea), BorderLayout.SOUTH);
+        JButton expandAllButton = new JButton("⬇ Expand All");
+        expandAllButton.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
         
-        // Right panel: decoded instructions
-        JPanel decodedPanel = new JPanel(new BorderLayout());
-        decodedPanel.add(new JLabel("Decoded Instructions:"), BorderLayout.NORTH);
-        decodedPanel.add(new JScrollPane(decodedTable), BorderLayout.CENTER);
+        JButton collapseAllButton = new JButton("⬆ Collapse All");
+        collapseAllButton.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
         
-        // Bottom left: current register state (directly add currentRegisterPanel)
-        // JPanel currentRegPanel = new JPanel(new BorderLayout());
-        // currentRegPanel.add(currentRegisterPanel, BorderLayout.CENTER);
+        controlPanel.add(pasteLogButton);
+        controlPanel.add(Box.createHorizontalStrut(10));
+        controlPanel.add(expandAllButton);
+        controlPanel.add(collapseAllButton);
         
-        // Bottom right: modernized history table with enhanced styling
+        // Create collapsible panels
+        CollapsiblePanel logPanel = createLogPanel();
+        CollapsiblePanel instructionsPanel = createInstructionsPanel();
+        CollapsiblePanel registerPanel = createRegisterPanel();
+        CollapsiblePanel historyPanel = createHistoryPanel();
+        
+        // Add expand/collapse all functionality
+        expandAllButton.addActionListener(_ -> {
+            logPanel.setExpanded(true);
+            instructionsPanel.setExpanded(true);
+            registerPanel.setExpanded(true);
+            historyPanel.setExpanded(true);
+        });
+        
+        collapseAllButton.addActionListener(_ -> {
+            logPanel.setExpanded(false);
+            instructionsPanel.setExpanded(false);
+            registerPanel.setExpanded(false);
+            historyPanel.setExpanded(false);
+        });
+        
+        // Layout panels vertically with splitters
+        JPanel collapsibleContainer = new JPanel();
+        collapsibleContainer.setLayout(new BoxLayout(collapsibleContainer, BoxLayout.Y_AXIS));
+        collapsibleContainer.add(logPanel);
+        collapsibleContainer.add(Box.createVerticalStrut(2));
+        collapsibleContainer.add(instructionsPanel);
+        collapsibleContainer.add(Box.createVerticalStrut(2));
+        collapsibleContainer.add(registerPanel);
+        collapsibleContainer.add(Box.createVerticalStrut(2));
+        collapsibleContainer.add(historyPanel);
+        collapsibleContainer.add(Box.createVerticalGlue());
+        
+        JScrollPane mainScrollPane = new JScrollPane(collapsibleContainer);
+        mainScrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
+        mainScrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+        mainScrollPane.getVerticalScrollBar().setUnitIncrement(16);
+        
+        mainContainer.add(controlPanel, BorderLayout.NORTH);
+        mainContainer.add(mainScrollPane, BorderLayout.CENTER);
+        
+        add(mainContainer, BorderLayout.CENTER);
+    }
+    
+    private CollapsiblePanel createLogPanel() {
+        JPanel logContent = new JPanel(new BorderLayout());
+        logContent.add(new JLabel("Simulation Log:"), BorderLayout.NORTH);
+        logContent.add(new JScrollPane(logArea), BorderLayout.CENTER);
+        
+        CollapsiblePanel panel = new CollapsiblePanel("📜 Simulation Log", logContent, true);
+        panel.setPreferredSize(new Dimension(0, 200));
+        return panel;
+    }
+    
+    private CollapsiblePanel createInstructionsPanel() {
+        JPanel instructionsContent = new JPanel(new BorderLayout());
+        instructionsContent.add(new JLabel("Decoded Instructions:"), BorderLayout.NORTH);
+        instructionsContent.add(new JScrollPane(decodedTable), BorderLayout.CENTER);
+        
+        CollapsiblePanel panel = new CollapsiblePanel("🔍 Decoded Instructions", instructionsContent, true);
+        panel.setPreferredSize(new Dimension(0, 200));
+        return panel;
+    }
+    
+    private CollapsiblePanel createRegisterPanel() {
+        JPanel registerContent = new JPanel(new BorderLayout());
+        registerContent.add(currentRegisterPanel, BorderLayout.CENTER);
+        
+        CollapsiblePanel panel = new CollapsiblePanel("📊 Current Register State", registerContent, true);
+        panel.setPreferredSize(new Dimension(0, 250));
+        return panel;
+    }
+    
+    private CollapsiblePanel createHistoryPanel() {
+        // Reuse the modern history panel we created earlier
         JPanel modernHistoryPanel = new JPanel(new BorderLayout());
-        modernHistoryPanel.setBorder(BorderFactory.createTitledBorder(
-            BorderFactory.createEtchedBorder(), 
-            "Register History (Yellow = Changed from Previous)",
-            0, 0, new Font(Font.SANS_SERIF, Font.BOLD, 12)
-        ));
         
         // Create modern paging controls
         JPanel modernPagingPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
@@ -459,11 +542,6 @@ public class SimulationLogTab extends BaseTab {
         nextPageButton.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
         pageInfoLabel.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 11));
         
-        prevPageButton.setBackground(new Color(230, 230, 230));
-        nextPageButton.setBackground(new Color(230, 230, 230));
-        prevPageButton.setBorder(BorderFactory.createRaisedBevelBorder());
-        nextPageButton.setBorder(BorderFactory.createRaisedBevelBorder());
-        
         modernPagingPanel.add(prevPageButton);
         modernPagingPanel.add(Box.createHorizontalStrut(15));
         modernPagingPanel.add(pageInfoLabel);
@@ -472,38 +550,13 @@ public class SimulationLogTab extends BaseTab {
         
         // Create scrollable table view
         JScrollPane modernHistoryScrollPane = new JScrollPane(historyTable);
-        modernHistoryScrollPane.setPreferredSize(new Dimension(800, 250));
+        modernHistoryScrollPane.setPreferredSize(new Dimension(800, 200));
         modernHistoryScrollPane.getViewport().setBackground(Color.WHITE);
-        modernHistoryScrollPane.setBorder(BorderFactory.createLoweredBevelBorder());
         
         modernHistoryPanel.add(modernPagingPanel, BorderLayout.NORTH);
         modernHistoryPanel.add(modernHistoryScrollPane, BorderLayout.CENTER);
         
-        // Add status bar to history panel
-        JLabel statusLabel = new JLabel("Ready - Select an instruction to view register changes");
-        statusLabel.setFont(new Font(Font.SANS_SERIF, Font.ITALIC, 10));
-        statusLabel.setBorder(BorderFactory.createEmptyBorder(3, 10, 3, 10));
-        statusLabel.setBackground(new Color(240, 240, 240));
-        statusLabel.setOpaque(true);
-        modernHistoryPanel.add(statusLabel, BorderLayout.SOUTH);
-        
-        // Create split panes
-        rightSplitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT);
-        rightSplitPane.setTopComponent(decodedPanel);
-        rightSplitPane.setBottomComponent(currentRegisterPanel); // Use currentRegisterPanel directly
-        rightSplitPane.setDividerLocation(300);
-        
-        bottomSplitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT);
-        bottomSplitPane.setLeftComponent(rightSplitPane);
-        bottomSplitPane.setRightComponent(modernHistoryPanel);
-        bottomSplitPane.setDividerLocation(600);
-        
-        // Main split pane
-        mainSplitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, leftPanel, bottomSplitPane);
-        mainSplitPane.setDividerLocation(400);
-        mainSplitPane.setResizeWeight(0.3);
-        add(mainSplitPane, BorderLayout.CENTER);
-        
+        // Action listeners for paging
         prevPageButton.addActionListener(_ -> {
             if (currentPage > 0) {
                 currentPage--;
@@ -516,6 +569,10 @@ public class SimulationLogTab extends BaseTab {
                 updateHistoryTable();
             }
         });
+        
+        CollapsiblePanel panel = new CollapsiblePanel("📈 Register History", modernHistoryPanel, true);
+        panel.setPreferredSize(new Dimension(0, 300));
+        return panel;
     }
 
     // Add this method to show the paste log dialog
@@ -732,6 +789,92 @@ public class SimulationLogTab extends BaseTab {
             currentRegisterPanel.repaint();
         }
         updateStatus("Parsed " + instructionCount + " instructions from simulation log");
+    }
+    
+    // CollapsiblePanel class for modern collapsible UI
+    private static class CollapsiblePanel extends JPanel {
+        private final JButton toggleButton;
+        private final JPanel contentPanel;
+        private boolean expanded;
+        private final String title;
+        private final Dimension collapsedSize = new Dimension(0, 35);
+        private Dimension expandedSize;
+        
+        public CollapsiblePanel(String title, JComponent content, boolean initiallyExpanded) {
+            this.title = title;
+            this.expanded = initiallyExpanded;
+            
+            setLayout(new BorderLayout());
+            setBorder(BorderFactory.createEtchedBorder());
+            
+            // Create toggle button with modern styling
+            toggleButton = new JButton();
+            toggleButton.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
+            toggleButton.setBackground(new Color(235, 235, 235));
+            toggleButton.setBorder(BorderFactory.createEmptyBorder(8, 10, 8, 10));
+            toggleButton.setHorizontalAlignment(SwingConstants.LEFT);
+            toggleButton.setFocusPainted(false);
+            toggleButton.addActionListener(_ -> toggleExpanded());
+            
+            // Content panel
+            contentPanel = new JPanel(new BorderLayout());
+            contentPanel.add(content, BorderLayout.CENTER);
+            
+            add(toggleButton, BorderLayout.NORTH);
+            
+            updateUIState();
+        }
+        
+        private void toggleExpanded() {
+            setExpanded(!expanded);
+        }
+        
+        public void setExpanded(boolean expanded) {
+            this.expanded = expanded;
+            updateUIState();
+        }
+        
+        public boolean isExpanded() {
+            return expanded;
+        }
+        
+        private void updateUIState() {
+            if (expanded) {
+                toggleButton.setText("▼ " + title);
+                add(contentPanel, BorderLayout.CENTER);
+                if (expandedSize != null) {
+                    setPreferredSize(expandedSize);
+                    setMaximumSize(new Dimension(Integer.MAX_VALUE, expandedSize.height));
+                } else {
+                    setPreferredSize(null);
+                    setMaximumSize(new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE));
+                }
+            } else {
+                toggleButton.setText("▶ " + title);
+                remove(contentPanel);
+                setPreferredSize(collapsedSize);
+                setMaximumSize(new Dimension(Integer.MAX_VALUE, collapsedSize.height));
+            }
+            
+            revalidate();
+            repaint();
+            
+            // Trigger parent layout update
+            Container parent = getParent();
+            while (parent != null) {
+                parent.revalidate();
+                parent.repaint();
+                parent = parent.getParent();
+            }
+        }
+        
+        @Override
+        public void setPreferredSize(Dimension preferredSize) {
+            super.setPreferredSize(preferredSize);
+            if (expanded && preferredSize != null) {
+                expandedSize = preferredSize;
+            }
+        }
     }
     
     // Helper class to track instruction information
