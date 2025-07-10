@@ -12,71 +12,67 @@
 #define MAX_DATA_WORDS 10000
 
 // Instruction format (32-bit):
-// Bits 31-27: Opcode (5 bits)
-// Bits 26-24: Function/Subopcode (3 bits)
+// Bits 31-26: Opcode (6 bits)
+// Bits 25-24: Function/Subopcode (2 bits)
 // Bits 23-19: Destination Register (5 bits)
 // Bits 18-14: Source Register 1 (5 bits)
 // Bits 13-9:  Source Register 2 (5 bits)
 // Bits 8-0:   Immediate/Offset (9 bits, sign-extended)
 
 // For large immediates (19-bit):
-// Bits 31-27: Opcode (5 bits)
-// Bits 26-24: Reserved (3 bits)
+// Bits 31-26: Opcode (6 bits)
+// Bits 25-24: Reserved (2 bits)
 // Bits 23-19: Destination Register (5 bits)
 // Bits 18-0:  19-bit Immediate
 
 typedef enum {
-    // Data Movement
-    OP_LOADI = 0x01,  // Load immediate (19-bit)
-    OP_LOAD  = 0x02,  // Load from memory
-    OP_STORE = 0x03,  // Store to memory
-    
-    // Arithmetic (matching CPU opcodes)
-    OP_ADD   = 0x04,  // Add registers
-    OP_ADDI  = 0x05,  // Add immediate
-    OP_SUB   = 0x06,  // Subtract registers
-    OP_SUBI  = 0x07,  // Subtract immediate
-    OP_MUL   = 0x08,  // Multiply
-    OP_DIV   = 0x09,  // Divide
-    OP_MOD   = 0x0A,  // Modulo (remainder)
-    
-    // Logical (updated opcodes)
-    OP_AND   = 0x0B,  // Logical AND
-    OP_OR    = 0x0C,  // Logical OR
-    OP_XOR   = 0x0D,  // Logical XOR
-    OP_NOT   = 0x0E,  // Logical NOT
-    OP_SHL   = 0x0F,  // Shift left logical
-    OP_SHR   = 0x10,  // Shift right logical
-    
-    // Comparison & Branches (updated opcodes)
-    OP_CMP   = 0x11,  // Compare (updated from 0x10)
-    OP_JMP   = 0x12,  // Unconditional jump
-    OP_JZ    = 0x13,  // Jump if zero
-    OP_JNZ   = 0x14,  // Jump if not zero
-    OP_JC    = 0x15,  // Jump if carry
-    OP_JNC   = 0x16,  // Jump if no carry
-    OP_JLT   = 0x17,  // Jump if less than
-    OP_JGE   = 0x18,  // Jump if greater or equal
-    OP_JLE   = 0x19,  // Jump if less or equal
-    OP_JN    = 0x1A,  // Jump if negative
-    
-    // Set instructions (conditional set to 1 or 0)
-    OP_SETEQ = 0x20,  // Set if equal
-    OP_SETNE = 0x21,  // Set if not equal
-    OP_SETLT = 0x22,  // Set if less than
-    OP_SETGE = 0x23,  // Set if greater or equal
-    OP_SETLE = 0x24,  // Set if less or equal
-    OP_SETGT = 0x25,  // Set if greater than
-    
-    // Function Calls & Stack (updated opcodes)
-    OP_CALL  = 0x1B,  // Function call
-    OP_RET   = 0x1C,  // Return from function
-    OP_PUSH  = 0x1D,  // Push register to stack
-    OP_POP   = 0x1E,  // Pop from stack to register
-    
-    // System
-    OP_HALT  = 0x1F,  // Halt processor
-    OP_OUT   = 0x20,  // Output (for putchar support)
+    // ALU (0x00–0x0F)
+    OP_ADD   = 0x00,
+    OP_SUB   = 0x01,
+    OP_AND   = 0x02,
+    OP_OR    = 0x03,
+    OP_XOR   = 0x04,
+    OP_NOT   = 0x05,
+    OP_SHL   = 0x06,
+    OP_SHR   = 0x07,
+    OP_MUL   = 0x08,
+    OP_DIV   = 0x09,
+    OP_MOD   = 0x0A,
+    OP_CMP   = 0x0B,
+    OP_SAR   = 0x0C,
+    // ...reserved 0x0D–0x0F...
+
+    // Memory (0x20–0x23)
+    OP_LOADI = 0x12, // 6'b100010
+    OP_LOAD  = 0x10, // 6'b100000
+    OP_STORE = 0x21, // 6'b100001
+
+    // Branch/Control (0x30–0x3D)
+    OP_JMP   = 0x30,
+    OP_JZ    = 0x31,
+    OP_JNZ   = 0x32,
+    OP_JC    = 0x33,
+    OP_JNC   = 0x34,
+    OP_JLT   = 0x35,
+    OP_JGE   = 0x36,
+    OP_JLE   = 0x37,
+    OP_JN    = 0x38,
+    OP_CALL  = 0x39,
+    OP_RET   = 0x3A,
+    OP_PUSH  = 0x3B,
+    OP_POP   = 0x3C,
+
+    // Set/Compare (0x28–0x2D)
+    OP_SETEQ = 0x28,
+    OP_SETNE = 0x29,
+    OP_SETLT = 0x2A,
+    OP_SETGE = 0x2B,
+    OP_SETLE = 0x2C,
+    OP_SETGT = 0x2D,
+
+    // System (0x3E–0x3F)
+    OP_HALT  = 0x3E,
+    OP_OUT   = 0x3F
 } opcode_t;
 
 typedef enum {
@@ -138,12 +134,8 @@ static const instruction_def_t instructions[] = {
     // Arithmetic - support both uppercase and lowercase
     {"ADD",   OP_ADD,   INST_TYPE_RRR},
     {"add",   OP_ADD,   INST_TYPE_RRR},
-    {"ADDI",  OP_ADDI,  INST_TYPE_RRI},
-    {"addi",  OP_ADDI,  INST_TYPE_RRI},
     {"SUB",   OP_SUB,   INST_TYPE_RRR},
     {"sub",   OP_SUB,   INST_TYPE_RRR},
-    {"SUBI",  OP_SUBI,  INST_TYPE_RRI},
-    {"subi",  OP_SUBI,  INST_TYPE_RRI},
     {"MUL",   OP_MUL,   INST_TYPE_RRR},
     {"mul",   OP_MUL,   INST_TYPE_RRR},
     {"DIV",   OP_DIV,   INST_TYPE_RRR},
@@ -226,7 +218,7 @@ static const instruction_def_t instructions[] = {
     {"out",   OP_OUT,   INST_TYPE_R},    // For putchar support
 };
 
-static const int num_instructions = sizeof(instructions) / sizeof(instructions[0]);
+static int num_instructions = sizeof(instructions) / sizeof(instructions[0]);
 
 // Global state
 static label_t labels[MAX_LABELS];
@@ -383,18 +375,20 @@ static int find_label(const char *name) {
 }
 
 static uint32_t encode_instruction(opcode_t opcode, int rd, int rs1, int rs2, int immediate, bool use_19bit_imm) {
+    printf("Encoding instruction: %d %d %d", rd, rs1, rs2);
+
     if (use_19bit_imm) {
         // 19-bit immediate format
-        return ((uint32_t)opcode << 27) | 
-               ((uint32_t)(rd & 0x1F) << 19) | 
+        return ((uint32_t)opcode << 26) |
+               ((uint32_t)(rd & 0x1F) << 19) |
                ((uint32_t)immediate & 0x7FFFF);
     } else {
         // Standard format - set bit 24 to distinguish from direct addressing
-        return ((uint32_t)opcode << 27) | 
-               (1 << 24) |  // Set bit 24 to make bits 26-24 = 001 (not 000)
-               ((uint32_t)(rd & 0x1F) << 19) | 
-               ((uint32_t)(rs1 & 0x1F) << 14) | 
-               ((uint32_t)(rs2 & 0x1F) << 9) | 
+        return ((uint32_t)opcode << 26) |
+               (1 << 24) |  // Set bit 24 to make bits 25-24 = 01 (not 00)
+               ((uint32_t)(rd & 0x1F) << 19) |
+               ((uint32_t)(rs1 & 0x1F) << 14) |
+               ((uint32_t)(rs2 & 0x1F) << 9) |
                ((uint32_t)immediate & 0x1FF);
     }
 }

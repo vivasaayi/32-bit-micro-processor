@@ -19,10 +19,10 @@ OR R6, R2, R3
 XOR R7, R2, R3
 
 ; ADDI: R8 = R2 + 5
-ADDI R8, R2, 5
+;ADDI R8, R2, 5
 
 ; SUBI: R9 = R3 - 7
-SUBI R9, R3, 7
+;SUBI R9, R3, 7
 
 ; CMP: Compare R2 and R3 (result in flags)
 CMP R2, R3

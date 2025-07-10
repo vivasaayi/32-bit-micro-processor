@@ -147,7 +147,7 @@ public class AssemblyTab extends BaseTab {
                     String outputHex = sourceFile.getAbsolutePath().replace(".asm", ".hex");
                     
                     // Build assembler command - adjust path as needed
-                    String assemblerPath = "/Users/rajanpanneerselvam/work/hdl/tools/assembler";
+                    String assemblerPath = "/Users/rajanpanneerselvam/work/hdl/temp/assembler";
                     ProcessBuilder pb = new ProcessBuilder(assemblerPath, sourceFile.getAbsolutePath(), outputHex);
                     pb.directory(sourceFile.getParentFile());
                     

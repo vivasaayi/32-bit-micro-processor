@@ -41,8 +41,7 @@ public class SimulationLogTab extends BaseTab {
     
     public SimulationLogTab(AppState appState, JFrame parentFrame) {
         super(appState, parentFrame);
-
-        System.out.println("Length of JLables:" + registerLabels.length);
+        // System.out.println("Length of JLables:" + registerLabels.length);
     }
     
     @Override
@@ -134,7 +133,7 @@ public class SimulationLogTab extends BaseTab {
         }
         
         for (int i = 0; i < 34; i++) {
-            System.out.println("Creating label for register: " + registerNames[i]);
+            // System.out.println("Creating label for register: " + registerNames[i]);
             registerLabels[i] = createRegisterLabel(registerNames[i], 0L);
             currentRegisterPanel.add(registerLabels[i]);
         }
@@ -154,11 +153,11 @@ public class SimulationLogTab extends BaseTab {
     }
     
     private void updateRegisterLabel(JLabel label, String name, long value, boolean changed) {
-        System.out.println("Update Register label called");
-        System.out.println(label);
-        System.out.println(name);
-        System.out.println(value);
-        System.out.println(changed);
+        // System.out.println("Update Register label called");
+        // System.out.println(label);
+        // System.out.println(name);
+        // System.out.println(value);
+        // System.out.println(changed);
 
         if (label == null) return;
         int intValue = (int) value;
@@ -167,7 +166,7 @@ public class SimulationLogTab extends BaseTab {
         String decimal = String.valueOf(intValue);
         // Plain text, 4 lines: name, hex, binary, decimal
         String text = name + "\n" + hex + "\n" + binary + "\n" + decimal;
-        System.out.println(text);
+        // System.out.println(text);
         label.setText("<html>" + text.replace("\n", "<br>") + "</html>"); // Use <br> for multiline, but no other HTML
         label.setBackground(changed ? Color.GREEN : Color.WHITE);
         label.setForeground(Color.BLACK);

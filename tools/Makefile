@@ -5,17 +5,14 @@ CC = gcc
 CFLAGS = -Wall -Wextra -std=c99 -O2 -g
 TEMP_DIR = ../temp
 ASSEMBLER_TARGET = $(TEMP_DIR)/assembler
-COMPILER_TARGET = $(TEMP_DIR)/c_compiler
 ASSEMBLER_SOURCE = assembler.c
-COMPILER_SOURCE = c_compiler.c
 
 # Phony targets
 .PHONY: all clean test test-compiler test-assembler help install
 
 # Default target
-all: $(ASSEMBLER_TARGET) $(COMPILER_TARGET)
+all: $(ASSEMBLER_TARGET)
 	@echo "✓ All tools built successfully"
-	@echo "  - C Compiler: $(COMPILER_TARGET)"
 	@echo "  - Assembler: $(ASSEMBLER_TARGET)"
 
 # Build assembler
@@ -47,19 +44,6 @@ test-assembler: $(ASSEMBLER_TARGET)
 	$(ASSEMBLER_TARGET) $(TEMP_DIR)/test.asm $(TEMP_DIR)/test.hex
 	@echo "✓ Assembler test completed"
 	@rm -f $(TEMP_DIR)/test.asm $(TEMP_DIR)/test.hex
-
-# Test C compiler
-test-compiler: $(COMPILER_TARGET)
-	@echo "Testing C compiler..."
-	@echo "int main() {" > $(TEMP_DIR)/test.c
-	@echo "    int x = 42;" >> $(TEMP_DIR)/test.c
-	@echo "    int y = 10;" >> $(TEMP_DIR)/test.c
-	@echo "    int z = x + y;" >> $(TEMP_DIR)/test.c
-	@echo "    return 0;" >> $(TEMP_DIR)/test.c
-	@echo "}" >> $(TEMP_DIR)/test.c
-	$(COMPILER_TARGET) $(TEMP_DIR)/test.c > /dev/null
-	@echo "✓ C compiler test completed"
-	@rm -f $(TEMP_DIR)/test.c $(TEMP_DIR)/test.asm
 
 # Test both tools
 test: test-assembler test-compiler
