@@ -72,16 +72,14 @@ module cpu_core (
     wire is_immediate_inst, is_load_store, is_branch_jump;
     
     // ----------------------------------------------------------------------
-    // OPCODE ASSIGNMENTS (6-bit, non-overlapping ranges)
+    // OPCODE ASSIGNMENTS (6-bit, fits within 0x00-0x3F range)
     // ----------------------------------------------------------------------
-    // 0x00–0x1F: ALU operations
-    // 0x20–0x2F: Memory operations
-    // 0x30–0x3F: Control/Branch
-    // 0x40–0x4F: Set/Compare
-    // 0x50–0x5F: System/Privileged
-    // 0x60–0x7F: Reserved/Extension
+    // 0x00–0x0F: ALU operations
+    // 0x10–0x1F: Memory operations
+    // 0x20–0x2F: Control/Branch operations
+    // 0x30–0x3F: Set/Compare/System operations
 
-    // ALU operation codes (0x00–0x1F)
+    // ALU operation codes (0x00–0x0F)
     localparam [5:0]
         ALU_ADD  = 6'h00,
         ALU_SUB  = 6'h01,
@@ -97,43 +95,40 @@ module cpu_core (
         ALU_CMP  = 6'h0B,
         ALU_SAR  = 6'h0C; // Arithmetic shift right
 
-    // Memory operation codes (0x20–0x2F)
+    // Memory operation codes (0x10–0x1F)
     localparam [5:0]
-        MEM_LOAD  = 6'h20,
-        MEM_STORE = 6'h21,
-        MEM_LOADI = 6'h22; // LOADI: Load immediate value into register
+        MEM_LOAD  = 6'h10,
+        MEM_STORE = 6'h11,
+        MEM_LOADI = 6'h12; // LOADI: Load immediate value into register
 
-    // Control/Branch opcodes (0x30–0x3F)
+    // Control/Branch opcodes (0x20–0x2F)
     localparam [5:0]
-        OP_JMP   = 6'h30,
-        OP_JZ    = 6'h31,
-        OP_JNZ   = 6'h32,
-        OP_JC    = 6'h33,
-        OP_JNC   = 6'h34,
-        OP_JLT   = 6'h35,
-        OP_JGE   = 6'h36,
-        OP_JLE   = 6'h37,
-        OP_CALL  = 6'h38,
-        OP_RET   = 6'h39,
-        OP_PUSH  = 6'h3A,
-        OP_POP   = 6'h3B;
+        OP_JMP   = 6'h20,
+        OP_JZ    = 6'h21,
+        OP_JNZ   = 6'h22,
+        OP_JC    = 6'h23,
+        OP_JNC   = 6'h24,
+        OP_JLT   = 6'h25,
+        OP_JGE   = 6'h26,
+        OP_JLE   = 6'h27,
+        OP_CALL  = 6'h28,
+        OP_RET   = 6'h29,
+        OP_PUSH  = 6'h2A,
+        OP_POP   = 6'h2B;
 
-    // Set/Compare opcodes (0x40–0x4F)
+    // Set/Compare/System opcodes (0x30–0x3F)
     localparam [5:0]
-        OP_SETEQ = 6'h40,
-        OP_SETNE = 6'h41,
-        OP_SETLT = 6'h42,
-        OP_SETGE = 6'h43,
-        OP_SETLE = 6'h44,
-        OP_SETGT = 6'h45;
-
-    // System/Privileged opcodes (0x50–0x5F)
-    localparam [5:0]
-        OP_HALT  = 6'h50,
-        OP_INT   = 6'h51;
+        OP_SETEQ = 6'h30,
+        OP_SETNE = 6'h31,
+        OP_SETLT = 6'h32,
+        OP_SETGE = 6'h33,
+        OP_SETLE = 6'h34,
+        OP_SETGT = 6'h35,
+        OP_HALT  = 6'h3E,
+        OP_INT   = 6'h3F;
 
     // ----------------------------------------------------------------------
-    // ALU OPCODE TABLE (0x00–0x1F)
+    // ALU OPCODE TABLE (0x00–0x0F)
     // ----------------------------------------------------------------------
     // | Opcode | Mnemonic | Operation         |
     // |--------|----------|------------------|
@@ -150,14 +145,41 @@ module cpu_core (
     // | 0x0A   | MOD      | a % b            |
     // | 0x0B   | CMP      | compare a, b     |
     // | 0x0C   | SAR      | a >>> b (arith)  |
-    // | 0x22   | LOADI    | R[rd] = immediate      |
     // ----------------------------------------------------------------------
-    // Memory OPCODE TABLE (0x20–0x2F)
+    // Memory OPCODE TABLE (0x10–0x1F)
     // | Opcode | Mnemonic | Operation         |
     // |--------|----------|------------------|
-    // | 0x20   | LOAD     | R[rd] = MEM[imm] |
-    // | 0x21   | STORE    | MEM[imm] = R[rd] |
-    // | 0x22   | LOADI    | R[rd] = imm      |
+    // | 0x10   | LOAD     | R[rd] = MEM[imm] |
+    // | 0x11   | STORE    | MEM[imm] = R[rd] |
+    // | 0x12   | LOADI    | R[rd] = imm      |
+    // ----------------------------------------------------------------------
+    // Control/Branch OPCODE TABLE (0x20–0x2F)
+    // | Opcode | Mnemonic | Operation         |
+    // |--------|----------|------------------|
+    // | 0x20   | JMP      | Jump unconditional|
+    // | 0x21   | JZ       | Jump if zero      |
+    // | 0x22   | JNZ      | Jump if not zero  |
+    // | 0x23   | JC       | Jump if carry     |
+    // | 0x24   | JNC      | Jump if no carry  |
+    // | 0x25   | JLT      | Jump if less than |
+    // | 0x26   | JGE      | Jump if greater/eq|
+    // | 0x27   | JLE      | Jump if less/eq   |
+    // | 0x28   | CALL     | Call function     |
+    // | 0x29   | RET      | Return from call  |
+    // | 0x2A   | PUSH     | Push to stack     |
+    // | 0x2B   | POP      | Pop from stack    |
+    // ----------------------------------------------------------------------
+    // Set/Compare/System OPCODE TABLE (0x30–0x3F)
+    // | Opcode | Mnemonic | Operation         |
+    // |--------|----------|------------------|
+    // | 0x30   | SETEQ    | Set if equal      |
+    // | 0x31   | SETNE    | Set if not equal  |
+    // | 0x32   | SETLT    | Set if less than  |
+    // | 0x33   | SETGE    | Set if greater/eq |
+    // | 0x34   | SETLE    | Set if less/eq    |
+    // | 0x35   | SETGT    | Set if greater    |
+    // | 0x3E   | HALT     | Halt processor    |
+    // | 0x3F   | INT      | Software interrupt|
     // ----------------------------------------------------------------------
     
     // Instantiate ALU
@@ -260,7 +282,7 @@ module cpu_core (
                     // ------ END: Handle SET instructions -----
 
 
-                    if (opcode == 6'h1F) begin // HALT
+                    if (opcode == OP_HALT) begin // HALT
                         halted_reg <= 1'b1;
                     end
                     // Branch/jump PC update
@@ -344,8 +366,8 @@ module cpu_core (
     wire is_io_access = (immediate >= 32'h8000) && (immediate < 32'h9000);
     
     // Detect STORE with direct addressing (20-bit immediate format)
-    // Format: opcode(5) | 000(3) | rs(4) | address(20)
-    wire store_direct_addr = (opcode == 6'h03) && (instruction_reg[26:24] == 3'b000);
+    // Format: opcode(6) | 000(2) | rs(4) | address(20)
+    wire store_direct_addr = (opcode == MEM_STORE) && (instruction_reg[25:24] == 2'b00);
     
     // Optimize for known memory regions
     wire use_optimized_addressing = is_log_buffer_access || is_stack_access;
@@ -391,8 +413,8 @@ module cpu_core (
     assign flags_in = flags_reg; // Use stored flags as input to ALU
     
     // Register file connections
-    assign reg_addr_a = (opcode == 6'h03) ? rd : rs1;  // For STORE, source data is in rd; others use rs1
-    assign reg_addr_b = (opcode == 6'h03 && !store_direct_addr) ? rs1 : rs2;  // For STORE register addressing, address base is in rs1
+    assign reg_addr_a = (opcode == MEM_STORE) ? rd : rs1;  // For STORE, source data is in rd; others use rs1
+    assign reg_addr_b = (opcode == MEM_STORE && !store_direct_addr) ? rs1 : rs2;  // For STORE register addressing, address base is in rs1
     assign reg_addr_w = rd;   // Always use rd for write destination
     assign reg_data_w = (state == WRITEBACK) ? 
                        ((opcode == MEM_LOAD) ? memory_data_reg :
@@ -406,7 +428,7 @@ module cpu_core (
     end
     
     assign reg_write_en = (state == WRITEBACK) && 
-                         !(opcode == MEM_STORE) && !(opcode == 6'h1F) && !is_branch_jump ||
+                         !(opcode == MEM_STORE) && !(opcode == OP_HALT) && !is_branch_jump ||
                          (state == WRITEBACK) && (opcode == OP_SETEQ || opcode == OP_SETNE || 
                           opcode == OP_SETLT || opcode == OP_SETGE || opcode == OP_SETLE || opcode == OP_SETGT) ||
                          (state == WRITEBACK) && (opcode == MEM_LOADI);
@@ -420,12 +442,12 @@ module cpu_core (
                      (state == MEMORY && is_load_store) ? immediate :         // LOAD: always direct addressing
                      pc_reg;
     
-    assign data_bus = (state == MEMORY && opcode == 6'h03 && mem_write) ? reg_data_a : 32'hZZZZZZZZ;
+    assign data_bus = (state == MEMORY && opcode == MEM_STORE && mem_write) ? reg_data_a : 32'hZZZZZZZZ;
     
     assign mem_read = (state == FETCH) ? 1'b1 : 
-                     (state == MEMORY && opcode == 6'h02) ? 1'b1 : 1'b0;
+                     (state == MEMORY && opcode == MEM_LOAD) ? 1'b1 : 1'b0;
     
-    assign mem_write = (state == MEMORY && opcode == 6'h03) ? 1'b1 : 1'b0;
+    assign mem_write = (state == MEMORY && opcode == MEM_STORE) ? 1'b1 : 1'b0;
     
     // Debug outputs
     always @(posedge clk) begin

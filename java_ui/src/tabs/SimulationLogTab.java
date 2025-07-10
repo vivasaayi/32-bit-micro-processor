@@ -661,9 +661,9 @@ public class SimulationLogTab extends BaseTab {
         String[] lines = content.split("\n");
         
         // Patterns for parsing simulation log
-        Pattern executePattern = Pattern.compile("DEBUG CPU Execute: PC=(0x[0-9A-Fa-f]+), Opcode=([0-9A-Fa-f]+), rd=\\s*(\\d+), rs1=\\s*(\\d+), rs2=\\s*(\\d+), imm=([0-9A-Fa-f]+)");
-        Pattern writebackPattern = Pattern.compile("DEBUG CPU Writeback: Writing\\s+(\\d+) to R (\\d+)");
-        Pattern flagsPattern = Pattern.compile("DEBUG CPU: Flags updated to C=(\\d+) Z=(\\d+) N=(\\d+) V=(\\d+)");
+        Pattern executePattern = Pattern.compile("(?:DEBUG_EXECUTE:|DECODE_DONE:) PC=(0x[0-9A-Fa-f]+), (?:IS=0x[0-9A-Fa-f]+ )?Opcode=([0-9A-Fa-f]+), rd=\\s*(\\d+), rs1=\\s*(\\d+), rs2=\\s*(\\d+), imm=([0-9A-Fa-f]+)");
+        Pattern writebackPattern = Pattern.compile("DEBUG CPU Writeback: Writing\\s+([0-9]+) to R (\\d+)");
+        Pattern flagsPattern = Pattern.compile("(?:EXECUTE_DEBUG_ALU:|DEBUG CPU: Flags updated to) C=(\\d+) Z=(\\d+) N=(\\d+) V=(\\d+)");
         Pattern regfileWritePattern = Pattern.compile("\\[register_file] Write: R(\\d+) <= 0x([0-9A-Fa-f]{8})");
         
         List<InstructionInfo> instructions = new ArrayList<>();

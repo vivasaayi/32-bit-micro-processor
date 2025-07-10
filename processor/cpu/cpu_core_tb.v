@@ -83,8 +83,8 @@ module cpu_core_tb;
 
         // Place instructions at the correct memory base (PC=0x8000)
         // Load test values into R1 and R2
-        mem[MEM_BASE + 0] = encode_ri(6'h22, 5'd1, 5'd0, 19'd5);   // LOADI R1, 5
-        mem[MEM_BASE + 1] = encode_ri(6'h22, 5'd2, 5'd0, 19'd3);   // LOADI R2, 3
+        mem[MEM_BASE + 0] = encode_ri(6'h12, 5'd1, 5'd0, 19'd5);   // LOADI R1, 5
+        mem[MEM_BASE + 1] = encode_ri(6'h12, 5'd2, 5'd0, 19'd3);   // LOADI R2, 3
         // ALU ops: R3 = R1 op R2
         mem[MEM_BASE + 2] = encode_rrr(6'h00, 5'd3, 5'd1, 5'd2);   // ADD R3, R1, R2
         mem[MEM_BASE + 3] = encode_rrr(6'h01, 5'd4, 5'd1, 5'd2);   // SUB R4, R1, R2
@@ -99,7 +99,7 @@ module cpu_core_tb;
         mem[MEM_BASE + 12] = encode_rrr(6'h09, 5'd13, 5'd1, 5'd2); // DIV R13, R1, R2
         mem[MEM_BASE + 13] = encode_rrr(6'h0A, 5'd14, 5'd1, 5'd2); // MOD R14, R1, R2
         mem[MEM_BASE + 14] = encode_rrr(6'h0B, 5'd15, 5'd1, 5'd2); // CMP R15, R1, R2
-        mem[MEM_BASE + 15] = encode_rrr(6'h50, 5'd0, 5'd0, 5'd0);  // HALT
+        mem[MEM_BASE + 15] = encode_rrr(6'h3E, 5'd0, 5'd0, 5'd0);  // HALT (updated opcode to 0x3E)
 
         // Print loaded instructions for verification
         for (i = 0; i < 16; i = i + 1) begin
