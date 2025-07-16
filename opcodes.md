@@ -13,10 +13,11 @@ Here is a table of your CPU core opcodes and mnemonics, with each opcode value s
 | ALU_MUL  | 001000 | 10    | 0x08 | 8   | a * b |
 | ALU_DIV  | 001001 | 11    | 0x09 | 9   | a / b |
 | ALU_MOD  | 001010 | 12    | 0x0A | 10  | a % b |
-| ALU_CMP  | 001011 | 13    | 0x0B | 11  | compare a, b |
+| ALU_CMP  | 001011 | 13    | 0x0B | 11  | compare a, b (sets flags, no register write) |
 | ALU_SAR  | 001100 | 14    | 0x0C | 12  | a >>> b (arithmetic shift) |
 | ALU_ADDI | 001101 | 15    | 0x0D | 13  | a + immediate |
 | ALU_SUBI | 001110 | 16    | 0x0E | 14  | a - immediate |
+| ALU_CMPI | 001111 | 17    | 0x0F | 15  | compare a, immediate (sets flags, no register write) |
 | MEM_LOAD | 010000 | 20    | 0x10 | 16  | Load from memory |
 | MEM_STORE| 010001 | 21    | 0x11 | 17  | Store to memory |
 | MEM_LOADI| 010010 | 22    | 0x12 | 18  | Load immediate value into register (R[rd] = imm) |

@@ -41,6 +41,7 @@ typedef enum {
     OP_SAR   = 0x0C,
     OP_ADDI  = 0x0D,
     OP_SUBI  = 0x0E,
+    OP_CMPI  = 0x0F,
     
     OP_LOAD  = 0x10,
     OP_STORE = 0x11,
@@ -159,6 +160,8 @@ static const instruction_def_t instructions[] = {
     // Comparison & Branches - support C compiler aliases
     {"CMP",   OP_CMP,   INST_TYPE_RR},
     {"cmp",   OP_CMP,   INST_TYPE_RR},
+    {"CMPI",  OP_CMPI,  INST_TYPE_RI},
+    {"cmpi",  OP_CMPI,  INST_TYPE_RI},
     {"JMP",   OP_JMP,   INST_TYPE_I},
     {"jmp",   OP_JMP,   INST_TYPE_I},
     {"JZ",    OP_JZ,    INST_TYPE_I},
@@ -367,7 +370,7 @@ static void add_label(const char *name, uint32_t address, bool is_data) {
 static int find_label(const char *name) {
     for (int i = 0; i < num_labels; i++) {
         if (strcmp(labels[i].name, name) == 0) {
-            return labels[i].address;
+            return (int)labels[i].address;  // Cast to int for return
         }
     }
     return -1;
@@ -388,7 +391,7 @@ static uint32_t encode_instruction(opcode_t opcode, int rd, int rs1, int rs2, in
                ((uint32_t)(rd & 0x1F) << 19) |
                ((uint32_t)(rs1 & 0x1F) << 14) |
                ((uint32_t)(rs2 & 0x1F) << 9) |
-               ((uint32_t)immediate & 0x1FF);
+               ((uint32_t)immediate & 0xFFF);  // 12-bit immediate for jumps/branches
     }
 }
 
@@ -473,6 +476,29 @@ static void handle_data_directive(const char *line, int line_num) {
     }
 }
 
+// Check if a string looks like a label name (not a number)
+static bool is_label_name(const char *str) {
+    if (!str || *str == '\0') return false;
+    
+    // Skip leading whitespace
+    while (isspace(*str)) str++;
+    
+    // If it starts with '#' or is a number, it's not a label
+    if (*str == '#') return false;
+    if (*str == '-' || *str == '+') str++; // Skip sign
+    if (isdigit(*str)) {
+        // Check if entire string is numeric
+        while (isdigit(*str) || *str == 'x' || *str == 'X' || 
+               (*str >= 'a' && *str <= 'f') || (*str >= 'A' && *str <= 'F')) {
+            str++;
+        }
+        return (*str != '\0'); // If we didn't reach end, it's not purely numeric
+    }
+    
+    // Must start with letter or underscore for a valid label
+    return (isalpha(*str) || *str == '_');
+}
+
 // Enhanced instruction assembly with better C compiler support
 static void assemble_instruction(const char *line, int line_num) {
     char line_copy[MAX_LINE_LENGTH];
@@ -542,6 +568,8 @@ static void assemble_instruction(const char *line, int line_num) {
     uint32_t encoded = 0;
     int rd = 0, rs1 = 0, rs2 = 0, immediate = 0;
     bool use_19bit_imm = false;
+    bool needs_resolution = false;
+    char forward_label[MAX_LABEL_LENGTH] = "";
     
     switch (inst->type) {
         case INST_TYPE_NONE:
@@ -568,8 +596,15 @@ static void assemble_instruction(const char *line, int line_num) {
             } else {
                 rs1 = parse_register(tokens[2]);
                 if (rd < 0 || rs1 < 0) error("Invalid register", line_num);
-                // MOVE/MOV R1, R2 -> ADD R1, R2, R0
-                encoded = encode_instruction(inst->opcode, rd, rs1, 0, 0, false);
+                
+                // Special handling for CMP instruction - operands should be in rs1 and rs2
+                if (inst->opcode == OP_CMP) {
+                    // CMP R1, R2 -> compare R1 with R2, don't write to any register
+                    encoded = encode_instruction(inst->opcode, 0, rd, rs1, 0, false);
+                } else {
+                    // MOVE/MOV R1, R2 -> ADD R1, R2, R0
+                    encoded = encode_instruction(inst->opcode, rd, rs1, 0, 0, false);
+                }
             }
             break;
             
@@ -765,18 +800,24 @@ static void assemble_instruction(const char *line, int line_num) {
             break;
             
         case INST_TYPE_I:
+            printf("DEBUG: Processing INST_TYPE_I instruction\n");
             if (num_tokens < 2) error("Missing operand", line_num);
             // Check if it's a label or immediate
             int label_addr = find_label(tokens[1]);
             if (label_addr >= 0) {
                 // It's a label - calculate relative offset for branches
                 if (inst->opcode >= OP_JMP) { // && inst->opcode <= OP_JN) 
-                    immediate = (label_addr - (current_address + 4)) / 4;
+                    int32_t raw_offset = (int32_t)label_addr - (int32_t)(current_address + 4);
+                    immediate = raw_offset / 4;
+                    printf("DEBUG: JMP to %s: label_addr=0x%x, current_address=0x%x, raw_offset=%d, offset=%d\n", 
+                           tokens[1], label_addr, current_address, raw_offset, immediate);
                     if (immediate < -256 || immediate > 255) {
                         // Use absolute addressing
+                        printf("DEBUG: Using absolute addressing, offset=%d out of range\n", immediate);
                         encoded = encode_instruction(inst->opcode, 0, 0, 0, label_addr, true);
                         use_19bit_imm = true;
                     } else {
+                        printf("DEBUG: Using relative addressing, offset=%d\n", immediate);
                         encoded = encode_instruction(inst->opcode, 0, 0, 0, immediate, false);
                     }
                 } else {
@@ -785,13 +826,23 @@ static void assemble_instruction(const char *line, int line_num) {
                     use_19bit_imm = true;
                 }
             } else {
-                // It's an immediate value
-                immediate = parse_immediate(tokens[1]);
-                if (immediate >= -256 && immediate <= 255) {
-                    encoded = encode_instruction(inst->opcode, 0, 0, 0, immediate, false);
+                // Check if it's a forward reference (label not found)
+                if (is_label_name(tokens[1])) {
+                    // Forward reference - mark for resolution in second pass
+                    printf("DEBUG: Forward reference detected for label: %s\n", tokens[1]);
+                    encoded = encode_instruction(inst->opcode, 0, 0, 0, 0, false);  // Placeholder
+                    needs_resolution = true;
+                    strncpy(forward_label, tokens[1], MAX_LABEL_LENGTH - 1);
+                    forward_label[MAX_LABEL_LENGTH - 1] = '\0';
                 } else {
-                    encoded = encode_instruction(inst->opcode, 0, 0, 0, immediate, true);
-                    use_19bit_imm = true;
+                    // It's an immediate value
+                    immediate = parse_immediate(tokens[1]);
+                    if (immediate >= -256 && immediate <= 255) {
+                        encoded = encode_instruction(inst->opcode, 0, 0, 0, immediate, false);
+                    } else {
+                        encoded = encode_instruction(inst->opcode, 0, 0, 0, immediate, true);
+                        use_19bit_imm = true;
+                    }
                 }
             }
             break;
@@ -806,6 +857,16 @@ static void assemble_instruction(const char *line, int line_num) {
     assembled[num_assembled].instruction = encoded;
     strncpy(assembled[num_assembled].source_line, line, MAX_LINE_LENGTH - 1);
     assembled[num_assembled].source_line[MAX_LINE_LENGTH - 1] = '\0';
+    assembled[num_assembled].needs_resolution = needs_resolution;
+    if (needs_resolution) {
+        strncpy(assembled[num_assembled].forward_label, forward_label, MAX_LABEL_LENGTH - 1);
+        assembled[num_assembled].forward_label[MAX_LABEL_LENGTH - 1] = '\0';
+        assembled[num_assembled].opcode = inst->opcode;
+        assembled[num_assembled].rd = rd;
+        assembled[num_assembled].rs1 = rs1;
+        assembled[num_assembled].rs2 = rs2;
+        assembled[num_assembled].type = inst->type;
+    }
     num_assembled++;
     
     current_address += 4;
@@ -867,8 +928,44 @@ static void first_pass(FILE *input) {
 }
 
 static void second_pass(void) {
-    // Re-assemble all instructions now that we know all label addresses
-    // This is where we'd resolve forward references if needed
+    // Resolve forward references now that we know all label addresses
+    printf("DEBUG: Starting second pass to resolve forward references\n");
+    
+    for (int i = 0; i < num_assembled; i++) {
+        if (assembled[i].needs_resolution) {
+            printf("DEBUG: Resolving forward reference for %s at address 0x%x\n", 
+                   assembled[i].forward_label, assembled[i].address);
+            
+            int label_addr = find_label(assembled[i].forward_label);
+            if (label_addr >= 0) {
+                // Calculate the offset for branch instructions
+                if (assembled[i].opcode >= OP_JMP) {
+                    int32_t raw_offset = (int32_t)label_addr - (int32_t)(assembled[i].address + 4);
+                    int32_t immediate = raw_offset / 4;
+                    
+                    printf("DEBUG: Resolved %s: label_addr=0x%x, instr_addr=0x%x, raw_offset=%d, offset=%d\n", 
+                           assembled[i].forward_label, label_addr, assembled[i].address, raw_offset, immediate);
+                    
+                    if (immediate < -2048 || immediate > 2047) {
+                        // Use absolute addressing - outside 12-bit range
+                        printf("DEBUG: Using absolute addressing, offset=%d out of 12-bit range\n", immediate);
+                        assembled[i].instruction = encode_instruction(assembled[i].opcode, 0, 0, 0, label_addr, true);
+                    } else {
+                        printf("DEBUG: Using relative addressing, offset=%d\n", immediate);
+                        assembled[i].instruction = encode_instruction(assembled[i].opcode, 0, 0, 0, immediate, false);
+                    }
+                } else {
+                    // Absolute addressing for non-branch instructions
+                    assembled[i].instruction = encode_instruction(assembled[i].opcode, 0, 0, 0, label_addr, true);
+                }
+                
+                assembled[i].needs_resolution = false;
+            } else {
+                printf("ERROR: Could not resolve forward reference to label: %s\n", assembled[i].forward_label);
+                exit(1);
+            }
+        }
+    }
 }
 
 static void write_hex_output(FILE *output) {

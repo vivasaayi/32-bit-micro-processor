@@ -70,7 +70,8 @@ module tb_microprocessor_system;
             hexfile = "testbench/simple_sort.hex"; // default
         end
         $display("Loading program from: %s", hexfile);
-        $readmemh(hexfile, uut.internal_memory);
+        // Load program at offset 0x8000/4 = 8192 (where CPU starts execution)
+        $readmemh(hexfile, uut.internal_memory, 32'h8000/4);
     end
     
     // Main test sequence

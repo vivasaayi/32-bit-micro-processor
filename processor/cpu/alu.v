@@ -22,6 +22,7 @@
  * | 0x0C   | SAR      | a >>> b (arith)  |
  * | 0x0D   | ADDI     | a + immediate    |
  * | 0x0E   | SUBI     | a - immediate    |
+ * | 0x0F   | CMPI     | compare a, imm   |
  * ---------------------------------------------------
  */
 
@@ -50,6 +51,7 @@ module alu (
     localparam ALU_SAR  = 6'h0C;
     localparam ALU_ADDI = 6'h0D;
     localparam ALU_SUBI = 6'h0E;
+    localparam ALU_CMPI = 6'h0F;
 
     // Flag bit positions
     localparam FLAG_CARRY     = 0;
@@ -158,6 +160,12 @@ module alu (
                 temp_result = {1'b0, operand_a} - {1'b0, operand_b};
                 result = a;
                 flags_out[FLAG_CARRY] = temp_result[32];
+            end
+            ALU_CMPI: begin
+                temp_result = {1'b0, operand_a} - {1'b0, operand_b};
+                result = a;
+                flags_out[FLAG_CARRY] = temp_result[32];
+                // $display("DEBUG ALU CMPI: a=%0d b=%0d result=%0d", operand_a, operand_b, result);
             end
             default: begin
                 result = 32'h0;

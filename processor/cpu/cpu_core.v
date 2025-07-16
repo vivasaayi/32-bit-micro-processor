@@ -95,7 +95,8 @@ module cpu_core (
         ALU_CMP  = 6'h0B,
         ALU_SAR  = 6'h0C, // Arithmetic shift right
         ALU_ADDI = 6'h0D, // Add immediate
-        ALU_SUBI = 6'h0E; // Subtract immediate
+        ALU_SUBI = 6'h0E, // Subtract immediate
+        ALU_CMPI = 6'h0F; // Compare immediate
 
     // Memory operation codes (0x10–0x1F)
     localparam [5:0]
@@ -149,6 +150,7 @@ module cpu_core (
     // | 0x0C   | SAR      | a >>> b (arith)  |
     // | 0x0D   | ADDI     | a + immediate    |
     // | 0x0E   | SUBI     | a - immediate    |
+    // | 0x0F   | CMPI     | compare a, imm   |
     // ----------------------------------------------------------------------
     // Memory OPCODE TABLE (0x10–0x1F)
     // | Opcode | Mnemonic | Operation         |
@@ -249,7 +251,7 @@ module cpu_core (
                     if (opcode == ALU_ADD || opcode == ALU_SUB || opcode == ALU_AND || opcode == ALU_OR || 
                         opcode == ALU_XOR || opcode == ALU_NOT || opcode == ALU_SHL || opcode == ALU_SHR ||
                         opcode == ALU_MUL || opcode == ALU_DIV || opcode == ALU_MOD || opcode == ALU_CMP || 
-                        opcode == ALU_SAR || opcode == ALU_ADDI || opcode == ALU_SUBI) begin
+                        opcode == ALU_SAR || opcode == ALU_ADDI || opcode == ALU_SUBI || opcode == ALU_CMPI) begin
                         flags_reg <= flags_out;
                         $display("EXECUTE_DEBUG_ALU: Flags updated to C=%b Z=%b N=%b V=%b", 
                                 flags_out[0], flags_out[1], flags_out[2], flags_out[3]);
@@ -362,13 +364,13 @@ module cpu_core (
     assign rs1 = instruction_reg[18:14];  // 5-bit register address
     assign rs2 = instruction_reg[13:9];   // 5-bit register address
     assign imm20 = instruction_reg[18:0]; // 19-bit immediate (reduced from 20)
-    assign imm12 = instruction_reg[8:0];  // 9-bit immediate (reduced from 12)
+    assign imm12 = instruction_reg[11:0]; // 12-bit immediate for branch/jump instructions
     
     // For ADDI/SUBI, use 20-bit immediate and rs1 from [19:16]
     wire [31:0] addi_subi_imm = {{12{instruction_reg[19]}}, instruction_reg[19:0]};
     
     // Control signal generation
-    assign is_immediate_inst = (opcode == ALU_ADDI || opcode == ALU_SUBI);
+    assign is_immediate_inst = (opcode == ALU_ADDI || opcode == ALU_SUBI || opcode == ALU_CMPI);
     assign is_load_store = (opcode == MEM_LOAD) || (opcode == MEM_STORE);
     assign is_branch_jump = (opcode >= OP_JMP && opcode <= OP_POP);
     
@@ -399,10 +401,11 @@ module cpu_core (
     // Immediate value selection
     assign immediate = (opcode == MEM_LOAD) ? {13'h0000, imm20} :                         // LOAD: 19-bit address
                       (opcode == MEM_STORE && store_direct_addr) ? {13'h0000, imm20} :     // STORE direct: 19-bit address  
-                      (opcode == MEM_STORE && !store_direct_addr) ? {{24{imm12[8]}}, imm12[7:0]} : // STORE reg+offset: 9-bit offset
+                      (opcode == MEM_STORE && !store_direct_addr) ? {{20{imm12[11]}}, imm12} : // STORE reg+offset: 12-bit offset
                       (opcode == MEM_LOADI) ? {13'h0000, imm20} :                         // LOADI: 19-bit immediate
-                      (opcode == ALU_ADDI || opcode == ALU_SUBI) ? {{24{imm12[8]}}, imm12[7:0]} : // ADDI/SUBI: 9-bit signed immediate
-                      {{24{imm12[8]}}, imm12[7:0]};                                       // Default: 9-bit signed
+                      (opcode == ALU_ADDI || opcode == ALU_SUBI || opcode == ALU_CMPI) ? {{20{imm12[11]}}, imm12} : // ADDI/SUBI/CMPI: 12-bit signed immediate
+                      (is_branch_jump) ? {{20{imm12[11]}}, imm12} :                       // Branch/Jump: 12-bit signed immediate  
+                      {{20{imm12[11]}}, imm12};                                           // Default: 12-bit signed
     
     // ALU connections
     assign alu_a = reg_data_a;
@@ -422,6 +425,7 @@ module cpu_core (
                    (opcode == ALU_SAR) ? ALU_SAR :
                    (opcode == ALU_ADDI) ? ALU_ADD : // ADDI uses ADD operation
                    (opcode == ALU_SUBI) ? ALU_SUB : // SUBI uses SUB operation
+                   (opcode == ALU_CMPI) ? ALU_CMP : // CMPI uses CMP operation
                    ALU_ADD; // Default ADD
     
     assign flags_in = flags_reg; // Use stored flags as input to ALU
@@ -442,7 +446,8 @@ module cpu_core (
     end
     
     assign reg_write_en = (state == WRITEBACK) && 
-                         !(opcode == MEM_STORE) && !(opcode == OP_HALT) && !is_branch_jump ||
+                         !(opcode == MEM_STORE) && !(opcode == OP_HALT) && !is_branch_jump && 
+                         !(opcode == ALU_CMP) && !(opcode == ALU_CMPI) ||  // CMP and CMPI should not write to registers
                          (state == WRITEBACK) && (opcode == OP_SETEQ || opcode == OP_SETNE || 
                           opcode == OP_SETLT || opcode == OP_SETGE || opcode == OP_SETLE || opcode == OP_SETGT) ||
                          (state == WRITEBACK) && (opcode == MEM_LOADI);
