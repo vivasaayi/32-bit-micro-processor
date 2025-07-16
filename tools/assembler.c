@@ -668,7 +668,7 @@ static void assemble_instruction(const char *line, int line_num) {
             if (num_tokens < 3) error("Missing operands", line_num);
             
             if (inst->opcode == OP_LOAD) {
-                // LOAD rd, [rs1+offset] or LOAD rd, [label] or LOAD rd, label
+                // LOAD rd, [rs1+offset] or LOAD rd, [label] or LOAD rd, label or LOAD rd, rs (register indirect)
                 rd = parse_register(tokens[1]);
                 if (rd < 0) error("Invalid destination register", line_num);
                 
@@ -676,16 +676,17 @@ static void assemble_instruction(const char *line, int line_num) {
                 char mem_label[MAX_LABEL_LENGTH];
                 
                 if (tokens[2][0] == '[') {
-                    // Bracketed memory reference
+                    // Bracketed memory reference: [rs1+offset] or [label]
                     if (parse_memory_ref(tokens[2], &mem_reg, &mem_offset, mem_label)) {
                         if (mem_reg >= 0) {
-                            // Register + offset
+                            // Register + offset: LOAD rd, [rs1+offset] - use bits 25:24 = 10
                             encoded = encode_instruction(inst->opcode, rd, mem_reg, 0, mem_offset, false);
+                            encoded |= (2 << 24); // Set bits 25:24 = 10 for reg+offset addressing
                         } else if (mem_label[0]) {
                             // Label reference - need to resolve
                             int label_addr = find_label(mem_label);
                             if (label_addr >= 0) {
-                                // Use absolute addressing
+                                // Use absolute addressing - bits 25:24 = 00 (default)
                                 encoded = encode_instruction(inst->opcode, rd, 0, 0, label_addr, true);
                                 use_19bit_imm = true;
                             } else {
@@ -698,12 +699,18 @@ static void assemble_instruction(const char *line, int line_num) {
                         error("Invalid memory reference", line_num);
                     }
                 } else if (tokens[2][0] == '#') {
-                    // Immediate addressing: LOAD rd, #immediate
+                    // Immediate addressing: LOAD rd, #immediate - bits 25:24 = 00 (default)
                     int immediate = parse_immediate(tokens[2]);
                     encoded = encode_instruction(inst->opcode, rd, 0, 0, immediate, true);
                     use_19bit_imm = true;
+                } else if (tokens[2][0] == 'R' || tokens[2][0] == 'r') {
+                    // Register indirect: LOAD rd, rs - use bits 25:24 = 01
+                    int src_reg = parse_register(tokens[2]);
+                    if (src_reg < 0) error("Invalid source register for indirect addressing", line_num);
+                    encoded = encode_instruction(inst->opcode, rd, src_reg, 0, 0, false);
+                    encoded |= (1 << 24); // Set bits 25:24 = 01 for register indirect addressing
                 } else {
-                    // Direct label reference (backward compatibility)
+                    // Direct label reference (backward compatibility) - bits 25:24 = 00 (default)
                     strncpy(mem_label, tokens[2], MAX_LABEL_LENGTH - 1);
                     mem_label[MAX_LABEL_LENGTH - 1] = '\0';
                     
