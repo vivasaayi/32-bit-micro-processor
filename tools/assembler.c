@@ -26,7 +26,6 @@
 // Bits 18-0:  19-bit Immediate
 
 typedef enum {
-    // ALU (0x00–0x0F)
     OP_ADD   = 0x00,
     OP_SUB   = 0x01,
     OP_AND   = 0x02,
@@ -40,37 +39,31 @@ typedef enum {
     OP_MOD   = 0x0A,
     OP_CMP   = 0x0B,
     OP_SAR   = 0x0C,
-    // ...reserved 0x0D–0x0F...
+    
+    OP_LOAD  = 0x10,
+    OP_STORE = 0x11,
+    OP_LOADI = 0x12,
+    
+    OP_JMP   = 0x20,
+    OP_JZ    = 0x21,
+    OP_JNZ   = 0x22,
+    OP_JC    = 0x23,
+    OP_JNC   = 0x24,
+    OP_JLT   = 0x25,
+    OP_JGE   = 0x26,
+    OP_JLE   = 0x27,
+    OP_CALL  = 0x28,
+    OP_RET   = 0x29,
+    OP_PUSH  = 0x2A,
+    OP_POP   = 0x2B,
 
-    // Memory (0x20–0x23)
-    OP_LOADI = 0x12, // 6'b100010
-    OP_LOAD  = 0x10, // 6'b100000
-    OP_STORE = 0x21, // 6'b100001
+    OP_SETEQ = 0x30,
+    OP_SETNE = 0x31,
+    OP_SETLT = 0x32,
+    OP_SETGE = 0x33,
+    OP_SETLE = 0x34,
+    OP_SETGT = 0x35,
 
-    // Branch/Control (0x30–0x3D)
-    OP_JMP   = 0x30,
-    OP_JZ    = 0x31,
-    OP_JNZ   = 0x32,
-    OP_JC    = 0x33,
-    OP_JNC   = 0x34,
-    OP_JLT   = 0x35,
-    OP_JGE   = 0x36,
-    OP_JLE   = 0x37,
-    OP_JN    = 0x38,
-    OP_CALL  = 0x39,
-    OP_RET   = 0x3A,
-    OP_PUSH  = 0x3B,
-    OP_POP   = 0x3C,
-
-    // Set/Compare (0x28–0x2D)
-    OP_SETEQ = 0x28,
-    OP_SETNE = 0x29,
-    OP_SETLT = 0x2A,
-    OP_SETGE = 0x2B,
-    OP_SETLE = 0x2C,
-    OP_SETGT = 0x2D,
-
-    // System (0x3E–0x3F)
     OP_HALT  = 0x3E,
     OP_OUT   = 0x3F
 } opcode_t;
@@ -184,8 +177,8 @@ static const instruction_def_t instructions[] = {
     {"jge",   OP_JGE,   INST_TYPE_I},
     {"JLE",   OP_JLE,   INST_TYPE_I},
     {"jle",   OP_JLE,   INST_TYPE_I},
-    {"JN",    OP_JN,    INST_TYPE_I},
-    {"jn",    OP_JN,    INST_TYPE_I},
+    //{"JN",    OP_JN,    INST_TYPE_I},
+    //{"jn",    OP_JN,    INST_TYPE_I},
     
     // Set instructions (rd = condition ? 1 : 0)
     {"SETEQ", OP_SETEQ, INST_TYPE_R},
@@ -771,7 +764,7 @@ static void assemble_instruction(const char *line, int line_num) {
             int label_addr = find_label(tokens[1]);
             if (label_addr >= 0) {
                 // It's a label - calculate relative offset for branches
-                if (inst->opcode >= OP_JMP && inst->opcode <= OP_JN) {
+                if (inst->opcode >= OP_JMP) { // && inst->opcode <= OP_JN) 
                     immediate = (label_addr - (current_address + 4)) / 4;
                     if (immediate < -256 || immediate > 255) {
                         // Use absolute addressing

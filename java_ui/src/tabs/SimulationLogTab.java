@@ -421,77 +421,318 @@ public class SimulationLogTab extends BaseTab {
     @Override
     protected void setupLayout() {
         setLayout(new BorderLayout());
-        
-        // Create collapsible panels for modern UX
-        createCollapsibleLayout();
-    }
-    
-    private void createCollapsibleLayout() {
-        // Main container with collapsible panels
-        JPanel mainContainer = new JPanel(new BorderLayout());
-        
-        // Top panel with controls
-        JPanel controlPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        controlPanel.setBackground(new Color(245, 245, 245));
-        controlPanel.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10));
-        
-        JButton pasteLogButton = new JButton("📋 Paste Log");
-        pasteLogButton.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
-        pasteLogButton.addActionListener(_ -> showPasteLogDialog());
-        
-        JButton expandAllButton = new JButton("⬇ Expand All");
-        expandAllButton.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
-        
-        JButton collapseAllButton = new JButton("⬆ Collapse All");
-        collapseAllButton.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
-        
-        controlPanel.add(pasteLogButton);
-        controlPanel.add(Box.createHorizontalStrut(10));
-        controlPanel.add(expandAllButton);
-        controlPanel.add(collapseAllButton);
-        
-        // Create collapsible panels
+
+        // Create enhanced collapsible panels for modern UX
         CollapsiblePanel logPanel = createLogPanel();
         CollapsiblePanel instructionsPanel = createInstructionsPanel();
         CollapsiblePanel registerPanel = createRegisterPanel();
         CollapsiblePanel historyPanel = createHistoryPanel();
+
+        // Store panel references for smart management
+        this.logPanel = logPanel;
+        this.instructionsPanel = instructionsPanel;
+        this.registerPanel = registerPanel;
+        this.historyPanel = historyPanel;
+
+        // Use JSplitPane with improved behavior
+        JSplitPane split1 = new JSplitPane(JSplitPane.VERTICAL_SPLIT, logPanel, instructionsPanel);
+        split1.setResizeWeight(0.25);
+        split1.setOneTouchExpandable(true);
+        split1.setContinuousLayout(true);
+        split1.setBorder(null); // Remove default border for cleaner look
         
-        // Add expand/collapse all functionality
-        expandAllButton.addActionListener(_ -> {
-            logPanel.setExpanded(true);
-            instructionsPanel.setExpanded(true);
-            registerPanel.setExpanded(true);
-            historyPanel.setExpanded(true);
+        JSplitPane split2 = new JSplitPane(JSplitPane.VERTICAL_SPLIT, split1, registerPanel);
+        split2.setResizeWeight(0.5);
+        split2.setOneTouchExpandable(true);
+        split2.setContinuousLayout(true);
+        split2.setBorder(null);
+        
+        JSplitPane split3 = new JSplitPane(JSplitPane.VERTICAL_SPLIT, split2, historyPanel);
+        split3.setResizeWeight(0.75);
+        split3.setOneTouchExpandable(true);
+        split3.setContinuousLayout(true);
+        split3.setBorder(null);
+
+        // Enhanced top panel with modern controls
+        JPanel controlPanel = createEnhancedControlPanel(logPanel, instructionsPanel, registerPanel, historyPanel);
+
+        add(controlPanel, BorderLayout.NORTH);
+        add(split3, BorderLayout.CENTER);
+        
+        // Add keyboard shortcuts
+        setupKeyboardShortcuts();
+    }
+    
+    // Add fields to store panel references
+    private CollapsiblePanel logPanel;
+    private CollapsiblePanel instructionsPanel;
+    private CollapsiblePanel registerPanel;
+    private CollapsiblePanel historyPanel;
+    
+    private JPanel createEnhancedControlPanel(CollapsiblePanel... panels) {
+        JPanel mainControlPanel = new JPanel(new BorderLayout());
+        mainControlPanel.setBackground(new Color(250, 250, 250));
+        mainControlPanel.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createMatteBorder(0, 0, 1, 0, new Color(200, 200, 200)),
+            BorderFactory.createEmptyBorder(8, 12, 8, 12)
+        ));
+
+        // Left side - Main actions
+        JPanel leftPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        leftPanel.setOpaque(false);
+
+        JButton pasteLogButton = createStyledButton("📋 Paste Log", "Paste simulation log from clipboard", Color.BLUE);
+        pasteLogButton.addActionListener(_ -> showPasteLogDialog());
+
+        JButton loadConsoleButton = createStyledButton("📂 Load Console Log", "Load log from simulation console", new Color(0, 150, 0));
+        loadConsoleButton.addActionListener(_ -> {
+            String consoleText = logArea.getText();
+            if (consoleText == null || consoleText.trim().isEmpty()) {
+                showWarningDialog("No Log", "Simulation log is empty. Please paste or run a simulation first.");
+            } else {
+                loadContent(consoleText);
+                smartExpandPanels(); // Auto-expand relevant panels
+            }
+        });
+
+        JButton clearAllButton = createStyledButton("🗑️ Clear All", "Clear all simulation data", new Color(200, 50, 50));
+        clearAllButton.addActionListener(_ -> {
+            if (showConfirmDialog("Clear All Data", "Are you sure you want to clear all simulation data?")) {
+                clearContent();
+                collapseAllPanels();
+            }
+        });
+
+        leftPanel.add(pasteLogButton);
+        leftPanel.add(loadConsoleButton);
+        leftPanel.add(Box.createHorizontalStrut(8));
+        leftPanel.add(clearAllButton);
+
+        // Center - Panel management
+        JPanel centerPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 6, 0));
+        centerPanel.setOpaque(false);
+
+        JButton expandAllButton = createStyledButton("⬇️ Expand All", "Expand all panels", new Color(70, 130, 180));
+        JButton collapseAllButton = createStyledButton("⬆️ Collapse All", "Collapse all panels", new Color(100, 100, 100));
+        JButton autoLayoutButton = createStyledButton("🎯 Smart Layout", "Automatically arrange panels based on content", new Color(150, 100, 200));
+
+        expandAllButton.addActionListener(_ -> expandAllPanels());
+        collapseAllButton.addActionListener(_ -> collapseAllPanels());
+        autoLayoutButton.addActionListener(_ -> smartExpandPanels());
+
+        centerPanel.add(expandAllButton);
+        centerPanel.add(collapseAllButton);
+        centerPanel.add(autoLayoutButton);
+
+        // Right side - Info and settings
+        JPanel rightPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
+        rightPanel.setOpaque(false);
+
+        JLabel statusLabel = new JLabel("Ready");
+        statusLabel.setFont(new Font(Font.SANS_SERIF, Font.ITALIC, 11));
+        statusLabel.setForeground(new Color(100, 100, 100));
+        this.statusLabel = statusLabel; // Store reference
+
+        JButton helpButton = createStyledButton("❓", "Show keyboard shortcuts and help", new Color(150, 150, 150));
+        helpButton.addActionListener(_ -> showHelpDialog());
+
+        rightPanel.add(statusLabel);
+        rightPanel.add(Box.createHorizontalStrut(8));
+        rightPanel.add(helpButton);
+
+        mainControlPanel.add(leftPanel, BorderLayout.WEST);
+        mainControlPanel.add(centerPanel, BorderLayout.CENTER);
+        mainControlPanel.add(rightPanel, BorderLayout.EAST);
+
+        return mainControlPanel;
+    }
+    
+    private JLabel statusLabel; // Add field for status updates
+    
+    private JButton createStyledButton(String text, String tooltip, Color accentColor) {
+        JButton button = new JButton(text);
+        button.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
+        button.setToolTipText(tooltip);
+        button.setFocusPainted(false);
+        button.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(accentColor.darker(), 1),
+            BorderFactory.createEmptyBorder(6, 12, 6, 12)
+        ));
+        button.setBackground(new Color(accentColor.getRed(), accentColor.getGreen(), accentColor.getBlue(), 20));
+        button.setForeground(accentColor.darker());
+        
+        // Add hover effects
+        button.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override
+            public void mouseEntered(java.awt.event.MouseEvent e) {
+                button.setBackground(new Color(accentColor.getRed(), accentColor.getGreen(), accentColor.getBlue(), 40));
+            }
+            
+            @Override
+            public void mouseExited(java.awt.event.MouseEvent e) {
+                button.setBackground(new Color(accentColor.getRed(), accentColor.getGreen(), accentColor.getBlue(), 20));
+            }
         });
         
-        collapseAllButton.addActionListener(_ -> {
-            logPanel.setExpanded(false);
-            instructionsPanel.setExpanded(false);
-            registerPanel.setExpanded(false);
-            historyPanel.setExpanded(false);
+        return button;
+    }
+    
+    private void setupKeyboardShortcuts() {
+        // Add keyboard shortcuts using InputMap and ActionMap
+        getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke("ctrl E"), "expandAll");
+        getActionMap().put("expandAll", new AbstractAction() {
+            @Override
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                expandAllPanels();
+            }
         });
         
-        // Layout panels vertically with splitters
-        JPanel collapsibleContainer = new JPanel();
-        collapsibleContainer.setLayout(new BoxLayout(collapsibleContainer, BoxLayout.Y_AXIS));
-        collapsibleContainer.add(logPanel);
-        collapsibleContainer.add(Box.createVerticalStrut(2));
-        collapsibleContainer.add(instructionsPanel);
-        collapsibleContainer.add(Box.createVerticalStrut(2));
-        collapsibleContainer.add(registerPanel);
-        collapsibleContainer.add(Box.createVerticalStrut(2));
-        collapsibleContainer.add(historyPanel);
-        collapsibleContainer.add(Box.createVerticalGlue());
+        getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke("ctrl C"), "collapseAll");
+        getActionMap().put("collapseAll", new AbstractAction() {
+            @Override
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                collapseAllPanels();
+            }
+        });
         
-        JScrollPane mainScrollPane = new JScrollPane(collapsibleContainer);
-        mainScrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
-        mainScrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
-        mainScrollPane.getVerticalScrollBar().setUnitIncrement(16);
+        getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke("ctrl L"), "smartLayout");
+        getActionMap().put("smartLayout", new AbstractAction() {
+            @Override
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                smartExpandPanels();
+            }
+        });
         
-        mainContainer.add(controlPanel, BorderLayout.NORTH);
-        mainContainer.add(mainScrollPane, BorderLayout.CENTER);
+        getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke("F1"), "showHelp");
+        getActionMap().put("showHelp", new AbstractAction() {
+            @Override
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                showHelpDialog();
+            }
+        });
+    }
+    
+    private void expandAllPanels() {
+        if (logPanel != null) logPanel.setExpanded(true);
+        if (instructionsPanel != null) instructionsPanel.setExpanded(true);
+        if (registerPanel != null) registerPanel.setExpanded(true);
+        if (historyPanel != null) historyPanel.setExpanded(true);
+        updateStatus("All panels expanded");
+        forceLayoutUpdate();
+    }
+    
+    private void collapseAllPanels() {
+        if (logPanel != null) logPanel.setExpanded(false);
+        if (instructionsPanel != null) instructionsPanel.setExpanded(false);
+        if (registerPanel != null) registerPanel.setExpanded(false);
+        if (historyPanel != null) historyPanel.setExpanded(false);
+        updateStatus("All panels collapsed");
+        forceLayoutUpdate();
+    }
+    
+    private void smartExpandPanels() {
+        // Smart expansion based on content availability
+        boolean hasLog = logArea.getText() != null && !logArea.getText().trim().isEmpty();
+        boolean hasInstructions = decodedTableModel.getRowCount() > 0;
+        boolean hasRegisterData = currentRegisterValues != null && !currentRegisterValues.isEmpty();
+        boolean hasHistory = historyTableModel.getRowCount() > 0;
         
-        add(mainContainer, BorderLayout.CENTER);
+        if (logPanel != null) logPanel.setExpanded(hasLog);
+        if (instructionsPanel != null) instructionsPanel.setExpanded(hasInstructions);
+        if (registerPanel != null) registerPanel.setExpanded(hasRegisterData);
+        if (historyPanel != null) historyPanel.setExpanded(hasHistory);
+        
+        // Update panel titles with data indicators
+        updatePanelTitles(hasLog, hasInstructions, hasRegisterData, hasHistory);
+        updateStatus("Smart layout applied");
+        forceLayoutUpdate();
+    }
+    
+    private void updatePanelTitles(boolean hasLog, boolean hasInstructions, boolean hasRegisterData, boolean hasHistory) {
+        if (logPanel != null) {
+            String title = "📜 Simulation Log" + (hasLog ? " ✓" : " ⚪");
+            logPanel.updateTitle(title);
+        }
+        if (instructionsPanel != null) {
+            String title = "🔍 Decoded Instructions" + (hasInstructions ? " ✓ (" + decodedTableModel.getRowCount() + ")" : " ⚪");
+            instructionsPanel.updateTitle(title);
+        }
+        if (registerPanel != null) {
+            String title = "📊 Current Register State" + (hasRegisterData ? " ✓" : " ⚪");
+            registerPanel.updateTitle(title);
+        }
+        if (historyPanel != null) {
+            String title = "📈 Register History" + (hasHistory ? " ✓ (" + historyTableModel.getRowCount() + ")" : " ⚪");
+            historyPanel.updateTitle(title);
+        }
+    }
+    
+    protected void updateStatus(String message) {
+        if (statusLabel != null) {
+            statusLabel.setText(message);
+            // Clear status after 3 seconds using javax.swing.Timer
+            javax.swing.Timer swingTimer = new javax.swing.Timer(3000, _ -> {
+                if (statusLabel != null) statusLabel.setText("Ready");
+            });
+            swingTimer.setRepeats(false);
+            swingTimer.start();
+        }
+    }
+    
+    private void forceLayoutUpdate() {
+        SwingUtilities.invokeLater(() -> {
+            revalidate();
+            repaint();
+            Container parent = getParent();
+            while (parent != null) {
+                if (parent instanceof JSplitPane) {
+                    ((JSplitPane) parent).resetToPreferredSizes();
+                }
+                parent.revalidate();
+                parent.repaint();
+                parent = parent.getParent();
+            }
+        });
+    }
+    
+    private void showHelpDialog() {
+        String helpText = """
+            Simulation Log Tab - Keyboard Shortcuts:
+            
+            Ctrl+E    - Expand all panels
+            Ctrl+C    - Collapse all panels  
+            Ctrl+L    - Smart layout (auto-arrange based on content)
+            F1        - Show this help
+            
+            Panel Features:
+            • Click panel headers to expand/collapse
+            • Panels auto-expand when new data is loaded
+            • Status indicators show data availability (✓/⚪)
+            • Right-click tables for copy/export options
+            
+            Navigation:
+            • Select instruction in decoded table to view register state
+            • Register history shows changes after each instruction
+            • Use pagination controls for large datasets
+            """;
+            
+        JTextArea textArea = new JTextArea(helpText);
+        textArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+        textArea.setEditable(false);
+        textArea.setBackground(new Color(250, 250, 250));
+        
+        JScrollPane scrollPane = new JScrollPane(textArea);
+        scrollPane.setPreferredSize(new Dimension(500, 300));
+        
+        JOptionPane.showMessageDialog(this, scrollPane, "Help - Simulation Log Tab", JOptionPane.INFORMATION_MESSAGE);
+    }
+    
+    private void showWarningDialog(String title, String message) {
+        JOptionPane.showMessageDialog(this, message, title, JOptionPane.WARNING_MESSAGE);
+    }
+    
+    private boolean showConfirmDialog(String title, String message) {
+        return JOptionPane.showConfirmDialog(this, message, title, JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION;
     }
     
     private CollapsiblePanel createLogPanel() {
@@ -592,6 +833,12 @@ public class SimulationLogTab extends BaseTab {
     public void loadContent(String content) {
         logArea.setText(content);
         parseSimulationLog(content);
+        
+        // Auto-apply smart layout when new content is loaded
+        SwingUtilities.invokeLater(() -> {
+            smartExpandPanels();
+            updateStatus("Simulation log loaded and parsed");
+        });
     }
     
     @Override
@@ -617,6 +864,10 @@ public class SimulationLogTab extends BaseTab {
         instructionRegisterChanges.clear();
         instructionRegisterValues.clear();
         currentInstructionRow = -1;
+        
+        // Update panel titles to show empty state and status
+        updatePanelTitles(false, false, false, false);
+        updateStatus("All content cleared");
     }
     
     private void updateHistoryTable() {
@@ -790,13 +1041,12 @@ public class SimulationLogTab extends BaseTab {
         updateStatus("Parsed " + instructionCount + " instructions from simulation log");
     }
     
-    // CollapsiblePanel class for modern collapsible UI
+    // Enhanced CollapsiblePanel class with modern styling and features
     private static class CollapsiblePanel extends JPanel {
         private final JButton toggleButton;
         private final JPanel contentPanel;
         private boolean expanded;
-        private final String title;
-        private final Dimension collapsedSize = new Dimension(0, 35);
+        private String title;
         private Dimension expandedSize;
         
         public CollapsiblePanel(String title, JComponent content, boolean initiallyExpanded) {
@@ -804,22 +1054,47 @@ public class SimulationLogTab extends BaseTab {
             this.expanded = initiallyExpanded;
             
             setLayout(new BorderLayout());
-            setBorder(BorderFactory.createEtchedBorder());
+            setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(220, 220, 220), 1),
+                BorderFactory.createEmptyBorder(1, 1, 1, 1)
+            ));
             
-            // Create toggle button with modern styling
+            // Create enhanced toggle button with modern styling
             toggleButton = new JButton();
-            toggleButton.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
-            toggleButton.setBackground(new Color(235, 235, 235));
-            toggleButton.setBorder(BorderFactory.createEmptyBorder(8, 10, 8, 10));
+            toggleButton.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 11));
+            toggleButton.setBackground(new Color(245, 245, 245));
+            toggleButton.setBorder(BorderFactory.createEmptyBorder(10, 15, 10, 15));
             toggleButton.setHorizontalAlignment(SwingConstants.LEFT);
             toggleButton.setFocusPainted(false);
+            toggleButton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+            
+            // Add hover effects
+            toggleButton.addMouseListener(new java.awt.event.MouseAdapter() {
+                @Override
+                public void mouseEntered(java.awt.event.MouseEvent e) {
+                    if (expanded) {
+                        toggleButton.setBackground(new Color(235, 235, 235));
+                    } else {
+                        toggleButton.setBackground(new Color(250, 250, 250));
+                    }
+                }
+                
+                @Override
+                public void mouseExited(java.awt.event.MouseEvent e) {
+                    if (expanded) {
+                        toggleButton.setBackground(new Color(245, 245, 245));
+                    } else {
+                        toggleButton.setBackground(new Color(240, 240, 240));
+                    }
+                }
+            });
+            
             toggleButton.addActionListener(_ -> toggleExpanded());
             
-            // Content panel
+            // Content panel with subtle styling
             contentPanel = new JPanel(new BorderLayout());
             contentPanel.add(content, BorderLayout.CENTER);
-            
-            add(toggleButton, BorderLayout.NORTH);
+            contentPanel.setBorder(BorderFactory.createEmptyBorder(5, 10, 10, 10));
             
             updateUIState();
         }
@@ -837,30 +1112,54 @@ public class SimulationLogTab extends BaseTab {
             return expanded;
         }
         
+        public void updateTitle(String newTitle) {
+            this.title = newTitle;
+            updateUIState();
+        }
+        
         private void updateUIState() {
+            // Clear all components first
+            removeAll();
+            
             if (expanded) {
                 toggleButton.setText("▼ " + title);
+                toggleButton.setBackground(new Color(245, 245, 245));
+                add(toggleButton, BorderLayout.NORTH);
                 add(contentPanel, BorderLayout.CENTER);
+                
+                // Restore expanded size
                 if (expandedSize != null) {
                     setPreferredSize(expandedSize);
+                    setMinimumSize(new Dimension(0, 120)); // Reasonable minimum
                     setMaximumSize(new Dimension(Integer.MAX_VALUE, expandedSize.height));
                 } else {
                     setPreferredSize(null);
+                    setMinimumSize(new Dimension(0, 120));
                     setMaximumSize(new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE));
                 }
+                setVisible(true);
             } else {
                 toggleButton.setText("▶ " + title);
-                remove(contentPanel);
-                setPreferredSize(collapsedSize);
-                setMaximumSize(new Dimension(Integer.MAX_VALUE, collapsedSize.height));
+                toggleButton.setPreferredSize(new Dimension(0, 35));
+                toggleButton.setBackground(new Color(240, 240, 240));
+                add(toggleButton, BorderLayout.NORTH);
+                
+                // Minimal collapsed size
+                setPreferredSize(new Dimension(0, 35));
+                setMinimumSize(new Dimension(0, 35));
+                setMaximumSize(new Dimension(Integer.MAX_VALUE, 35));
+                setVisible(true);
             }
             
             revalidate();
             repaint();
             
-            // Trigger parent layout update
+            // Trigger parent layout update recursively
             Container parent = getParent();
             while (parent != null) {
+                if (parent instanceof JSplitPane) {
+                    ((JSplitPane) parent).resetToPreferredSizes();
+                }
                 parent.revalidate();
                 parent.repaint();
                 parent = parent.getParent();

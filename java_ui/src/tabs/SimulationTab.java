@@ -268,17 +268,23 @@ public class SimulationTab extends BaseTab {
         final String currentTestName = getCurrentTestName();
 
         SwingWorker<Void, String> worker = new SwingWorker<Void, String>() {
+            private StringBuilder logBuffer = new StringBuilder();
+            
             @Override
             protected Void doInBackground() throws Exception {
                 try {
                     // Look for VVP file or compile Verilog
                     String vvpFile = findOrCreateVvpFile();
                     if (vvpFile == null) {
-                        publish("ERROR: No VVP file found or Verilog compilation failed");
+                        String errorMsg = "ERROR: No VVP file found or Verilog compilation failed";
+                        publish(errorMsg);
+                        logBuffer.append(errorMsg).append("\n");
                         return null;
                     }
                     
-                    publish("Starting VVP simulation: " + vvpFile);
+                    String startMsg = "Starting VVP simulation: " + vvpFile;
+                    publish(startMsg);
+                    logBuffer.append(startMsg).append("\n");
                     
                     // Start VVP simulation
                     ProcessBuilder pb = new ProcessBuilder("vvp", vvpFile);
@@ -290,7 +296,9 @@ public class SimulationTab extends BaseTab {
                     try (BufferedReader reader = new BufferedReader(new InputStreamReader(simulationProcess.getInputStream()))) {
                         String line;
                         while ((line = reader.readLine()) != null && isSimulating) {
-                            publish("SIM: " + line);
+                            String simLine = "SIM: " + line;
+                            publish(simLine);
+                            logBuffer.append(simLine).append("\n");
                             
                             // Parse register updates if format is known
                             parseSimulationOutput(line);
@@ -301,25 +309,33 @@ public class SimulationTab extends BaseTab {
                     try (BufferedReader reader = new BufferedReader(new InputStreamReader(simulationProcess.getErrorStream()))) {
                         String line;
                         while ((line = reader.readLine()) != null && isSimulating) {
-                            publish("SIM ERROR: " + line);
+                            String errLine = "SIM ERROR: " + line;
+                            publish(errLine);
+                            logBuffer.append(errLine).append("\n");
                         }
                     }
                     
                     int exitCode = simulationProcess.waitFor();
-                    publish("Simulation completed with exit code: " + exitCode);
+                    String exitMsg = "Simulation completed with exit code: " + exitCode;
+                    publish(exitMsg);
+                    logBuffer.append(exitMsg).append("\n");
+                    
                     // After simulation, update Sim Log and VCD tabs, and save log to file
                     String logFilePath = "/Users/rajanpanneerselvam/work/hdl/temp/" + currentTestName + ".log";
                     try (FileWriter logWriter = new FileWriter(logFilePath)) {
-                        logWriter.write(simulationLogArea.getText());
+                        System.out.println("Simulation log saved to: " + logFilePath);
+                        System.out.println("Simulation log content length: " + logBuffer.length() + " characters");
+                        System.out.println("First 500 chars of log:\n" + logBuffer.substring(0, Math.min(500, logBuffer.length())));
+                        logWriter.write(logBuffer.toString());
                         SwingUtilities.invokeLater(() -> logFilePathLabel.setText("Log file: " + logFilePath));
                     } catch (Exception e) {
-                        // Ignore log file write errors
+                        e.printStackTrace(); // Log file write errors
                     }
                     if (parentFrame instanceof main.CpuIDE) {
                         main.CpuIDE ide = (main.CpuIDE) parentFrame;
                         // Update simulation log in Sim Log tab without switching tabs
                         SwingUtilities.invokeLater(() -> {
-                            ide.updateSimulationLogTab(simulationLogArea.getText());
+                            ide.updateSimulationLogTab(logBuffer.toString());
                         });
                         // Try to load VCD file in VCD tab
                         String vcdPath = "/Users/rajanpanneerselvam/work/hdl/temp/" + currentTestName + ".vcd";
@@ -329,12 +345,15 @@ public class SimulationTab extends BaseTab {
                                 String vcdContent = new String(java.nio.file.Files.readAllBytes(vcdFile.toPath()));
                                 ide.getVcdTab().loadContent(vcdContent);
                             } catch (Exception e) {
-                                // Ignore VCD load errors
+                                e.printStackTrace(); // Log VCD load errors
                             }
                         }
                     }
                 } catch (Exception e) {
-                    publish("Simulation error: " + e.getMessage());
+                    String errorMsg = "Simulation error: " + e.getMessage();
+                    publish(errorMsg);
+                    logBuffer.append(errorMsg).append("\n");
+                    e.printStackTrace(); // Log simulation errors
                 }
                 
                 return null;
@@ -480,7 +499,7 @@ public class SimulationTab extends BaseTab {
                 registerTableModel.setValueAt("UPDATED", regNum, 3);
                 
             } catch (Exception e) {
-                // Ignore update errors
+                e.printStackTrace(); // Log update errors
             }
         });
     }
@@ -507,7 +526,7 @@ public class SimulationTab extends BaseTab {
                             }
                         });
                     } catch (Exception e) {
-                        // Ignore file read errors
+                        e.printStackTrace(); // Log UART file read errors
                     }
                 }
             }
@@ -575,6 +594,7 @@ public class SimulationTab extends BaseTab {
                 }
             } catch (Exception e) {
                 showError("Memory Dump Error", "Failed to dump memory: " + e.getMessage());
+                e.printStackTrace(); // Log memory dump errors
             }
         }
     }
@@ -595,7 +615,7 @@ public class SimulationTab extends BaseTab {
                 }
             }
         } catch (Exception e) {
-            // Ignore errors
+            e.printStackTrace(); // Log file open errors
         }
     }
 }
