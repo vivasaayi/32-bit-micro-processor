@@ -18,6 +18,9 @@ public class AssemblyTab extends BaseTab {
     private JSplitPane mainSplitPane;
     private JSplitPane rightSplitPane;
     
+    // Add a field for the save button
+    private JButton saveButton;
+    
     public AssemblyTab(AppState appState, JFrame parentFrame) {
         super(appState, parentFrame);
     }
@@ -50,8 +53,23 @@ public class AssemblyTab extends BaseTab {
         
         explainButton = new JButton("Explain Assembly");
         explainButton.addActionListener(e -> explainAssembly());
+        
+        // Save button
+        JButton saveButton = new JButton("Save");
+        saveButton.setToolTipText("Save (Ctrl+S)");
+        saveButton.addActionListener(e -> saveContent());
+        this.saveButton = saveButton;
+        
+        // Keyboard shortcut for save (Ctrl+S)
+        sourceArea.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke("control S"), "saveFile");
+        sourceArea.getActionMap().put("saveFile", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                saveContent();
+            }
+        });
     }
-    
+
     @Override
     protected void setupLayout() {
         setLayout(new BorderLayout());
@@ -71,6 +89,7 @@ public class AssemblyTab extends BaseTab {
         // Left panel: source code with buttons
         JPanel leftPanel = new JPanel(new BorderLayout());
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        buttonPanel.add(saveButton);
         buttonPanel.add(assembleButton);
         buttonPanel.add(explainButton);
         
@@ -101,13 +120,17 @@ public class AssemblyTab extends BaseTab {
     
     @Override
     public void saveContent() {
-        if (appState.getCurrentFile() != null) {
-            try (FileWriter writer = new FileWriter(appState.getCurrentFile())) {
+        File file = appState.getCurrentFile();
+        if (file != null) {
+            try (FileWriter writer = new FileWriter(file)) {
                 writer.write(sourceArea.getText());
-                updateStatus("Saved: " + appState.getCurrentFile().getName());
+                updateStatus("Saved: " + file.getName());
+                updateFilePath();
             } catch (IOException e) {
                 showError("Save Error", "Failed to save file: " + e.getMessage());
             }
+        } else {
+            showError("No File Loaded", "No file is loaded. Please open or create a file first.");
         }
     }
     
