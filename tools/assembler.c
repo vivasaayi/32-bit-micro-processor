@@ -377,8 +377,6 @@ static int find_label(const char *name) {
 }
 
 static uint32_t encode_instruction(opcode_t opcode, int rd, int rs1, int rs2, int immediate, bool use_19bit_imm) {
-    printf("Encoding instruction: %d %d %d", rd, rs1, rs2);
-
     if (use_19bit_imm) {
         // 19-bit immediate format
         return ((uint32_t)opcode << 26) |
@@ -699,6 +697,11 @@ static void assemble_instruction(const char *line, int line_num) {
                     } else {
                         error("Invalid memory reference", line_num);
                     }
+                } else if (tokens[2][0] == '#') {
+                    // Immediate addressing: LOAD rd, #immediate
+                    int immediate = parse_immediate(tokens[2]);
+                    encoded = encode_instruction(inst->opcode, rd, 0, 0, immediate, true);
+                    use_19bit_imm = true;
                 } else {
                     // Direct label reference (backward compatibility)
                     strncpy(mem_label, tokens[2], MAX_LABEL_LENGTH - 1);
@@ -776,6 +779,14 @@ static void assemble_instruction(const char *line, int line_num) {
                     } else {
                         error("Invalid memory reference", line_num);
                     }
+                } else if (tokens[2][0] == '#') {
+                    // Immediate addressing: STORE src, #immediate
+                    rd = parse_register(tokens[1]);
+                    if (rd < 0) error("Invalid source register", line_num);
+                    
+                    int immediate = parse_immediate(tokens[2]);
+                    encoded = encode_instruction(inst->opcode, rd, 0, 0, immediate, true);
+                    use_19bit_imm = true;
                 } else {
                     // C compiler format: STORE src, label (backward compatibility)
                     rd = parse_register(tokens[1]);
@@ -800,7 +811,6 @@ static void assemble_instruction(const char *line, int line_num) {
             break;
             
         case INST_TYPE_I:
-            printf("DEBUG: Processing INST_TYPE_I instruction\n");
             if (num_tokens < 2) error("Missing operand", line_num);
             // Check if it's a label or immediate
             int label_addr = find_label(tokens[1]);
@@ -929,12 +939,9 @@ static void first_pass(FILE *input) {
 
 static void second_pass(void) {
     // Resolve forward references now that we know all label addresses
-    printf("DEBUG: Starting second pass to resolve forward references\n");
     
     for (int i = 0; i < num_assembled; i++) {
         if (assembled[i].needs_resolution) {
-            printf("DEBUG: Resolving forward reference for %s at address 0x%x\n", 
-                   assembled[i].forward_label, assembled[i].address);
             
             int label_addr = find_label(assembled[i].forward_label);
             if (label_addr >= 0) {
@@ -943,15 +950,10 @@ static void second_pass(void) {
                     int32_t raw_offset = (int32_t)label_addr - (int32_t)(assembled[i].address + 4);
                     int32_t immediate = raw_offset / 4;
                     
-                    printf("DEBUG: Resolved %s: label_addr=0x%x, instr_addr=0x%x, raw_offset=%d, offset=%d\n", 
-                           assembled[i].forward_label, label_addr, assembled[i].address, raw_offset, immediate);
-                    
                     if (immediate < -2048 || immediate > 2047) {
                         // Use absolute addressing - outside 12-bit range
-                        printf("DEBUG: Using absolute addressing, offset=%d out of 12-bit range\n", immediate);
                         assembled[i].instruction = encode_instruction(assembled[i].opcode, 0, 0, 0, label_addr, true);
                     } else {
-                        printf("DEBUG: Using relative addressing, offset=%d\n", immediate);
                         assembled[i].instruction = encode_instruction(assembled[i].opcode, 0, 0, 0, immediate, false);
                     }
                 } else {

@@ -32,22 +32,14 @@ LOOP_I:
         LOADI R16, #222
         SUBI R13, R13, 1    ; 7 - i - 1
         LOADI R16, #333
-        LOADI R14, #0x0100
-        LOAD R20, R14, #0
-        ADDI R14, R14, 4
-        LOAD R21, R14, #0
-        ADDI R14, R14, 4
-        LOAD R22, R14, #0
-        ADDI R14, R14, 4
-        LOAD R23, R14, #0
-        ADDI R14, R14, 4
-        LOAD R24, R14, #0
-        ADDI R14, R14, 4
-        LOAD R25, R14, #0
-        ADDI R14, R14, 4
-        LOAD R26, R14, #0
-        ADDI R14, R14, 4
-        LOAD R27, R14, #0
+        LOAD R20, #0x0100
+        LOAD R21, #0x0104
+        LOAD R22, #0x0108
+        LOAD R23, #0x010C
+        LOAD R24, #0x0110
+        LOAD R25, #0x0114
+        LOAD R26, #0x0118
+        LOAD R27, #0x011C
         LOADI R16, #444
         CMP R12, R13
         ; If j == 7-i-1, break
