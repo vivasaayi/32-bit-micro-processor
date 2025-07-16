@@ -1,17 +1,21 @@
 ; Multiply two numbers (e.g., 7 * 6) using repeated addition
-; Result stored in r3
+; Result stored in R3
 
-start:
-    mov r1, #7       ; Multiplicand
-    mov r2, #6       ; Multiplier
-    mov r3, #0       ; Result accumulator
+main:
+    ; Initialize registers
+    LOADI R1, #7        ; R1 = 7 (multiplicand)
+    LOADI R2, #6        ; R2 = 6 (multiplier)
+    LOADI R3, #0        ; R3 = 0 (result accumulator)
 
 mul_loop:
-    cmp r2, #0
-    jz end_mul
-    add r3, r3, r1   ; r3 += r1
-    sub r2, r2, #1   ; r2--
-    jmp mul_loop
+    ; Check if multiplier is zero
+    CMP R2, #0
+    JZ end_mul
+    ADD R3, R3, R1      ; R3 += R1
+    SUBI R2, R2, #1     ; R2--
+    JMP mul_loop
 
 end_mul:
-    halt             ; stop execution (r3 = 42)
+    ; Store result for verification
+    STORE R3, 0x7000    ; Store result (should be 42)
+    HALT

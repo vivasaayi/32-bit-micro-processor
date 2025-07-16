@@ -1,76 +1,73 @@
-; Test all 32 registers: initialize to 0, then add 2 to each (except R0) in a loop, 5 times
-; R0 will always remain 0
+; Add values from all general-purpose registers (R1 to R31) and store the result in R30
 
-start:
-    ; Initialize all registers R1-R31 to 0
-    mov r1, #0
-    mov r2, #0
-    mov r3, #0
-    mov r4, #0
-    mov r5, #0
-    mov r6, #0
-    mov r7, #0
-    mov r8, #0
-    mov r9, #0
-    mov r10, #0
-    mov r11, #0
-    mov r12, #0
-    mov r13, #0
-    mov r14, #0
-    mov r15, #0
-    mov r16, #0
-    mov r17, #0
-    mov r18, #0
-    mov r19, #0
-    mov r20, #0
-    mov r21, #0
-    mov r22, #0
-    mov r23, #0
-    mov r24, #0
-    mov r25, #0
-    mov r26, #0
-    mov r27, #0
-    mov r28, #0
-    mov r29, #0
-    mov r30, #0
-    mov r31, #0
+main:
+    ; Initialize registers with different values (R1 to R31)
+    LOADI R1, #1
+    LOADI R2, #2
+    LOADI R3, #3
+    LOADI R4, #4
+    LOADI R5, #5
+    LOADI R6, #6
+    LOADI R7, #7
+    LOADI R8, #8
+    LOADI R9, #9
+    LOADI R10, #10
+    LOADI R11, #11
+    LOADI R12, #12
+    LOADI R13, #13
+    LOADI R14, #14
+    LOADI R15, #15
+    LOADI R16, #16
+    LOADI R17, #17
+    LOADI R18, #18
+    LOADI R19, #19
+    LOADI R20, #20
+    LOADI R21, #21
+    LOADI R22, #22
+    LOADI R23, #23
+    LOADI R24, #24
+    LOADI R25, #25
+    LOADI R26, #26
+    LOADI R27, #27
+    LOADI R28, #28
+    LOADI R29, #29
+    LOADI R30, #30
+    LOADI R31, #31
 
-    mov r20, #5      ; Loop counter (r20)
-    mov r21, #2      ; Value to add (r21)
+    ; Accumulate sum in R30 (skip R0)
+    ; LOADI R30, #0
+    ADD R30, R30, R1
+    ADD R30, R30, R2
+    ADD R30, R30, R3
+    ADD R30, R30, R4
+    ADD R30, R30, R5
+    ADD R30, R30, R6
+    ADD R30, R30, R7
+    ADD R30, R30, R8
+    ADD R30, R30, R9
+    ADD R30, R30, R10
+    ADD R30, R30, R11
+    ADD R30, R30, R12
+    ADD R30, R30, R13
+    ADD R30, R30, R14
+    ADD R30, R30, R15
+    ADD R30, R30, R16
+    ADD R30, R30, R17
+    ADD R30, R30, R18
+    ADD R30, R30, R19
+    ADD R30, R30, R20
+    ADD R30, R30, R21
+    ADD R30, R30, R22
+    ADD R30, R30, R23
+    ADD R30, R30, R24
+    ADD R30, R30, R25
+    ADD R30, R30, R26
+    ADD R30, R30, R27
+    ADD R30, R30, R28
+    ADD R30, R30, R29
+    ;ADD R30, R30, R30
+    ADD R30, R30, R31
 
-loop_all_regs:
-    add r1, r1, r21
-    add r2, r2, r21
-    add r3, r3, r21
-    add r4, r4, r21
-    add r5, r5, r21
-    add r6, r6, r21
-    add r7, r7, r21
-    add r8, r8, r21
-    add r9, r9, r21
-    add r10, r10, r21
-    add r11, r11, r21
-    add r12, r12, r21
-    add r13, r13, r21
-    add r14, r14, r21
-    add r15, r15, r21
-    add r16, r16, r21
-    add r17, r17, r21
-    add r18, r18, r21
-    add r19, r19, r21
-    add r22, r22, r21
-    add r23, r23, r21
-    add r24, r24, r21
-    add r25, r25, r21
-    add r26, r26, r21
-    add r27, r27, r21
-    add r28, r28, r21
-    add r29, r29, r21
-    add r30, r30, r21
-    add r31, r31, r21
-
-    sub r20, r20, #1
-    cmp r20, #0
-    jnz loop_all_regs
-
-    halt
+    ; Store result for verification
+    STORE R30, 0x8000   ; Store sum of 1..31 = 496
+    HALT
