@@ -39,6 +39,8 @@ typedef enum {
     OP_MOD   = 0x0A,
     OP_CMP   = 0x0B,
     OP_SAR   = 0x0C,
+    OP_ADDI  = 0x0D,
+    OP_SUBI  = 0x0E,
     
     OP_LOAD  = 0x10,
     OP_STORE = 0x11,
@@ -127,8 +129,12 @@ static const instruction_def_t instructions[] = {
     // Arithmetic - support both uppercase and lowercase
     {"ADD",   OP_ADD,   INST_TYPE_RRR},
     {"add",   OP_ADD,   INST_TYPE_RRR},
+    {"ADDI",  OP_ADDI,  INST_TYPE_RRI},
+    {"addi",  OP_ADDI,  INST_TYPE_RRI},
     {"SUB",   OP_SUB,   INST_TYPE_RRR},
     {"sub",   OP_SUB,   INST_TYPE_RRR},
+    {"SUBI",  OP_SUBI,  INST_TYPE_RRI},
+    {"subi",  OP_SUBI,  INST_TYPE_RRI},
     {"MUL",   OP_MUL,   INST_TYPE_RRR},
     {"mul",   OP_MUL,   INST_TYPE_RRR},
     {"DIV",   OP_DIV,   INST_TYPE_RRR},

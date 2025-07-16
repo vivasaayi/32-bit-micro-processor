@@ -20,6 +20,8 @@
  * | 0x0A   | MOD      | a % b            |
  * | 0x0B   | CMP      | compare a, b     |
  * | 0x0C   | SAR      | a >>> b (arith)  |
+ * | 0x0D   | ADDI     | a + immediate    |
+ * | 0x0E   | SUBI     | a - immediate    |
  * ---------------------------------------------------
  */
 
@@ -46,6 +48,8 @@ module alu (
     localparam ALU_MOD  = 6'h0A;
     localparam ALU_CMP  = 6'h0B;
     localparam ALU_SAR  = 6'h0C;
+    localparam ALU_ADDI = 6'h0D;
+    localparam ALU_SUBI = 6'h0E;
 
     // Flag bit positions
     localparam FLAG_CARRY     = 0;
@@ -79,11 +83,25 @@ module alu (
                 flags_out[FLAG_OVERFLOW] = (operand_a[31] == operand_b[31]) && (result[31] != operand_a[31]);
                 // $display("DEBUG ALU ADD: a=%0d b=%0d result=%0d", operand_a, operand_b, result);
             end
+            ALU_ADDI: begin
+                temp_result = {1'b0, operand_a} + {1'b0, operand_b};
+                result = temp_result[31:0];
+                flags_out[FLAG_CARRY] = temp_result[32];
+                flags_out[FLAG_OVERFLOW] = (operand_a[31] == operand_b[31]) && (result[31] != operand_a[31]);
+                // $display("DEBUG ALU ADDI: a=%0d b=%0d result=%0d", operand_a, operand_b, result);
+            end
             ALU_SUB: begin
                 temp_result = {1'b0, operand_a} - {1'b0, operand_b};
                 result = temp_result[31:0];
                 flags_out[FLAG_CARRY] = temp_result[32];
                 flags_out[FLAG_OVERFLOW] = (operand_a[31] != operand_b[31]) && (result[31] != operand_a[31]);
+            end
+            ALU_SUBI: begin
+                temp_result = {1'b0, operand_a} - {1'b0, operand_b};
+                result = temp_result[31:0];
+                flags_out[FLAG_CARRY] = temp_result[32];
+                flags_out[FLAG_OVERFLOW] = (operand_a[31] != operand_b[31]) && (result[31] != operand_a[31]);
+                // $display("DEBUG ALU SUBI: a=%0d b=%0d result=%0d", operand_a, operand_b, result);
             end
             ALU_AND: begin
                 result = a & b;

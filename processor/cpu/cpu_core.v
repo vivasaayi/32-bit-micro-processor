@@ -93,7 +93,9 @@ module cpu_core (
         ALU_DIV  = 6'h09,
         ALU_MOD  = 6'h0A,
         ALU_CMP  = 6'h0B,
-        ALU_SAR  = 6'h0C; // Arithmetic shift right
+        ALU_SAR  = 6'h0C, // Arithmetic shift right
+        ALU_ADDI = 6'h0D, // Add immediate
+        ALU_SUBI = 6'h0E; // Subtract immediate
 
     // Memory operation codes (0x10–0x1F)
     localparam [5:0]
@@ -145,6 +147,8 @@ module cpu_core (
     // | 0x0A   | MOD      | a % b            |
     // | 0x0B   | CMP      | compare a, b     |
     // | 0x0C   | SAR      | a >>> b (arith)  |
+    // | 0x0D   | ADDI     | a + immediate    |
+    // | 0x0E   | SUBI     | a - immediate    |
     // ----------------------------------------------------------------------
     // Memory OPCODE TABLE (0x10–0x1F)
     // | Opcode | Mnemonic | Operation         |
@@ -244,7 +248,8 @@ module cpu_core (
                     // Update flags for ALU operations
                     if (opcode == ALU_ADD || opcode == ALU_SUB || opcode == ALU_AND || opcode == ALU_OR || 
                         opcode == ALU_XOR || opcode == ALU_NOT || opcode == ALU_SHL || opcode == ALU_SHR ||
-                        opcode == ALU_MUL || opcode == ALU_DIV || opcode == ALU_MOD || opcode == ALU_CMP || opcode == ALU_SAR) begin
+                        opcode == ALU_MUL || opcode == ALU_DIV || opcode == ALU_MOD || opcode == ALU_CMP || 
+                        opcode == ALU_SAR || opcode == ALU_ADDI || opcode == ALU_SUBI) begin
                         flags_reg <= flags_out;
                         $display("EXECUTE_DEBUG_ALU: Flags updated to C=%b Z=%b N=%b V=%b", 
                                 flags_out[0], flags_out[1], flags_out[2], flags_out[3]);
@@ -294,13 +299,20 @@ module cpu_core (
                         $display("DEBUG CPU: Branch not taken at PC=0x%x, condition failed", pc_reg);
                     end
                     // Debug output for ALU operations
-                    // FIX ADDI
-                    if (opcode == ALU_ADD || opcode == 6'h000000) begin // ADD/ADDI
-                        $display("DEBUG ALU: ADD/ADDI - op=%s R%d = R%d + %s%d => %d", 
-                                (opcode == 6'h04) ? "ADD" : "ADDI",
+                    if (opcode == ALU_ADD || opcode == ALU_ADDI) begin // ADD/ADDI
+                        $display("DEBUG ALU: %s - R%d = R%d + %s%d => %d", 
+                                (opcode == ALU_ADD) ? "ADD" : "ADDI",
                                 rd, rs1, 
-                                (opcode == 6'h04) ? "R" : "#",
-                                (opcode == 6'h04) ? rs2 : immediate,
+                                (opcode == ALU_ADD) ? "R" : "#",
+                                (opcode == ALU_ADD) ? rs2 : immediate,
+                                alu_result);
+                    end
+                    if (opcode == ALU_SUB || opcode == ALU_SUBI) begin // SUB/SUBI
+                        $display("DEBUG ALU: %s - R%d = R%d - %s%d => %d", 
+                                (opcode == ALU_SUB) ? "SUB" : "SUBI",
+                                rd, rs1, 
+                                (opcode == ALU_SUB) ? "R" : "#",
+                                (opcode == ALU_SUB) ? rs2 : immediate,
                                 alu_result);
                     end
                     // LOADI: Write immediate to register (no ALU)
@@ -356,7 +368,7 @@ module cpu_core (
     wire [31:0] addi_subi_imm = {{12{instruction_reg[19]}}, instruction_reg[19:0]};
     
     // Control signal generation
-    assign is_immediate_inst = 1'b0; // (set as needed for your ISA)
+    assign is_immediate_inst = (opcode == ALU_ADDI || opcode == ALU_SUBI);
     assign is_load_store = (opcode == MEM_LOAD) || (opcode == MEM_STORE);
     assign is_branch_jump = (opcode >= OP_JMP && opcode <= OP_POP);
     
@@ -387,10 +399,10 @@ module cpu_core (
     // Immediate value selection
     assign immediate = (opcode == MEM_LOAD) ? {13'h0000, imm20} :                         // LOAD: 19-bit address
                       (opcode == MEM_STORE && store_direct_addr) ? {13'h0000, imm20} :     // STORE direct: 19-bit address  
-                      (opcode == MEM_STORE && !store_direct_addr) ? {{23{imm12[8]}}, imm12} : // STORE reg+offset: 9-bit offset
+                      (opcode == MEM_STORE && !store_direct_addr) ? {{24{imm12[8]}}, imm12[7:0]} : // STORE reg+offset: 9-bit offset
                       (opcode == MEM_LOADI) ? {13'h0000, imm20} :                         // LOADI: 19-bit immediate
-                      ((opcode == 6'h05) || (opcode == 6'h07)) ? {{23{imm12[8]}}, imm12} : // ADDI/SUBI: 9-bit signed
-                      {{23{imm12[8]}}, imm12};                                             // Default: 9-bit signed
+                      (opcode == ALU_ADDI || opcode == ALU_SUBI) ? {{24{imm12[8]}}, imm12[7:0]} : // ADDI/SUBI: 9-bit signed immediate
+                      {{24{imm12[8]}}, imm12[7:0]};                                       // Default: 9-bit signed
     
     // ALU connections
     assign alu_a = reg_data_a;
@@ -408,6 +420,8 @@ module cpu_core (
                    (opcode == ALU_MOD) ? ALU_MOD :
                    (opcode == ALU_CMP) ? ALU_CMP :
                    (opcode == ALU_SAR) ? ALU_SAR :
+                   (opcode == ALU_ADDI) ? ALU_ADD : // ADDI uses ADD operation
+                   (opcode == ALU_SUBI) ? ALU_SUB : // SUBI uses SUB operation
                    ALU_ADD; // Default ADD
     
     assign flags_in = flags_reg; // Use stored flags as input to ALU
@@ -454,7 +468,7 @@ module cpu_core (
         if (!rst_n) begin
             // Reset debug state
         end else begin
-            //$display("DEBUG CPU State: state=%b, next_state=%b, opcode=0x%h, pc=0x%h, alu_result_reg=0x%h, reg_write_en=%b, reg_addr_w=%d, reg_data_w=0x%h", state, next_state, opcode, pc_reg, alu_result_reg, reg_write_en, reg_addr_w, reg_data_w);
+            //$display("DEBUG CPU State: state=%b, next_state=%b, opcode=0x%h, pc=0x%h, alu_result_reg=0x%h, reg_write_en=%b, reg_addr_w=%d, reg_data_w=0x%h");
             if (state == EXECUTE) begin
                 $display("DEBUG_EXECUTE: PC=0x%x, Opcode=%h, rd=%d, rs1=%d, rs2=%d, imm=%h", pc_reg, opcode, rd, rs1, rs2, immediate);
                 if (opcode == 6'h04 || opcode == 6'h05) begin
