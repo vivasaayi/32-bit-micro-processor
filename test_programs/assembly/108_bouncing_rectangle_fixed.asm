@@ -23,10 +23,10 @@ main:
     ; Screen bounds
     LOADI R7, #320       ; screen_width
     LOADI R8, #240       ; screen_height
-    
-    ; Calculate framebuffer base (0x000 = 0)
-    LOADI R9, #0         ; framebuffer base address
-    
+
+    ; Framebuffer base (match fill_red)
+    LOADI R9, #0x10000   ; framebuffer base address
+
     ; Calculate total pixels (320 * 240 = 76800)
     LOADI R10, #10000
     LOADI R14, #7
@@ -40,8 +40,10 @@ add_76k_loop:
 add_76k_done:
     LOADI R14, #6800
     ADD R10, R10, R14    ; R10 = 76800 total pixels
-    
-    LOADI R11, #0xFF     ; background color (blue)
+
+    ; Load background color (blue) from data section
+    LOADI R13, bg_color
+    LOAD R11, R13
     
 animation_loop:
     ; Clear the entire screen first
@@ -93,26 +95,9 @@ draw_rows:
     LOADI R19, #0
     ADD R19, R19, R3     ; pixels_left = rect_width
     
-    ; Create red color (0xFF0000FF)
-    LOADI R13, #0xFF     ; Start with 0xFF
-    ADD R13, R13, R13    ; 0x1FE
-    ADD R13, R13, R13    ; 0x3FC
-    ADD R13, R13, R13    ; 0x7F8
-    ADD R13, R13, R13    ; 0xFF0
-    ADD R13, R13, R13    ; 0x1FE0
-    ADD R13, R13, R13    ; 0x3FC0
-    ADD R13, R13, R13    ; 0x7F80
-    ADD R13, R13, R13    ; 0xFF00
-    ADD R13, R13, R13    ; 0x1FE00
-    ADD R13, R13, R13    ; 0x3FC00
-    ADD R13, R13, R13    ; 0x7F800
-    ADD R13, R13, R13    ; 0xFF000
-    ADD R13, R13, R13    ; 0x1FE000
-    ADD R13, R13, R13    ; 0x3FC000
-    ADD R13, R13, R13    ; 0x7F8000
-    ADD R13, R13, R13    ; 0xFF0000
-    LOADI R20, #0xFF
-    ADD R13, R13, R20    ; 0xFF00FF (red + alpha)
+    ; Load rectangle color (red) from data section
+    LOADI R13, rect_color
+    LOAD R13, R13
 
 draw_pixels:
     STORE R13, R18
@@ -193,3 +178,9 @@ delay_done:
 
 end_program:
     HALT
+
+; Data section - placed after code
+bg_color:
+    .word 0xFF           ; blue (0x000000FF)
+rect_color:
+    .word 0xFF0000FF     ; red (0xFF0000FF)

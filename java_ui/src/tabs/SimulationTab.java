@@ -536,20 +536,25 @@ public class SimulationTab extends BaseTab {
     public void stopSimulation() {
         isSimulating = false;
         appState.setSimulating(false);
-        
+
         if (simulationProcess != null) {
             simulationProcess.destroy();
             simulationProcess = null;
         }
-        
+
         if (uartTimer != null) {
             uartTimer.cancel();
             uartTimer = null;
         }
-        
+
         simulateButton.setEnabled(true);
         stopButton.setEnabled(false);
         updateStatus("Simulation stopped");
+
+        // Automatically update and parse the simulation log in SimulationLogTab
+        if (parentFrame instanceof main.CpuIDE) {
+            ((main.CpuIDE) parentFrame).updateSimulationLogTab(simulationLogArea.getText());
+        }
     }
     
     private void dumpMemory() {

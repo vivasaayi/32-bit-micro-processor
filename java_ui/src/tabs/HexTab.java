@@ -26,11 +26,8 @@ public class HexTab extends BaseTab {
     private JButton copyAllButton;
     private JLabel filePathLabel;
     private JSplitPane mainSplitPane;
-    private JSplitPane rightSplitPane;
-    
-    // Label storage and management
+    // Label storage and management (still used for decoding, but not shown)
     private Map<Integer, String> labels = new HashMap<>();
-    private JTextArea labelsArea;
     
     public HexTab(AppState appState, JFrame parentFrame) {
         super(appState, parentFrame);
@@ -67,12 +64,7 @@ public class HexTab extends BaseTab {
         // Add copy functionality with right-click menu
         setupCopyFunctionality();
         
-        // Labels display area
-        labelsArea = new JTextArea();
-        labelsArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 11));
-        labelsArea.setEditable(false);
-        labelsArea.setBackground(new Color(250, 250, 250));
-        labelsArea.setText("No labels loaded");
+        // Labels display area removed from UI
         
         // Explanation area
         explanationArea = new JTextArea();
@@ -124,36 +116,25 @@ public class HexTab extends BaseTab {
         topWithSeparator.add(new JSeparator(), BorderLayout.SOUTH);
         add(topWithSeparator, BorderLayout.NORTH);
 
-        // Left panel: disassembly table with buttons
-        JPanel leftPanel = new JPanel(new BorderLayout());
+        // Disassembly table with buttons (top row)
+        JPanel disassemblyPanel = new JPanel(new BorderLayout());
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
         buttonPanel.add(explainButton);
         buttonPanel.add(copySelectionButton);
         buttonPanel.add(copyAllButton);
-        leftPanel.add(new JLabel("Disassembled Instructions:"), BorderLayout.NORTH);
-        leftPanel.add(new JScrollPane(disassemblyTable), BorderLayout.CENTER);
-        leftPanel.add(buttonPanel, BorderLayout.SOUTH);
-        
-        // Right panel: split between labels and explanation
-        rightSplitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT);
-        
-        JPanel labelsPanel = new JPanel(new BorderLayout());
-        labelsPanel.add(new JLabel("Labels:"), BorderLayout.NORTH);
-        labelsPanel.add(new JScrollPane(labelsArea), BorderLayout.CENTER);
-        
+        disassemblyPanel.add(new JLabel("Disassembled Instructions:"), BorderLayout.NORTH);
+        disassemblyPanel.add(new JScrollPane(disassemblyTable), BorderLayout.CENTER);
+        disassemblyPanel.add(buttonPanel, BorderLayout.SOUTH);
+
+        // Explanations area (bottom row)
         JPanel explanationPanel = new JPanel(new BorderLayout());
         explanationPanel.add(new JLabel("Opcode Explanations:"), BorderLayout.NORTH);
         explanationPanel.add(new JScrollPane(explanationArea), BorderLayout.CENTER);
-        
-        rightSplitPane.setLeftComponent(labelsPanel);
-        rightSplitPane.setRightComponent(explanationPanel);
-        rightSplitPane.setDividerLocation(250);
-        
-        // Main split pane
-        mainSplitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, leftPanel, rightSplitPane);
-        mainSplitPane.setDividerLocation(600);
+
+        // Main vertical split: top = disassembly, bottom = explanations
+        mainSplitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, disassemblyPanel, explanationPanel);
+        mainSplitPane.setDividerLocation(350);
         mainSplitPane.setResizeWeight(0.7);
-        
         add(mainSplitPane, BorderLayout.CENTER);
     }
     
@@ -295,16 +276,7 @@ public class HexTab extends BaseTab {
     }
     
     private void updateLabelsDisplay() {
-        StringBuilder sb = new StringBuilder();
-        if (labels.isEmpty()) {
-            sb.append("No labels found");
-        } else {
-            sb.append("Found ").append(labels.size()).append(" labels:\n\n");
-            labels.entrySet().stream()
-                .sorted(Map.Entry.comparingByKey())
-                .forEach(entry -> sb.append(String.format("%-20s = 0x%08X\n", entry.getValue(), entry.getKey())));
-        }
-        labelsArea.setText(sb.toString());
+        // No-op: labelsArea removed from UI
     }
     
     private void setupCopyFunctionality() {
@@ -612,7 +584,7 @@ public class HexTab extends BaseTab {
     public void clearContent() {
         if (tableModel != null) tableModel.setRowCount(0);
         if (explanationArea != null) explanationArea.setText("");
-        if (labelsArea != null) labelsArea.setText("No labels loaded");
+        // labelsArea removed from UI
         if (explainButton != null) explainButton.setEnabled(false);
         if (filePathLabel != null) filePathLabel.setText("No hex file loaded");
         labels.clear();

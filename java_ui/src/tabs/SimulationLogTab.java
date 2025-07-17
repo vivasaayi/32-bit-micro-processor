@@ -15,6 +15,7 @@ import java.util.ArrayList;
 import util.AppState;
 import util.InstructionDecoder;
 import java.util.Objects;
+import java.util.Arrays;
 
 public class SimulationLogTab extends BaseTab {
     private JTextArea logArea;
@@ -925,7 +926,7 @@ public class SimulationLogTab extends BaseTab {
         String[] lines = content.split("\n");
         
         // Patterns for parsing simulation log
-        Pattern executePattern = Pattern.compile("(?:DEBUG_EXECUTE:|DECODE_DONE:) PC=(0x[0-9A-Fa-f]+), (?:IS=0x[0-9A-Fa-f]+ )?Opcode=([0-9A-Fa-f]+), rd=\\s*(\\d+), rs1=\\s*(\\d+), rs2=\\s*(\\d+), imm=([0-9A-Fa-f]+)");
+        Pattern executePattern = Pattern.compile("(?:DEBUG_EXECUTE:|DECODE_DONE:) PC=(0x[0-9A-Fa-f]+), (?:IS=0x([0-9A-Fa-f]+) )?Opcode=([0-9A-Fa-f]+), rd=\\s*(\\d+), rs1=\\s*(\\d+), rs2=\\s*(\\d+), imm=([0-9A-Fa-f]+)");
         Pattern writebackPattern = Pattern.compile("DEBUG CPU Writeback: Writing\\s+([0-9]+) to R (\\d+)");
         Pattern flagsPattern = Pattern.compile("(?:EXECUTE_DEBUG_ALU:|DEBUG CPU: Flags updated to) C=(\\d+) Z=(\\d+) N=(\\d+) V=(\\d+)");
         Pattern regfileWritePattern = Pattern.compile("\\[register_file] Write: R(\\d+) <= 0x([0-9A-Fa-f]{8})");
@@ -948,14 +949,14 @@ public class SimulationLogTab extends BaseTab {
                     currentInstruction.finalizeRegisters(regValues, lastFlags);
                     instructions.add(currentInstruction);
                 }
-                
                 // Start new instruction
                 String pc = executeMatcher.group(1);
-                int opcode = Integer.parseInt(executeMatcher.group(2), 16);
-                int rd = Integer.parseInt(executeMatcher.group(3));
-                int rs1 = Integer.parseInt(executeMatcher.group(4));
-                int rs2 = Integer.parseInt(executeMatcher.group(5));
-                String immStr = executeMatcher.group(6);
+                String isWord = executeMatcher.group(2); // May be null
+                int opcode = Integer.parseInt(executeMatcher.group(3), 16);
+                int rd = Integer.parseInt(executeMatcher.group(4));
+                int rs1 = Integer.parseInt(executeMatcher.group(5));
+                int rs2 = Integer.parseInt(executeMatcher.group(6));
+                String immStr = executeMatcher.group(7);
                 int imm = 0;
                 try {
                     imm = Integer.parseInt(immStr, 16);
@@ -965,8 +966,10 @@ public class SimulationLogTab extends BaseTab {
                 } catch (NumberFormatException e) {
                     imm = 0;
                 }
-                
                 currentInstruction = new InstructionInfo(pc, opcode, rd, rs1, rs2, imm);
+                if (isWord != null) {
+                    currentInstruction.instructionSet = "0x" + isWord;
+                }
                 continue;
             }
             
@@ -1021,8 +1024,16 @@ public class SimulationLogTab extends BaseTab {
         // Now populate the tables with the collected instruction info
         int instructionCount = 0;
         for (InstructionInfo inst : instructions) {
-            // Add to decoded table
+            // Add to decoded table, now including instruction set if available
             Object[] row = InstructionDecoder.decodeFromSimLog(inst.pc, inst.opcode, inst.rd, inst.rs1, inst.rs2, inst.imm);
+            // If you have instruction set info, append it to the row (or insert at the right index)
+            // For demonstration, let's assume inst has a field 'instructionSet' (String)
+            // If not, you may need to extract it from the log or elsewhere
+            if (inst.instructionSet != null) {
+                Object[] newRow = Arrays.copyOf(row, row.length + 1);
+                newRow[row.length] = inst.instructionSet;
+                row = newRow;
+            }
             decodedTableModel.addRow(row);
             
             // Store register tracking info
@@ -1196,7 +1207,8 @@ public class SimulationLogTab extends BaseTab {
         Set<Integer> changedRegisters = new HashSet<>();
         Map<Integer, Long> registerSnapshot;
         String flags;
-        
+        String instructionSet; // Raw instruction word (IS=...)
+
         InstructionInfo(String pc, int opcode, int rd, int rs1, int rs2, int imm) {
             this.pc = pc;
             this.opcode = opcode;
@@ -1204,8 +1216,9 @@ public class SimulationLogTab extends BaseTab {
             this.rs1 = rs1;
             this.rs2 = rs2;
             this.imm = imm;
+            this.instructionSet = null;
         }
-        
+
         void finalizeRegisters(Map<Integer, Long> regValues, String flags) {
             this.registerSnapshot = new HashMap<>(regValues);
             this.registerSnapshot.put(0, Long.decode(pc)); // PC
