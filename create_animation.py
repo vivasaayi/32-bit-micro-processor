@@ -20,7 +20,7 @@ def create_animation_from_ppm_files(input_dir, output_file, fps=10):
     """
     
     # Find all framebuffer PPM files
-    pattern = os.path.join(input_dir, "framebuffer_*.ppm")
+    pattern = os.path.join(input_dir, "frame_*.ppm")
     ppm_files = sorted(glob.glob(pattern))
     
     if not ppm_files:
@@ -86,7 +86,7 @@ def main():
     args = parser.parse_args()
     
     if args.list:
-        pattern = os.path.join(args.input_dir, "framebuffer_*.ppm")
+        pattern = os.path.join(args.input_dir, "frame_*.ppm")
         ppm_files = sorted(glob.glob(pattern))
         print(f"Found {len(ppm_files)} framebuffer files in {args.input_dir}:")
         for f in ppm_files:

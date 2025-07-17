@@ -7,6 +7,10 @@ import java.io.*;
 import javax.imageio.ImageIO;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.List;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import util.AppState;
 import main.CpuIDE;
 
@@ -19,6 +23,7 @@ public class FramebufferTab extends BaseTab {
     private JLabel statusLabel;
     private JScrollPane scrollPane;
     private String framebufferPath = "/Users/rajanpanneerselvam/work/hdl/temp/reports/framebuffer.ppm";
+    private String framebufferDir = "/Users/rajanpanneerselvam/work/hdl/temp/reports";
     private int frameCount = 0;
     private int zoomFactor = 1;
     private BufferedImage currentImage = null;
@@ -28,6 +33,11 @@ public class FramebufferTab extends BaseTab {
     private boolean fitToWindow = false;
     private int refreshIntervalMs = 100; // Default 100ms for smooth animation
     private long lastFileModified = 0; // Track file changes for smart refresh
+    
+    // Multi-frame support
+    private java.util.List<String> frameFiles = new ArrayList<>();
+    private int currentFrameIndex = -1;
+    private boolean multiFrameMode = false;
     
     public FramebufferTab(AppState appState, CpuIDE parentFrame) {
         super(appState, parentFrame);
@@ -67,57 +77,172 @@ public class FramebufferTab extends BaseTab {
         add(scrollPane, BorderLayout.CENTER);
         
         // Controls at bottom
-        JPanel controls = new JPanel(new FlowLayout());
+        JPanel controls = new JPanel(new GridLayout(2, 1, 0, 2));
+        JPanel buttonRow1 = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 6));
+        JPanel buttonRow2 = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 6));
         
+        // First row: refresh, live, rate, speed, zoom, fit
         JButton refreshButton = new JButton("🔄 Refresh");
         refreshButton.addActionListener(e -> loadImage());
-        controls.add(refreshButton);
-        
+        buttonRow1.add(refreshButton);
+
         JButton autoRefreshButton = new JButton("⚡ Live Monitor");
         autoRefreshButton.addActionListener(e -> toggleAutoRefresh());
-        controls.add(autoRefreshButton);
-        
-        // Refresh rate controls for animation
+        buttonRow1.add(autoRefreshButton);
+
         JLabel rateLabel = new JLabel("Rate:");
-        controls.add(rateLabel);
-        
+        buttonRow1.add(rateLabel);
+
         JButton ultraFastButton = new JButton("⚡ Ultra (16ms)");
-        ultraFastButton.addActionListener(e -> setRefreshRate(16)); // ~60 FPS
-        controls.add(ultraFastButton);
-        
+        ultraFastButton.addActionListener(e -> setRefreshRate(16));
+        buttonRow1.add(ultraFastButton);
+
         JButton fastButton = new JButton("🏃 Fast (33ms)");
-        fastButton.addActionListener(e -> setRefreshRate(33)); // ~30 FPS
-        controls.add(fastButton);
-        
+        fastButton.addActionListener(e -> setRefreshRate(33));
+        buttonRow1.add(fastButton);
+
         JButton normalButton = new JButton("🚶 Normal (100ms)");
-        normalButton.addActionListener(e -> setRefreshRate(100)); // 10 FPS
-        controls.add(normalButton);
-        
+        normalButton.addActionListener(e -> setRefreshRate(100));
+        buttonRow1.add(normalButton);
+
         JButton slowButton = new JButton("🐌 Slow (500ms)");
-        slowButton.addActionListener(e -> setRefreshRate(500)); // 2 FPS
-        controls.add(slowButton);
-        
+        slowButton.addActionListener(e -> setRefreshRate(500));
+        buttonRow1.add(slowButton);
+
         JButton zoomInButton = new JButton("🔍+ Zoom In");
         zoomInButton.addActionListener(e -> zoomIn());
-        controls.add(zoomInButton);
-        
+        buttonRow1.add(zoomInButton);
+
         JButton zoomOutButton = new JButton("🔍- Zoom Out");
         zoomOutButton.addActionListener(e -> zoomOut());
-        controls.add(zoomOutButton);
-        
-        JButton fitButton = new JButton("� Fit to Window");
+        buttonRow1.add(zoomOutButton);
+
+        JButton fitButton = new JButton("🖼️ Fit to Window");
         fitButton.addActionListener(e -> { fitToWindow = !fitToWindow; loadImage(); });
-        controls.add(fitButton);
-        
-        JButton debugButton = new JButton("� Debug PPM");
+        buttonRow1.add(fitButton);
+
+
+        // Second row: frame navigation, debug, export, and movie controls
+        JButton scanFramesButton = new JButton("🔍 Scan Frames");
+        scanFramesButton.addActionListener(e -> scanForFrames());
+        buttonRow2.add(scanFramesButton);
+
+        JButton prevFrameButton = new JButton("◀ Prev");
+        prevFrameButton.addActionListener(e -> previousFrame());
+        buttonRow2.add(prevFrameButton);
+
+        JButton nextFrameButton = new JButton("▶ Next");
+        nextFrameButton.addActionListener(e -> nextFrame());
+        buttonRow2.add(nextFrameButton);
+
+        JButton latestFrameButton = new JButton("⏩ Latest");
+        latestFrameButton.addActionListener(e -> showLatestFrame());
+        buttonRow2.add(latestFrameButton);
+
+        // Play/Pause button for movie mode
+        JButton playPauseButton = new JButton("▶ Play");
+        buttonRow2.add(playPauseButton);
+        playPauseButton.addActionListener(e -> toggleMovieMode(playPauseButton));
+
+        JButton debugButton = new JButton("🔧 Debug PPM");
         debugButton.addActionListener(e -> debugPPM());
-        controls.add(debugButton);
-        
+        buttonRow2.add(debugButton);
+
         JButton exportButton = new JButton("💾 Export BMP");
         exportButton.addActionListener(e -> exportBMP());
-        controls.add(exportButton);
-        
+        buttonRow2.add(exportButton);
+
+        controls.add(buttonRow1);
+        controls.add(buttonRow2);
         add(controls, BorderLayout.SOUTH);
+    }
+
+    // ===== Movie mode state and methods (moved to class level) =====
+    private Timer movieTimer = null;
+    private boolean moviePlaying = false;
+
+    // Toggle movie mode (play/pause)
+    private void toggleMovieMode(JButton playPauseButton) {
+        if (!multiFrameMode || frameFiles.isEmpty()) {
+            statusLabel.setText("No frames loaded. Click 'Scan Frames' first.");
+            return;
+        }
+        if (moviePlaying) {
+            stopMovieMode(playPauseButton);
+        } else {
+            startMovieMode(playPauseButton);
+        }
+    }
+
+    private void startMovieMode(JButton playPauseButton) {
+        if (movieTimer != null) movieTimer.cancel();
+        moviePlaying = true;
+        playPauseButton.setText("⏸ Pause");
+        // Always rescan frames before playing
+        scanForFrames();
+        if (currentFrameIndex < 0) currentFrameIndex = 0;
+        movieTimer = new Timer();
+        movieTimer.scheduleAtFixedRate(new TimerTask() {
+            @Override
+            public void run() {
+                SwingUtilities.invokeLater(() -> {
+                    // Rescan for new frames during playback
+                    int prevFrameCount = frameFiles.size();
+                    scanForFramesSilently();
+                    int newFrameCount = frameFiles.size();
+                    if (!multiFrameMode || frameFiles.isEmpty()) {
+                        stopMovieMode(playPauseButton);
+                        return;
+                    }
+                    if (currentFrameIndex < frameFiles.size() - 1) {
+                        currentFrameIndex++;
+                        loadFrameAt(currentFrameIndex);
+                    } else {
+                        // Stay at last frame, but if new frames appear, advance
+                        if (newFrameCount > prevFrameCount) {
+                            currentFrameIndex = newFrameCount - 1;
+                            loadFrameAt(currentFrameIndex);
+                        }
+                        // Otherwise, do nothing (keep polling)
+                    }
+                });
+            }
+        }, 0, refreshIntervalMs);
+        statusLabel.setText("Movie mode: Playing");
+    }
+
+    private void stopMovieMode(JButton playPauseButton) {
+        if (movieTimer != null) {
+            movieTimer.cancel();
+            movieTimer = null;
+        }
+        moviePlaying = false;
+        playPauseButton.setText("▶ Play");
+        statusLabel.setText("Movie mode: Paused");
+    }
+
+    // Rescan frames without resetting navigation or status
+    private void scanForFramesSilently() {
+        File directory = new File(framebufferDir);
+        if (!directory.exists() || !directory.isDirectory()) {
+            return;
+        }
+        File[] files = directory.listFiles((dir, name) ->
+            name.startsWith("frame_") && name.endsWith(".ppm"));
+        if (files == null || files.length == 0) {
+            return;
+        }
+        Arrays.sort(files, (f1, f2) -> f1.getName().compareTo(f2.getName()));
+        List<String> newFrameFiles = new ArrayList<>();
+        for (File file : files) {
+            newFrameFiles.add(file.getAbsolutePath());
+        }
+        // Only update if new frames are found
+        if (newFrameFiles.size() != frameFiles.size() ||
+            !newFrameFiles.equals(frameFiles)) {
+            frameFiles = newFrameFiles;
+        }
+        multiFrameMode = true;
     }
     
     @Override
@@ -145,6 +270,13 @@ public class FramebufferTab extends BaseTab {
     }
     
     private void loadImage() {
+        // In multi-frame mode, auto-refresh scans for new frames and shows the latest
+        if (multiFrameMode && autoRefreshEnabled) {
+            scanForFrames(); // This will automatically show the latest frame
+            return;
+        }
+        
+        // Standard single-file mode
         try {
             File file = new File(framebufferPath);
             if (!file.exists()) {
@@ -166,31 +298,12 @@ public class FramebufferTab extends BaseTab {
             BufferedImage img = readPPMRobust(framebufferPath);
             if (img != null) {
                 currentImage = img;
-                BufferedImage displayImg = img;
-                if (fitToWindow) {
-                    // Scale to fit scrollPane viewport
-                    Dimension vp = scrollPane.getViewport().getExtentSize();
-                    int w = vp.width, h = vp.height;
-                    double scale = Math.min((double)w/img.getWidth(), (double)h/img.getHeight());
-                    if (scale < 1.0) {
-                        int sw = (int)(img.getWidth()*scale);
-                        int sh = (int)(img.getHeight()*scale);
-                        displayImg = scaleImage(img, sw, sh);
-                    }
-                } else if (zoomFactor > 1) {
-                    displayImg = scaleImage(img, zoomFactor);
-                }
-                imageLabel.setIcon(new ImageIcon(displayImg));
-                imageLabel.setText("");
+                displayCurrentImage();
                 frameCount++;
                 String refreshInfo = autoRefreshEnabled ? String.format(" | Live@%dms", refreshIntervalMs) : "";
-                statusLabel.setText(String.format("Frame %d - %dx%d - Size: %.1f KB - Zoom: %sx%s", 
+                statusLabel.setText(String.format("Frame %d - %dx%d - Size: %.1f KB - Zoom: %s%s", 
                     frameCount, currentImage.getWidth(), currentImage.getHeight(), 
                     file.length() / 1024.0, fitToWindow ? "Fit" : zoomFactor, refreshInfo));
-                imageLabel.setPreferredSize(new Dimension(displayImg.getWidth(), displayImg.getHeight()));
-                imageLabel.revalidate();
-                imagePanel.revalidate();
-                scrollPane.revalidate();
             } else {
                 // During live monitoring, don't show errors for incomplete files
                 if (!autoRefreshEnabled) {
@@ -289,6 +402,137 @@ public class FramebufferTab extends BaseTab {
             statusLabel.setText("Export failed: " + e.getMessage());
             e.printStackTrace();
         }
+    }
+    
+    // Frame navigation methods
+    private void scanForFrames() {
+        frameFiles.clear();
+        currentFrameIndex = -1;
+        multiFrameMode = false;
+        
+        File directory = new File(framebufferDir);
+        if (!directory.exists() || !directory.isDirectory()) {
+            statusLabel.setText("Directory not found: " + framebufferDir);
+            return;
+        }
+        
+        // Look for frame_*.ppm files
+        File[] files = directory.listFiles((dir, name) -> 
+            name.startsWith("frame_") && name.endsWith(".ppm"));
+        
+        if (files == null || files.length == 0) {
+            statusLabel.setText("No frame files found in " + framebufferDir);
+            return;
+        }
+        
+        // Sort files by name to get them in order
+        Arrays.sort(files, (f1, f2) -> f1.getName().compareTo(f2.getName()));
+        
+        for (File file : files) {
+            frameFiles.add(file.getAbsolutePath());
+        }
+        
+        multiFrameMode = true;
+        statusLabel.setText("Found " + frameFiles.size() + " frame files. Use navigation buttons to browse.");
+        
+        // If in auto-refresh mode, show the latest frame automatically
+        if (autoRefreshEnabled) {
+            showLatestFrame();
+        }
+    }
+    
+    private void previousFrame() {
+        if (!multiFrameMode || frameFiles.isEmpty()) {
+            statusLabel.setText("No frames loaded. Click 'Scan Frames' first.");
+            return;
+        }
+        
+        if (currentFrameIndex > 0) {
+            currentFrameIndex--;
+            loadFrameAt(currentFrameIndex);
+        } else {
+            statusLabel.setText("Already at first frame");
+        }
+    }
+    
+    private void nextFrame() {
+        if (!multiFrameMode || frameFiles.isEmpty()) {
+            statusLabel.setText("No frames loaded. Click 'Scan Frames' first.");
+            return;
+        }
+        
+        if (currentFrameIndex < frameFiles.size() - 1) {
+            currentFrameIndex++;
+            loadFrameAt(currentFrameIndex);
+        } else {
+            statusLabel.setText("Already at last frame");
+        }
+    }
+    
+    private void showLatestFrame() {
+        if (!multiFrameMode || frameFiles.isEmpty()) {
+            statusLabel.setText("No frames loaded. Click 'Scan Frames' first.");
+            return;
+        }
+        
+        currentFrameIndex = frameFiles.size() - 1;
+        loadFrameAt(currentFrameIndex);
+    }
+    
+    private void loadFrameAt(int index) {
+        if (index < 0 || index >= frameFiles.size()) {
+            statusLabel.setText("Invalid frame index: " + index);
+            return;
+        }
+        
+        String framePath = frameFiles.get(index);
+        try {
+            BufferedImage img = readPPMRobust(framePath);
+            if (img != null) {
+                currentImage = img;
+                displayCurrentImage();
+                String fileName = new File(framePath).getName();
+                statusLabel.setText(String.format("Frame %d/%d: %s - %dx%d", 
+                    index + 1, frameFiles.size(), fileName, 
+                    img.getWidth(), img.getHeight()));
+            } else {
+                statusLabel.setText("Failed to load frame: " + framePath);
+            }
+        } catch (Exception e) {
+            statusLabel.setText("Error loading frame: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+    
+    private void displayCurrentImage() {
+        if (currentImage == null) {
+            imageLabel.setIcon(null);
+            imageLabel.setText("No image loaded");
+            return;
+        }
+        
+        BufferedImage displayImg = currentImage;
+        if (fitToWindow) {
+            // Scale to fit scrollPane viewport
+            Dimension vp = scrollPane.getViewport().getExtentSize();
+            int w = vp.width, h = vp.height;
+            double scale = Math.min((double)w/currentImage.getWidth(), 
+                                  (double)h/currentImage.getHeight());
+            if (scale < 1.0) {
+                int sw = (int)(currentImage.getWidth()*scale);
+                int sh = (int)(currentImage.getHeight()*scale);
+                displayImg = scaleImage(currentImage, sw, sh);
+            }
+        } else if (zoomFactor > 1) {
+            displayImg = scaleImage(currentImage, zoomFactor);
+        }
+        
+        imageLabel.setIcon(new ImageIcon(displayImg));
+        imageLabel.setText("");
+        imageLabel.setPreferredSize(new Dimension(displayImg.getWidth(), displayImg.getHeight()));
+        imageLabel.revalidate();
+        imagePanel.revalidate();
+        scrollPane.revalidate();
     }
     
     private BufferedImage scaleImage(BufferedImage original, int scale) {
@@ -494,6 +738,11 @@ public class FramebufferTab extends BaseTab {
             autoRefreshTimer.cancel();
             autoRefreshTimer = null;
         }
+        if (movieTimer != null) {
+            movieTimer.cancel();
+            movieTimer = null;
+        }
         autoRefreshEnabled = false;
+        moviePlaying = false;
     }
 }

@@ -45,8 +45,8 @@ public class VVvpTab extends BaseTab {
         saveVerilogButton = new JButton("Save Verilog");
         saveVerilogButton.addActionListener(e -> saveVerilog());
         
-        runSimulationButton = new JButton("Run Simulation");
-        runSimulationButton.addActionListener(e -> runSimulationOnVvp());
+        runSimulationButton = new JButton("Go To Simulation");
+        runSimulationButton.addActionListener(e -> goToSimulationOnVvp());
         
         // Inner tabs
         innerTabs = new JTabbedPane();
@@ -303,7 +303,7 @@ public class VVvpTab extends BaseTab {
         }
     }
     
-    private void runSimulationOnVvp() {
+    private void goToSimulationOnVvp() {
         // Find the VVP file path from AppState
         File vvpFile = appState.getGeneratedFile("vvp");
         if (vvpFile == null || !vvpFile.exists()) {
@@ -312,17 +312,17 @@ public class VVvpTab extends BaseTab {
         }
         // Run vvp and show output in Simulation Log tab
         try {
-            ProcessBuilder pb = new ProcessBuilder("vvp", vvpFile.getAbsolutePath());
-            pb.directory(new File(System.getProperty("user.dir")));
-            Process process = pb.start();
-            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
-            StringBuilder output = new StringBuilder();
-            String line;
-            while ((line = reader.readLine()) != null) {
-                output.append(line).append("\n");
-            }
-            int exitCode = process.waitFor();
-            output.append("\n[Process exited with code " + exitCode + "]\n");
+            //ProcessBuilder pb = new ProcessBuilder("vvp", vvpFile.getAbsolutePath());
+            //pb.directory(new File(System.getProperty("user.dir")));
+            //Process process = pb.start();
+            //BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+            //StringBuilder output = new StringBuilder();
+            //String line;
+            //while ((line = reader.readLine()) != null) {
+            //    output.append(line).append("\n");
+            //}
+            //int exitCode = process.waitFor();
+            //output.append("\n[Process exited with code " + exitCode + "]\n");
             // Show in Simulation Log tab
             if (parentFrame instanceof main.CpuIDE) {
                 main.CpuIDE ide = (main.CpuIDE) parentFrame;

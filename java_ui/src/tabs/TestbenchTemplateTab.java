@@ -111,7 +111,7 @@ public class TestbenchTemplateTab extends BaseTab {
             "    parameter FB_HEIGHT = 240;\n" +
             "    parameter FB_BASE_ADDR = 32'h10000;\n" +
             "    parameter FB_SIZE = FB_WIDTH * FB_HEIGHT * 4;\n" +
-            "    parameter DUMP_INTERVAL = 100;\n" +
+            "    parameter DUMP_INTERVAL = 10000;\n" +
             "\n" +
             "    integer cycle_count = 0;\n" +
             "    integer dump_count = 0;\n" +
@@ -119,6 +119,7 @@ public class TestbenchTemplateTab extends BaseTab {
             "    integer last_dump_cycle = 0;\n" +
             "    integer graphics_pixels = 0;\n" +
             "    reg fb_dump_enable = 1;\n" +
+            "    reg gif_mode = 1;  // Enable GIF generation mode\n" +
             "\n" +
             "    // Clock generation\n" +
             "    initial begin\n" +
@@ -138,10 +139,21 @@ public class TestbenchTemplateTab extends BaseTab {
             "    task dump_framebuffer;\n" +
             "        integer x, y, pixel_addr, pixel_data;\n" +
             "        integer r, g, b;\n" +
+            "        reg [1023:0] filename;\n" +
             "        begin\n" +
             "            $display(\"Dumping framebuffer at cycle %d...\", cycle_count);\n" +
-            "            fb_dump_file = $fopen(\"/Users/rajanpanneerselvam/work/hdl/temp/reports/framebuffer.ppm\", \"w\");\n" +
-            "            $display(\"Framebuffer dump file handle: %0d (file: %s)\", fb_dump_file, \"/Users/rajanpanneerselvam/work/hdl/temp/reports/framebuffer.ppm\");\n" +
+            "            \n" +
+            "            // Generate individual frame files for GIF generation\n" +
+            "            if (gif_mode) begin\n" +
+            "                $sformat(filename, \"/Users/rajanpanneerselvam/work/hdl/temp/reports/frame_%04d.ppm\", dump_count);\n" +
+            "                fb_dump_file = $fopen(filename, \"w\");\n" +
+            "                $display(\"Frame dump file handle: %0d (file: %s)\", fb_dump_file, filename);\n" +
+            "            end else begin\n" +
+            "                // Original single framebuffer file\n" +
+            "                fb_dump_file = $fopen(\"/Users/rajanpanneerselvam/work/hdl/temp/reports/framebuffer.ppm\", \"w\");\n" +
+            "                $display(\"Framebuffer dump file handle: %0d (file: %s)\", fb_dump_file, \"/Users/rajanpanneerselvam/work/hdl/temp/reports/framebuffer.ppm\");\n" +
+            "            end\n" +
+            "            \n" +
             "            if (fb_dump_file != 0) begin\n" +
             "                $fwrite(fb_dump_file, \"P6\\n\");\n" +
             "                $fwrite(fb_dump_file, \"# RISC CPU Framebuffer\\n\");\n" +
@@ -162,6 +174,19 @@ public class TestbenchTemplateTab extends BaseTab {
             "                $display(\"Framebuffer dump #%d complete\", dump_count);\n" +
             "            end else begin\n" +
             "                $display(\"WARNING: Failed to open framebuffer file for writing!\");\n" +
+            "            end\n" +
+            "        end\n" +
+            "    endtask\n" +
+            "\n" +
+            "    // GIF generation task\n" +
+            "    task generate_gif;\n" +
+            "        begin\n" +
+            "            if (gif_mode && dump_count > 1) begin\n" +
+            "                $display(\"Generated %d frame files for GIF animation\", dump_count);\n" +
+            "                $display(\"To create GIF animation, run:\");\n" +
+            "                $display(\"  cd /Users/rajanpanneerselvam/work/hdl\");\n" +
+            "                $display(\"  python3 create_animation.py --input-dir temp/reports\");\n" +
+            "                $display(\"Frame files saved in: /Users/rajanpanneerselvam/work/hdl/temp/reports/\");\n" +
             "            end\n" +
             "        end\n" +
             "    endtask\n" +
@@ -202,10 +227,21 @@ public class TestbenchTemplateTab extends BaseTab {
             "        rst_n = 1;\n" +
             "        #1000;\n" +
             "        dump_framebuffer();\n" +
-            "        #200000;\n" +
+            "        #999999;\n" +
+            "        #999999;\n" +
+            "        #999999;\n" +
+            "        #999999;\n" +
+            "        #999999;\n" +
+            "        #999999;\n" +
+            "        #999999;\n" +
+            "        #999999;\n" +
+            "        #999999;\n" +
+            "        #999999;\n" +
+            "        #999999;\n" +
             "        dump_framebuffer();\n" +
             "        dump_log_memory();\n" +
-            "        $finish;\n" +
+            "        generate_gif();  // Generate GIF animation from collected frames\n" +
+            "        //$finish;\n" +
             "    end\n" +
             "\n" +
             "    // Instantiate the microprocessor system\n" +
