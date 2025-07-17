@@ -11,11 +11,11 @@ int main() {
     int sum = x + y;
     log_string("Value of Sum=30\n");
     
-    if (sum == 30) {
+    if (sum == 3110) {
         log_string("Sum check passed\n");
-        return 1;  // Success 
+        return 133;  // Success 
     } else {
         log_string("Sum check failed\n");
-        return 0;  // Failure
+        return 444;  // Failure
     }
 }

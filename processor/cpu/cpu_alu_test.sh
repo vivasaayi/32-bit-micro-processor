@@ -1,0 +1,1 @@
+iverilog -g2012 -o cpu_alu_test cpu_core_tb.v cpu_core.v alu.v register_file.v && vvp cpu_alu_test

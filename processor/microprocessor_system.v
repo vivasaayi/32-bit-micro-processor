@@ -118,27 +118,32 @@ module microprocessor_system (
                     status_register <= cpu_data_bus;
                     $display("DEBUG: Status register write: 0x%08x", cpu_data_bus);
                 end
-                mem_data_out_reg <= status_register;
             end else if (accessing_internal_mem) begin
                 if (cpu_mem_write) begin
                     internal_memory[cpu_addr_bus[19:2]] <= cpu_data_bus;
                     $display("DEBUG: Memory write at addr=0x%08x, word_addr=%d, data=0x%08x", 
                             cpu_addr_bus, cpu_addr_bus[19:2], cpu_data_bus);
                 end
-                // Always output data for reads or instruction fetch
-                mem_data_out_reg <= internal_memory[cpu_addr_bus[19:2]];
+                // Debug output for reads (data is provided combinationally)
+                if (cpu_mem_read && !cpu_mem_write) begin
+                    if (cpu_addr_bus < 32'h00001000) begin
+                        $display("DEBUG: Memory data read at addr=0x%08x, word_addr=%d, data=0x%08x", 
+                                cpu_addr_bus, cpu_addr_bus[19:2], internal_memory[cpu_addr_bus[19:2]]);
+                    end else begin
+                        $display("DEBUG: Memory instruction fetch at addr=0x%08x, word_addr=%d, data=0x%08x", 
+                                cpu_addr_bus, cpu_addr_bus[19:2], internal_memory[cpu_addr_bus[19:2]]);
+                    end
+                end
             end else if (accessing_external_mem) begin
                 // Pass through to external memory
                 mem_ready_reg <= ext_mem_ready;
-                if (cpu_mem_read) begin
-                    mem_data_out_reg <= ext_data;
-                end
             end
         end
     end
     
-    // Memory data bus handling - only drive during reads
-    assign cpu_data_bus = (cpu_mem_read && (accessing_internal_mem || accessing_status_reg)) ? mem_data_out_reg : 
+    // Memory data bus handling - provide data combinationally for reads
+    assign cpu_data_bus = (cpu_mem_read && accessing_internal_mem) ? internal_memory[cpu_addr_bus[19:2]] :
+                         (cpu_mem_read && accessing_status_reg) ? status_register :
                          (cpu_mem_read && accessing_external_mem) ? ext_data : 32'hZZZZZZZZ;
     
     // External memory interface

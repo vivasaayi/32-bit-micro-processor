@@ -1,0 +1,1 @@
+iverilog -o alu_test alu_tb.v alu.v && vvp alu_test

@@ -1,0 +1,44 @@
+# Build artifacts
+*.o
+*.obj
+ccompiler
+ccompiler.exe
+
+# Generated assembly files
+*.s
+*.asm
+
+# Debug files
+*.dSYM/
+*.su
+*.idb
+*.pdb
+
+# Core dumps
+core
+core.*
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Editor temporary files
+*~
+*.swp
+*.swo
+.vscode/
+.idea/
+
+# Backup files
+*_old.*
+*.bak
+*.backup
+
+# Test output
+test_output.*
+*.log
