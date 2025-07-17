@@ -329,17 +329,11 @@ module cpu_core (
                     $display("STATE_MEMORY:");
                     if (is_load_store && opcode == MEM_LOAD) begin // LOAD
                         memory_data_reg <= data_bus;
-                        if (load_direct_addr) begin
-                            $display("DEBUG CPU: LOAD (direct) from addr=0x%x, data=%d", immediate, data_bus);
-                        end else if (load_reg_indirect) begin
-                            $display("DEBUG CPU: LOAD (indirect) from addr=0x%x (R%d), data=%d", reg_data_a, rs1, data_bus);
-                        end else if (load_reg_offset) begin
-                            $display("DEBUG CPU: LOAD (reg+offset) from addr=0x%x (R%d+%d), data=%d", reg_data_a + immediate, rs1, immediate, data_bus);
-                        end
+                        $display("DEBUG CPU: LOAD from addr=0x%x (R%d), data=%d", reg_data_a, rs1, data_bus);
                     end
                     if (opcode == MEM_STORE) begin // STORE
-                        $display("DEBUG CPU: STORE R%d=%d to addr=0x%x, mem_write=%b, data_bus=0x%x", 
-                                store_direct_addr ? rd : rs1, reg_data_a, immediate, mem_write, data_bus);
+                        $display("DEBUG CPU: STORE R%d=%d to addr=0x%x (R%d), mem_write=%b, data_bus=0x%x", 
+                                rd, reg_data_b, reg_data_a, rs1, mem_write, data_bus);
                     end
                 end
                 
@@ -380,23 +374,6 @@ module cpu_core (
     assign is_load_store = (opcode == MEM_LOAD) || (opcode == MEM_STORE);
     assign is_branch_jump = (opcode >= OP_JMP && opcode <= OP_POP);
     
-    // Enhanced memory addressing intelligence
-    wire is_log_buffer_access = (immediate >= 32'h3000) && (immediate < 32'h5000);
-    wire is_stack_access = (immediate >= 32'h7000) && (immediate < 32'h8000);
-    wire is_io_access = (immediate >= 32'h8000) && (immediate < 32'h9000);
-    
-    // Detect STORE with direct addressing (20-bit immediate format)
-    // Format: opcode(6) | 000(2) | rs(4) | address(20)
-    wire store_direct_addr = (opcode == MEM_STORE) && (instruction_reg[25:24] == 2'b00);
-    
-    // Detect LOAD addressing modes
-    wire load_direct_addr = (opcode == MEM_LOAD) && (instruction_reg[25:24] == 2'b00);  // Direct: LOAD Rd, #immediate
-    wire load_reg_indirect = (opcode == MEM_LOAD) && (instruction_reg[25:24] == 2'b01); // Indirect: LOAD Rd, Rs
-    wire load_reg_offset = (opcode == MEM_LOAD) && (instruction_reg[25:24] == 2'b10);   // Reg+offset: LOAD Rd, [Rs+offset]
-    
-    // Optimize for known memory regions
-    wire use_optimized_addressing = is_log_buffer_access || is_stack_access;
-    
     // Branch condition logic
     wire branch_taken =
         (opcode == OP_JMP) ? 1'b1 :
@@ -410,13 +387,10 @@ module cpu_core (
         1'b0;
 
     // Immediate value selection
-    assign immediate = (opcode == MEM_LOAD) ? {13'h0000, imm20} :                         // LOAD: 19-bit address
-                      (opcode == MEM_STORE && store_direct_addr) ? {13'h0000, imm20} :     // STORE direct: 19-bit address  
-                      (opcode == MEM_STORE && !store_direct_addr) ? {{20{imm12[11]}}, imm12} : // STORE reg+offset: 12-bit offset
-                      (opcode == MEM_LOADI) ? {13'h0000, imm20} :                         // LOADI: 19-bit immediate
-                      (opcode == ALU_ADDI || opcode == ALU_SUBI || opcode == ALU_CMPI) ? {{20{imm12[11]}}, imm12} : // ADDI/SUBI/CMPI: 12-bit signed immediate
-                      (is_branch_jump) ? {{20{imm12[11]}}, imm12} :                       // Branch/Jump: 12-bit signed immediate  
-                      {{20{imm12[11]}}, imm12};                                           // Default: 12-bit signed
+    assign immediate = (opcode == MEM_LOADI) ? instruction_reg[18:0] :                    // LOADI: 19-bit immediate
+                      (opcode == ALU_ADDI || opcode == ALU_SUBI || opcode == ALU_CMPI) ? {{20{instruction_reg[11]}}, instruction_reg[11:0]} : // ADDI/SUBI/CMPI: 12-bit signed immediate
+                      (is_branch_jump) ? {{20{instruction_reg[11]}}, instruction_reg[11:0]} :  // Branch/Jump: 12-bit signed immediate  
+                      {{20{instruction_reg[11]}}, instruction_reg[11:0]};                 // Default: 12-bit signed
     
     // ALU connections
     assign alu_a = reg_data_a;
@@ -442,10 +416,11 @@ module cpu_core (
     assign flags_in = flags_reg; // Use stored flags as input to ALU
     
     // Register file connections
-    assign reg_addr_a = (opcode == MEM_STORE) ? rd : 
-                       (opcode == MEM_LOAD && (load_reg_indirect || load_reg_offset)) ? rs1 :  // LOAD indirect/reg+offset: use rs1 as base address
+    assign reg_addr_a = (opcode == MEM_STORE) ? rs1 :  // STORE: rs1 contains address register
+                       (opcode == MEM_LOAD) ? rs1 :     // LOAD: rs1 contains address register
                        rs1;  // Default: use rs1
-    assign reg_addr_b = (opcode == MEM_STORE && !store_direct_addr) ? rs1 : rs2;  // For STORE register addressing, address base is in rs1
+    assign reg_addr_b = (opcode == MEM_STORE) ? rd :    // STORE: rd contains source data register
+                       rs2;  // Default: use rs2
     assign reg_addr_w = rd;   // Always use rd for write destination
     assign reg_data_w = (state == WRITEBACK) ? 
                        ((opcode == MEM_LOAD) ? memory_data_reg :
@@ -469,14 +444,11 @@ module cpu_core (
 
     // Memory interface with intelligent addressing
     assign addr_bus = (state == FETCH) ? pc_reg : 
-                     (state == MEMORY && opcode == MEM_STORE && store_direct_addr) ? immediate :     // STORE direct addressing: use immediate as address
-                     (state == MEMORY && opcode == MEM_STORE && !store_direct_addr) ? (reg_data_b + immediate) : // STORE register+offset: base + offset
-                     (state == MEMORY && opcode == MEM_LOAD && load_direct_addr) ? immediate :       // LOAD direct addressing: use immediate as address
-                     (state == MEMORY && opcode == MEM_LOAD && load_reg_indirect) ? reg_data_a :     // LOAD indirect: use register value as address
-                     (state == MEMORY && opcode == MEM_LOAD && load_reg_offset) ? (reg_data_a + immediate) : // LOAD register+offset: base + offset
+                     (state == MEMORY && opcode == MEM_STORE) ? reg_data_a :                         // STORE: use rs1 register as address
+                     (state == MEMORY && opcode == MEM_LOAD) ? reg_data_a :                          // LOAD: use rs1 register as address  
                      pc_reg;
     
-    assign data_bus = (state == MEMORY && opcode == MEM_STORE && mem_write) ? reg_data_a : 32'hZZZZZZZZ;
+    assign data_bus = (state == MEMORY && opcode == MEM_STORE && mem_write) ? reg_data_b : 32'hZZZZZZZZ;
     
     assign mem_read = (state == FETCH) ? 1'b1 : 
                      (state == MEMORY && opcode == MEM_LOAD) ? 1'b1 : 1'b0;

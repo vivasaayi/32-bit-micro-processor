@@ -11,7 +11,7 @@ public class InstructionDecoder {
     private static final Map<Integer, String> OPCODE_MAP = new HashMap<>();
     
     static {
-        // ALU operations (0x00–0x1F)
+        // ALU operations (0x00–0x0F)
         OPCODE_MAP.put(0x00, "ADD");
         OPCODE_MAP.put(0x01, "SUB");
         OPCODE_MAP.put(0x02, "AND");
@@ -25,37 +25,40 @@ public class InstructionDecoder {
         OPCODE_MAP.put(0x0A, "MOD");
         OPCODE_MAP.put(0x0B, "CMP");
         OPCODE_MAP.put(0x0C, "SAR");
+        OPCODE_MAP.put(0x0D, "ADDI");
+        OPCODE_MAP.put(0x0E, "SUBI");
+        OPCODE_MAP.put(0x0F, "CMPI");
         
-        // Memory operations (0x20–0x2F)
-        OPCODE_MAP.put(0x20, "LOAD");
-        OPCODE_MAP.put(0x21, "STORE");
-        OPCODE_MAP.put(0x22, "LOADI");
+        // Memory operations (0x10–0x12)
+        OPCODE_MAP.put(0x10, "LOAD");
+        OPCODE_MAP.put(0x11, "STORE");
+        OPCODE_MAP.put(0x12, "LOADI");
         
-        // Control/Branch opcodes (0x30–0x3F)
-        OPCODE_MAP.put(0x30, "JMP");
-        OPCODE_MAP.put(0x31, "JZ");
-        OPCODE_MAP.put(0x32, "JNZ");
-        OPCODE_MAP.put(0x33, "JC");
-        OPCODE_MAP.put(0x34, "JNC");
-        OPCODE_MAP.put(0x35, "JLT");
-        OPCODE_MAP.put(0x36, "JGE");
-        OPCODE_MAP.put(0x37, "JLE");
-        OPCODE_MAP.put(0x38, "CALL");
-        OPCODE_MAP.put(0x39, "RET");
-        OPCODE_MAP.put(0x3A, "PUSH");
-        OPCODE_MAP.put(0x3B, "POP");
+        // Control/Branch opcodes (0x20–0x2B)
+        OPCODE_MAP.put(0x20, "JMP");
+        OPCODE_MAP.put(0x21, "JZ");
+        OPCODE_MAP.put(0x22, "JNZ");
+        OPCODE_MAP.put(0x23, "JC");
+        OPCODE_MAP.put(0x24, "JNC");
+        OPCODE_MAP.put(0x25, "JLT");
+        OPCODE_MAP.put(0x26, "JGE");
+        OPCODE_MAP.put(0x27, "JLE");
+        OPCODE_MAP.put(0x28, "CALL");
+        OPCODE_MAP.put(0x29, "RET");
+        OPCODE_MAP.put(0x2A, "PUSH");
+        OPCODE_MAP.put(0x2B, "POP");
         
-        // Set/Compare opcodes (0x40–0x4F)
-        OPCODE_MAP.put(0x40, "SETEQ");
-        OPCODE_MAP.put(0x41, "SETNE");
-        OPCODE_MAP.put(0x42, "SETLT");
-        OPCODE_MAP.put(0x43, "SETGE");
-        OPCODE_MAP.put(0x44, "SETLE");
-        OPCODE_MAP.put(0x45, "SETGT");
+        // Set/Compare opcodes (0x30–0x35)
+        OPCODE_MAP.put(0x30, "SETEQ");
+        OPCODE_MAP.put(0x31, "SETNE");
+        OPCODE_MAP.put(0x32, "SETLT");
+        OPCODE_MAP.put(0x33, "SETGE");
+        OPCODE_MAP.put(0x34, "SETLE");
+        OPCODE_MAP.put(0x35, "SETGT");
         
-        // System/Privileged opcodes (0x50–0x5F)
-        OPCODE_MAP.put(0x50, "HALT");
-        OPCODE_MAP.put(0x51, "INT");
+        // System/Privileged opcodes (0x3E–0x3F)
+        OPCODE_MAP.put(0x3E, "HALT");
+        OPCODE_MAP.put(0x3F, "OUT");
     }
     
     public static Object[] decodeInstruction(int address, int instruction) {
@@ -63,11 +66,33 @@ public class InstructionDecoder {
         int rd = (instruction >>> 19) & 0x1F;      // [23:19] 
         int rs1 = (instruction >>> 14) & 0x1F;     // [18:14]
         int rs2 = (instruction >>> 9) & 0x1F;      // [13:9]
-        int immediate = instruction & 0x1FF;       // [8:0]
         
-        // Sign extend immediate
-        if ((immediate & 0x100) != 0) {
-            immediate |= 0xFFFFFE00;
+        // Handle different immediate field sizes based on instruction type
+        int immediate;
+        if (opcode == 0x12) { // LOADI uses 19-bit immediate [18:0]
+            immediate = instruction & 0x7FFFF;
+            // Sign extend 19-bit immediate
+            if ((immediate & 0x40000) != 0) {
+                immediate |= 0xFFF80000;
+            }
+        } else if (opcode >= 0x0D && opcode <= 0x0F) { // ADDI, SUBI, CMPI use 12-bit immediate [11:0]
+            immediate = instruction & 0xFFF;
+            // Sign extend 12-bit immediate
+            if ((immediate & 0x800) != 0) {
+                immediate |= 0xFFFFF000;
+            }
+        } else if (opcode >= 0x20 && opcode <= 0x2B) { // Branch/Jump instructions use 12-bit immediate [11:0]
+            immediate = instruction & 0xFFF;
+            // Sign extend 12-bit immediate
+            if ((immediate & 0x800) != 0) {
+                immediate |= 0xFFFFF000;
+            }
+        } else { // Default to 12-bit immediate [11:0]
+            immediate = instruction & 0xFFF;
+            // Sign extend 12-bit immediate
+            if ((immediate & 0x800) != 0) {
+                immediate |= 0xFFFFF000;
+            }
         }
         
         String mnemonic = OPCODE_MAP.getOrDefault(opcode, "OP_" + String.format("%02X", opcode));
@@ -136,7 +161,7 @@ public class InstructionDecoder {
             case "STORE":
                 return String.format("MEM[0x%X] = R%d", imm, rd);
             case "LOADI":
-                return String.format("R%d = 0x%X (immediate)", rd, imm);
+                return String.format("R%d = 0x%X (immediate)", rd, imm & 0x7FFFF); // Mask to 19 bits for display
             case "JMP":
                 return String.format("Jump to 0x%X", imm);
             case "JZ":

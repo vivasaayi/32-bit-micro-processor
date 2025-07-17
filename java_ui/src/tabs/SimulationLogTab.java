@@ -831,14 +831,28 @@ public class SimulationLogTab extends BaseTab {
     
     @Override
     public void loadContent(String content) {
+        // Immediately update the text area
         logArea.setText(content);
-        parseSimulationLog(content);
+        updateStatus("Loading simulation log...");
         
-        // Auto-apply smart layout when new content is loaded
-        SwingUtilities.invokeLater(() -> {
-            smartExpandPanels();
-            updateStatus("Simulation log loaded and parsed");
-        });
+        // Parse the log in a background thread to avoid blocking UI
+        SwingWorker<Void, Void> parser = new SwingWorker<Void, Void>() {
+            @Override
+            protected Void doInBackground() throws Exception {
+                parseSimulationLog(content);
+                return null;
+            }
+            
+            @Override
+            protected void done() {
+                // Auto-apply smart layout when parsing is complete
+                SwingUtilities.invokeLater(() -> {
+                    smartExpandPanels();
+                    updateStatus("Simulation log loaded and parsed");
+                });
+            }
+        };
+        parser.execute();
     }
     
     @Override

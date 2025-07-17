@@ -109,7 +109,7 @@ public class TestbenchTemplateTab extends BaseTab {
             "    // Framebuffer parameters\n" +
             "    parameter FB_WIDTH = 320;\n" +
             "    parameter FB_HEIGHT = 240;\n" +
-            "    parameter FB_BASE_ADDR = 32'h800;\n" +
+            "    parameter FB_BASE_ADDR = 32'h10000;\n" +
             "    parameter FB_SIZE = FB_WIDTH * FB_HEIGHT * 4;\n" +
             "    parameter DUMP_INTERVAL = 100;\n" +
             "\n" +
@@ -140,7 +140,8 @@ public class TestbenchTemplateTab extends BaseTab {
             "        integer r, g, b;\n" +
             "        begin\n" +
             "            $display(\"Dumping framebuffer at cycle %d...\", cycle_count);\n" +
-            "            fb_dump_file = $fopen(\"temp/reports/framebuffer.ppm\", \"w\");\n" +
+            "            fb_dump_file = $fopen(\"/Users/rajanpanneerselvam/work/hdl/temp/reports/framebuffer.ppm\", \"w\");\n" +
+            "            $display(\"Framebuffer dump file handle: %0d (file: %s)\", fb_dump_file, \"/Users/rajanpanneerselvam/work/hdl/temp/reports/framebuffer.ppm\");\n" +
             "            if (fb_dump_file != 0) begin\n" +
             "                $fwrite(fb_dump_file, \"P6\\n\");\n" +
             "                $fwrite(fb_dump_file, \"# RISC CPU Framebuffer\\n\");\n" +
@@ -159,6 +160,8 @@ public class TestbenchTemplateTab extends BaseTab {
             "                $fclose(fb_dump_file);\n" +
             "                dump_count = dump_count + 1;\n" +
             "                $display(\"Framebuffer dump #%d complete\", dump_count);\n" +
+            "            end else begin\n" +
+            "                $display(\"WARNING: Failed to open framebuffer file for writing!\");\n" +
             "            end\n" +
             "        end\n" +
             "    endtask\n" +
@@ -191,7 +194,7 @@ public class TestbenchTemplateTab extends BaseTab {
             "\n" +
             "    // Reset and test\n" +
             "    initial begin\n" +
-            "        $dumpfile(\"/Users/rajanpanneerselvam/work/hdl/temp/{TEST_NAME}.vcd\");\n" +
+            "        $dumpfile(\"{TEST_NAME}.vcd\");\n" +
             "        $dumpvars(0, tb_{TEST_NAME});\n" +
             "        $readmemh(\"{HEX_FILE_PATH}\", uut.internal_memory, 8192);\n" +
             "        rst_n = 0;\n" +

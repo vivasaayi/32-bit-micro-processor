@@ -17,9 +17,10 @@ public class AssemblyTab extends BaseTab {
     private JLabel filePathLabel;
     private JSplitPane mainSplitPane;
     private JSplitPane rightSplitPane;
-    
-    // Add a field for the save button
     private JButton saveButton;
+    private JButton reloadButton;
+    // Track the last loaded .asm file for reload
+    private File lastAsmFile = null;
     
     public AssemblyTab(AppState appState, JFrame parentFrame) {
         super(appState, parentFrame);
@@ -60,6 +61,11 @@ public class AssemblyTab extends BaseTab {
         saveButton.addActionListener(e -> saveContent());
         this.saveButton = saveButton;
         
+        // Reload button
+        reloadButton = new JButton("Reload");
+        reloadButton.setToolTipText("Reload file from disk");
+        reloadButton.addActionListener(e -> reloadFile());
+        
         // Keyboard shortcut for save (Ctrl+S)
         sourceArea.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke("control S"), "saveFile");
         sourceArea.getActionMap().put("saveFile", new AbstractAction() {
@@ -90,6 +96,7 @@ public class AssemblyTab extends BaseTab {
         JPanel leftPanel = new JPanel(new BorderLayout());
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
         buttonPanel.add(saveButton);
+        buttonPanel.add(reloadButton);
         buttonPanel.add(assembleButton);
         buttonPanel.add(explainButton);
         
@@ -115,6 +122,11 @@ public class AssemblyTab extends BaseTab {
         sourceArea.setText(content);
         logArea.setText("");
         explanationArea.setText("");
+        // Only update lastAsmFile if the current file is an .asm
+        File file = appState.getCurrentFile();
+        if (file != null && file.getName().endsWith(".asm")) {
+            lastAsmFile = file;
+        }
         updateFilePath();
     }
     
@@ -134,10 +146,29 @@ public class AssemblyTab extends BaseTab {
         }
     }
     
+    private void reloadFile() {
+        File file = lastAsmFile;
+        if (file != null && file.exists()) {
+            try {
+                String content = new String(java.nio.file.Files.readAllBytes(file.toPath()));
+                sourceArea.setText(content);
+                logArea.setText("");
+                explanationArea.setText("");
+                updateStatus("Reloaded: " + file.getName());
+                updateFilePath();
+            } catch (IOException e) {
+                showError("Reload Error", "Failed to reload file: " + e.getMessage());
+            }
+        } else {
+            showError("No ASM File", "No .asm file loaded or file does not exist.");
+        }
+    }
+    
     public void loadFromCompilation(String assemblyContent) {
         // Called when C code is compiled to assembly
         loadContent(assemblyContent);
         updateStatus("Assembly loaded from C compilation");
+        // Do not update lastAsmFile here
     }
     
     private void assembleCode() {
@@ -169,17 +200,21 @@ public class AssemblyTab extends BaseTab {
                     
                     String outputHex = sourceFile.getAbsolutePath().replace(".asm", ".hex");
                     
-                    // Build assembler command - adjust path as needed
-                    String assemblerPath = "/Users/rajanpanneerselvam/work/hdl/temp/assembler";
-                    ProcessBuilder pb = new ProcessBuilder(assemblerPath, sourceFile.getAbsolutePath(), outputHex);
-                    pb.directory(sourceFile.getParentFile());
+                    // Build assembler command with listing flag
+                    String assemblerPath = "temp/assembler";
+                    ProcessBuilder pb = new ProcessBuilder(assemblerPath, sourceFile.getAbsolutePath(), outputHex, "-l");
+                    pb.directory(new File("/Users/rajanpanneerselvam/work/hdl"));
                     
                     Process process = pb.start();
                     
-                    // Read stdout
+                    // Capture stdout (listing content) and stderr separately
+                    StringBuilder listingContent = new StringBuilder();
+                    
+                    // Read stdout (listing content)
                     try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
                         String line;
                         while ((line = reader.readLine()) != null) {
+                            listingContent.append(line).append("\n");
                             publish("ASM STDOUT: " + line);
                         }
                     }
@@ -198,13 +233,23 @@ public class AssemblyTab extends BaseTab {
                         File hexFile = new File(outputHex);
                         appState.addGeneratedFile("hex", hexFile);
                         
-                        // Notify parent to load hex tab
+                        // Capture the listing content for passing to HexTab
+                        final String finalListingContent = listingContent.toString();
+                        
+                        // Notify parent to load hex tab with listing
                         SwingUtilities.invokeLater(() -> {
                             try {
-                                java.lang.reflect.Method method = parentFrame.getClass().getMethod("loadGeneratedHex", File.class);
-                                method.invoke(parentFrame, hexFile);
+                                // Try the new method with listing first
+                                java.lang.reflect.Method method = parentFrame.getClass().getMethod("loadGeneratedHexWithListing", File.class, String.class);
+                                method.invoke(parentFrame, hexFile, finalListingContent);
                             } catch (Exception e) {
-                                System.setProperty("generated.hex.file", hexFile.getAbsolutePath());
+                                // Fallback to old method if new one doesn't exist
+                                try {
+                                    java.lang.reflect.Method method = parentFrame.getClass().getMethod("loadGeneratedHex", File.class);
+                                    method.invoke(parentFrame, hexFile);
+                                } catch (Exception e2) {
+                                    System.setProperty("generated.hex.file", hexFile.getAbsolutePath());
+                                }
                             }
                         });
                     } else {

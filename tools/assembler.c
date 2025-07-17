@@ -378,14 +378,13 @@ static int find_label(const char *name) {
 
 static uint32_t encode_instruction(opcode_t opcode, int rd, int rs1, int rs2, int immediate, bool use_19bit_imm) {
     if (use_19bit_imm) {
-        // 19-bit immediate format
+        // 19-bit immediate format - CPU expects: opcode[31:26], rd[23:19], immediate[18:0]
         return ((uint32_t)opcode << 26) |
                ((uint32_t)(rd & 0x1F) << 19) |
                ((uint32_t)immediate & 0x7FFFF);
     } else {
-        // Standard format - set bit 24 to distinguish from direct addressing
+        // Standard format - CPU expects: opcode[31:26], rd[23:19], rs1[18:14], rs2[13:9], immediate[11:0]
         return ((uint32_t)opcode << 26) |
-               (1 << 24) |  // Set bit 24 to make bits 25-24 = 01 (not 00)
                ((uint32_t)(rd & 0x1F) << 19) |
                ((uint32_t)(rs1 & 0x1F) << 14) |
                ((uint32_t)(rs2 & 0x1F) << 9) |
@@ -646,19 +645,27 @@ static void assemble_instruction(const char *line, int line_num) {
             if (label_address >= 0) {
                 // It's a label - use the label address
                 immediate = label_address;
+                encoded = encode_instruction(inst->opcode, rd, 0, 0, immediate, true);
+            } else if (is_label_name(tokens[2])) {
+                // Forward reference - mark for resolution in second pass
+                printf("DEBUG: LOADI Forward reference detected for label: %s\n", tokens[2]);
+                encoded = encode_instruction(inst->opcode, rd, 0, 0, 0, true);  // Placeholder
+                needs_resolution = true;
+                strncpy(forward_label, tokens[2], MAX_LABEL_LENGTH - 1);
+                forward_label[MAX_LABEL_LENGTH - 1] = '\0';
             } else {
                 // It's an immediate value
                 immediate = parse_immediate(tokens[2]);
-            }
-            
-            // Allow full 32-bit values for LOADI - we'll use 19-bit encoding when possible
-            if (immediate >= -262144 && immediate <= 262143) {
-                encoded = encode_instruction(inst->opcode, rd, 0, 0, immediate, true);
-            } else {
-                // For larger values, we need to split into multiple instructions
-                // For now, just mask to 19 bits and warn
-                warning("Large immediate value truncated to 19 bits", line_num);
-                encoded = encode_instruction(inst->opcode, rd, 0, 0, immediate & 0x7FFFF, true);
+                
+                // Allow full 32-bit values for LOADI - we'll use 19-bit encoding when possible
+                if (immediate >= -262144 && immediate <= 262143) {
+                    encoded = encode_instruction(inst->opcode, rd, 0, 0, immediate, true);
+                } else {
+                    // For larger values, we need to split into multiple instructions
+                    // For now, just mask to 19 bits and warn
+                    warning("Large immediate value truncated to 19 bits", line_num);
+                    encoded = encode_instruction(inst->opcode, rd, 0, 0, immediate & 0x7FFFF, true);
+                }
             }
             use_19bit_imm = true;
             break;
@@ -965,7 +972,7 @@ static void second_pass(void) {
                     }
                 } else {
                     // Absolute addressing for non-branch instructions
-                    assembled[i].instruction = encode_instruction(assembled[i].opcode, 0, 0, 0, label_addr, true);
+                    assembled[i].instruction = encode_instruction(assembled[i].opcode, assembled[i].rd, assembled[i].rs1, assembled[i].rs2, label_addr, true);
                 }
                 
                 assembled[i].needs_resolution = false;
