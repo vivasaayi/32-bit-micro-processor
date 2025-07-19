@@ -1,4 +1,4 @@
-package tabs;
+package org.poriyiyal.tabs;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -6,7 +6,7 @@ import javax.swing.border.TitledBorder;
 import java.awt.*;
 import java.util.HashMap;
 import java.util.Map;
-import util.AppState;
+import org.poriyiyal.util.AppState;
 
 /**
  * Tab for encoding instructions from opcode and operands to 32-bit hex/binary

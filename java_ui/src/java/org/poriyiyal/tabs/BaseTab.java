@@ -1,8 +1,8 @@
-package tabs;
+package org.poriyiyal.tabs;
 
 import javax.swing.*;
-import java.awt.*;
-import util.AppState;
+
+import org.poriyiyal.util.AppState;
 
 /**
  * Base class for all IDE tabs

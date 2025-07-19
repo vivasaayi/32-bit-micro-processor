@@ -1,6 +1,6 @@
-package util;
+package org.poriyiyal.util;
 
-import main.CpuIDE;
+import org.poriyiyal.CpuIDE;
 import java.io.File;
 import java.nio.file.*;
 import java.util.concurrent.Executors;

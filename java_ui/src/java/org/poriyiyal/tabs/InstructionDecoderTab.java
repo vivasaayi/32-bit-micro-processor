@@ -1,11 +1,11 @@
-package tabs;
+package org.poriyiyal.tabs;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import javax.swing.border.TitledBorder;
 import java.awt.*;
-import util.AppState;
-import util.InstructionDecoder;
+import org.poriyiyal.util.AppState;
+import org.poriyiyal.util.InstructionDecoder;
 
 /**
  * Tab for decoding 32-bit instructions
@@ -190,7 +190,7 @@ public class InstructionDecoderTab extends BaseTab {
         rs2Field.setText(String.format("R%d", rs2));
         imm19Field.setText(String.format("0x%05X (%d)", imm19, imm19));
         imm9Field.setText(String.format("0x%03X (%d)", imm9, imm9));
-        mnemonicField.setText(util.InstructionDecoder.getOpcodeName(opcode));
+        mnemonicField.setText(InstructionDecoder.getOpcodeName(opcode));
         // Generate detailed breakdown
         StringBuilder sb = new StringBuilder();
         sb.append("Instruction: 0x").append(String.format("%08X", value)).append("\n");
@@ -198,13 +198,13 @@ public class InstructionDecoderTab extends BaseTab {
         sb.append("             ").append("^^^^^^  ^^^^^ ^^^^^ ^^^^^ ^^^^^^^^^^^^^^^^^^^\n");
         sb.append("             ").append("opcode   rd   rs1   rs2     immediate\n\n");
         sb.append("Field Breakdown:\n");
-        sb.append("  Opcode (31:26): ").append(String.format("0x%02X", opcode)).append(" (").append(opcode).append(") - ").append(util.InstructionDecoder.getOpcodeName(opcode)).append("\n");
+        sb.append("  Opcode (31:26): ").append(String.format("0x%02X", opcode)).append(" (").append(opcode).append(") - ").append(InstructionDecoder.getOpcodeName(opcode)).append("\n");
         sb.append("  RD     (23:19): ").append(String.format("R%d", rd)).append(" (register ").append(rd).append(")\n");
         sb.append("  RS1    (18:14): ").append(String.format("R%d", rs1)).append(" (register ").append(rs1).append(")\n");
         sb.append("  RS2    (13:9):  ").append(String.format("R%d", rs2)).append(" (register ").append(rs2).append(")\n");
         sb.append("  IMM[18:0]  (18:0): ").append(String.format("0x%05X", imm19)).append(" (").append(imm19).append(")\n");
         sb.append("  IMM[8:0]   (8:0):  ").append(String.format("0x%03X", imm9)).append(" (").append(imm9).append(")\n\n");
-        String mnemonic = util.InstructionDecoder.getOpcodeName(opcode);
+        String mnemonic = InstructionDecoder.getOpcodeName(opcode);
         sb.append("Instruction Format:\n");
         if (opcode >= 0x00 && opcode <= 0x1F) {
             sb.append("  Type: ALU Operation\n");

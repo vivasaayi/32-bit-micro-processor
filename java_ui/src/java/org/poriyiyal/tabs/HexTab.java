@@ -1,4 +1,4 @@
-package tabs;
+package org.poriyiyal.tabs;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
@@ -12,9 +12,9 @@ import java.io.*;
 import java.util.Map;
 import java.util.HashMap;
 import javax.swing.SwingWorker;
-import util.AppState;
-import util.InstructionDecoder;
-import main.CpuIDE;
+import org.poriyiyal.util.AppState;
+import org.poriyiyal.util.InstructionDecoder;
+import org.poriyiyal.CpuIDE;
 
 public class HexTab extends BaseTab {
     private DefaultTableModel tableModel;

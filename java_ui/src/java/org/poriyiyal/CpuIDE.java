@@ -1,4 +1,4 @@
-package main;
+package org.poriyiyal;
 
 import javax.swing.*;
 import javax.swing.filechooser.FileNameExtensionFilter;
@@ -9,9 +9,10 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 
-import tabs.*;
-import util.AppState;
-import util.FileWatcher;
+import org.poriyiyal.tabs.*;
+import org.poriyiyal.tabs.*;
+import org.poriyiyal.util.AppState;
+import org.poriyiyal.util.FileWatcher;
 
 /**
  * Main IDE Application for Custom CPU Development

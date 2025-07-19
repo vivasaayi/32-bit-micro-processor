@@ -1,11 +1,9 @@
-package tabs;
+package org.poriyiyal.tabs;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
 import java.io.*;
-import util.AppState;
+import org.poriyiyal.util.AppState;
 
 /**
  * Testbench Template Tab for editing testbench templates

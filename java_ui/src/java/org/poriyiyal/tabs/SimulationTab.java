@@ -1,15 +1,14 @@
-package tabs;
+package org.poriyiyal.tabs;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
 import java.io.*;
 import javax.swing.SwingWorker;
 import java.util.Timer;
 import java.util.TimerTask;
-import util.AppState;
+import org.poriyiyal.util.AppState;
+import org.poriyiyal.CpuIDE;
 
 public class SimulationTab extends BaseTab {
     private JTextArea verilogArea;
@@ -290,35 +289,73 @@ public class SimulationTab extends BaseTab {
                     ProcessBuilder pb = new ProcessBuilder("vvp", vvpFile);
                     pb.directory(new File(vvpFile).getParentFile());
                     
-                    simulationProcess = pb.start();
+                    // Synchronized access to simulationProcess
+                    synchronized (SimulationTab.this) {
+                        if (!isSimulating) {
+                            return null; // Simulation was stopped before we could start
+                        }
+                        simulationProcess = pb.start();
+                    }
                     
                     // Read simulation output
-                    try (BufferedReader reader = new BufferedReader(new InputStreamReader(simulationProcess.getInputStream()))) {
-                        String line;
-                        while ((line = reader.readLine()) != null && isSimulating) {
-                            String simLine = "SIM: " + line;
-                            publish(simLine);
-                            logBuffer.append(simLine).append("\n");
-                            
-                            // Parse register updates if format is known
-                            parseSimulationOutput(line);
+                    Process currentProcess = null;
+                    synchronized (SimulationTab.this) {
+                        currentProcess = simulationProcess;
+                    }
+                    
+                    if (currentProcess != null) {
+                        try (BufferedReader reader = new BufferedReader(new InputStreamReader(currentProcess.getInputStream()))) {
+                            String line;
+                            while ((line = reader.readLine()) != null && isSimulating) {
+                                // Check if process is still valid
+                                synchronized (SimulationTab.this) {
+                                    if (simulationProcess == null) break;
+                                }
+                                String simLine = "SIM: " + line;
+                                publish(simLine);
+                                logBuffer.append(simLine).append("\n");
+                                
+                                // Parse register updates if format is known
+                                parseSimulationOutput(line);
+                            }
                         }
                     }
                     
-                    // Read error output
-                    try (BufferedReader reader = new BufferedReader(new InputStreamReader(simulationProcess.getErrorStream()))) {
-                        String line;
-                        while ((line = reader.readLine()) != null && isSimulating) {
-                            String errLine = "SIM ERROR: " + line;
-                            publish(errLine);
-                            logBuffer.append(errLine).append("\n");
+                    // Read error output - check if process still exists
+                    synchronized (SimulationTab.this) {
+                        currentProcess = simulationProcess;
+                    }
+                    
+                    if (currentProcess != null) {
+                        try (BufferedReader reader = new BufferedReader(new InputStreamReader(currentProcess.getErrorStream()))) {
+                            String line;
+                            while ((line = reader.readLine()) != null && isSimulating) {
+                                // Check if process is still valid
+                                synchronized (SimulationTab.this) {
+                                    if (simulationProcess == null) break;
+                                }
+                                String errLine = "SIM ERROR: " + line;
+                                publish(errLine);
+                                logBuffer.append(errLine).append("\n");
+                            }
                         }
                     }
                     
-                    int exitCode = simulationProcess.waitFor();
-                    String exitMsg = "Simulation completed with exit code: " + exitCode;
-                    publish(exitMsg);
-                    logBuffer.append(exitMsg).append("\n");
+                    // Wait for process completion - check if process still exists
+                    synchronized (SimulationTab.this) {
+                        currentProcess = simulationProcess;
+                    }
+                    
+                    if (currentProcess != null) {
+                        int exitCode = currentProcess.waitFor();
+                        String exitMsg = "Simulation completed with exit code: " + exitCode;
+                        publish(exitMsg);
+                        logBuffer.append(exitMsg).append("\n");
+                    } else {
+                        String stopMsg = "Simulation was stopped by user";
+                        publish(stopMsg);
+                        logBuffer.append(stopMsg).append("\n");
+                    }
                     
                     // After simulation, update Sim Log and VCD tabs, and save log to file
                     String logFilePath = "/Users/rajanpanneerselvam/work/hdl/temp/" + currentTestName + ".log";
@@ -331,8 +368,8 @@ public class SimulationTab extends BaseTab {
                     } catch (Exception e) {
                         e.printStackTrace(); // Log file write errors
                     }
-                    if (parentFrame instanceof main.CpuIDE) {
-                        main.CpuIDE ide = (main.CpuIDE) parentFrame;
+                    if (parentFrame instanceof CpuIDE) {
+                        CpuIDE ide = (CpuIDE) parentFrame;
                         // Update simulation log in Sim Log tab without switching tabs
                         SwingUtilities.invokeLater(() -> {
                             ide.updateSimulationLogTab(logBuffer.toString());
@@ -537,9 +574,16 @@ public class SimulationTab extends BaseTab {
         isSimulating = false;
         appState.setSimulating(false);
 
-        if (simulationProcess != null) {
-            simulationProcess.destroy();
-            simulationProcess = null;
+        // Synchronized access to simulationProcess to prevent race conditions
+        synchronized (this) {
+            if (simulationProcess != null) {
+                try {
+                    simulationProcess.destroy();
+                } catch (Exception e) {
+                    System.err.println("Error destroying simulation process: " + e.getMessage());
+                }
+                simulationProcess = null;
+            }
         }
 
         if (uartTimer != null) {
@@ -552,8 +596,8 @@ public class SimulationTab extends BaseTab {
         updateStatus("Simulation stopped");
 
         // Automatically update and parse the simulation log in SimulationLogTab
-        if (parentFrame instanceof main.CpuIDE) {
-            ((main.CpuIDE) parentFrame).updateSimulationLogTab(simulationLogArea.getText());
+        if (parentFrame instanceof CpuIDE) {
+            ((CpuIDE) parentFrame).updateSimulationLogTab(simulationLogArea.getText());
         }
     }
     

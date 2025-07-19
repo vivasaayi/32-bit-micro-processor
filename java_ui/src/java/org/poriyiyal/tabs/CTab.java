@@ -1,4 +1,4 @@
-package tabs;
+package org.poriyiyal.tabs;
 
 import javax.swing.*;
 import java.awt.*;
@@ -6,7 +6,7 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.io.*;
 import javax.swing.SwingWorker;
-import util.AppState;
+import org.poriyiyal.util.AppState;
 
 /**
  * C Tab for editing and compiling C source code

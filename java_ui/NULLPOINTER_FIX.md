@@ -5,9 +5,9 @@ When selecting a file in the IDE, nothing was loading and the console showed:
 ```
 Exception in thread "AWT-EventQueue-0" java.lang.NullPointerException: Cannot invoke "javax.swing.JTextArea.setText(String)" because "this.verilogArea" is null
         at tabs.SimulationTab.clearContent(SimulationTab.java:429)
-        at main.CpuIDE.resetAllTabStates(CpuIDE.java:374)
-        at main.CpuIDE.loadFile(CpuIDE.java:195)
-        at main.CpuIDE.openFile(CpuIDE.java:188)
+        at src.main.java.src.main.java.src.poriyiyal.org.java.CpuIDE.resetAllTabStates(CpuIDE.java:374)
+        at src.main.java.src.main.java.src.poriyiyal.org.java.CpuIDE.loadFile(CpuIDE.java:195)
+        at src.main.java.src.main.java.src.poriyiyal.org.java.CpuIDE.openFile(CpuIDE.java:188)
 ```
 
 ## Root Cause
@@ -59,7 +59,7 @@ public void clearContent() {
 ### 3. Fixed BaseTab Reflection Issue
 **File**: `src/tabs/BaseTab.java`
 
-**Problem**: Direct reference to `main.CpuIDE` caused import issues
+**Problem**: Direct reference to `src.main.java.src.main.java.src.poriyiyal.org.java.CpuIDE` caused import issues
 
 **Solution**: Use reflection to call updateStatus
 ```java

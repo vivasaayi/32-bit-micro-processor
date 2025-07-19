@@ -1,4 +1,4 @@
-package tabs;
+package org.poriyiyal.tabs;
 
 import javax.swing.*;
 import java.awt.*;
@@ -10,9 +10,9 @@ import java.util.TimerTask;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
-import util.AppState;
-import main.CpuIDE;
+
+import org.poriyiyal.util.AppState;
+import org.poriyiyal.CpuIDE;
 
 /**
  * Framebuffer Graphics Tab for CPU IDE

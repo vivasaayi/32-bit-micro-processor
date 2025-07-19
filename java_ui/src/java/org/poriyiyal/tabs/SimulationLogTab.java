@@ -1,4 +1,4 @@
-package tabs;
+package org.poriyiyal.tabs;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
@@ -12,8 +12,8 @@ import java.util.Set;
 import java.util.HashSet;
 import java.util.List;
 import java.util.ArrayList;
-import util.AppState;
-import util.InstructionDecoder;
+import org.poriyiyal.util.AppState;
+import org.poriyiyal.util.InstructionDecoder;
 import java.util.Objects;
 import java.util.Arrays;
 

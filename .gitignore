@@ -190,3 +190,4 @@ benchmark_*.dat
 temp
 tools/assembler.dSYM
 *.class
+java_ui/target

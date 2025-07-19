@@ -1,4 +1,4 @@
-package util;
+package org.poriyiyal.util;
 
 import java.io.File;
 import java.util.HashMap;

@@ -1,12 +1,12 @@
-package tabs;
+package org.poriyiyal.tabs;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
 import java.io.*;
 import javax.swing.SwingWorker;
-import util.AppState;
+
+import org.poriyiyal.CpuIDE;
+import org.poriyiyal.util.AppState;
 
 /**
  * Combined V/VVP Tab for Verilog testbench files and compiled VVP files
@@ -324,8 +324,8 @@ public class VVvpTab extends BaseTab {
             //int exitCode = process.waitFor();
             //output.append("\n[Process exited with code " + exitCode + "]\n");
             // Show in Simulation Log tab
-            if (parentFrame instanceof main.CpuIDE) {
-                main.CpuIDE ide = (main.CpuIDE) parentFrame;
+            if (parentFrame instanceof CpuIDE) {
+                CpuIDE ide = (CpuIDE) parentFrame;
                 // Switch to Simulation tab instead of Sim Log
                 ide.switchToTab("Simulation");
                 // Optionally, update the simulation log area in SimulationTab if needed
