@@ -59,7 +59,7 @@ public class SimulationLogTab extends BaseTab {
         logArea.setForeground(Color.GREEN);
         
         // Decoded instructions table
-        String[] decodedColumns = {"PC", "OpCode", "Mnemonic", "RD", "RS1", "RS2", "IMM", "Description"};
+        String[] decodedColumns = {"PC", "OpCode", "Mnemonic", "RD", "RS1", "RS2", "IMM", "Description", "Instruction Set"};
         decodedTableModel = new DefaultTableModel(decodedColumns, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
@@ -67,8 +67,17 @@ public class SimulationLogTab extends BaseTab {
             }
         };
         decodedTable = new JTable(decodedTableModel);
-        decodedTable.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 10));
-        decodedTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        // Add listener for instruction selection to show details
+        decodedTable.getSelectionModel().addListSelectionListener(e -> {
+            if (!e.getValueIsAdjusting()) {
+                int selectedRow = decodedTable.getSelectedRow();
+                if (selectedRow >= 0) {
+                    showInstructionDetails(selectedRow);
+                    currentInstructionRow = selectedRow;
+                    updateCurrentRegisterDisplay();
+                }
+            }
+        });
         
         // Initialize current register values (ensure map is created)
         if (currentRegisterValues == null) {
@@ -925,11 +934,13 @@ public class SimulationLogTab extends BaseTab {
         instructionRegisterValues.clear();
         String[] lines = content.split("\n");
         
-        // Patterns for parsing simulation log
-        Pattern executePattern = Pattern.compile("(?:DEBUG_EXECUTE:|DECODE_DONE:) PC=(0x[0-9A-Fa-f]+), (?:IS=0x([0-9A-Fa-f]+) )?Opcode=([0-9A-Fa-f]+), rd=\\s*(\\d+), rs1=\\s*(\\d+), rs2=\\s*(\\d+), imm=([0-9A-Fa-f]+)");
-        Pattern writebackPattern = Pattern.compile("DEBUG CPU Writeback: Writing\\s+([0-9]+) to R (\\d+)");
-        Pattern flagsPattern = Pattern.compile("(?:EXECUTE_DEBUG_ALU:|DEBUG CPU: Flags updated to) C=(\\d+) Z=(\\d+) N=(\\d+) V=(\\d+)");
-        Pattern regfileWritePattern = Pattern.compile("\\[register_file] Write: R(\\d+) <= 0x([0-9A-Fa-f]{8})");
+        // Enhanced patterns for parsing simulation log with clear markers
+        Pattern instrStartPattern = Pattern.compile("==== INSTR_START ==== PC=(0x[0-9A-Fa-f]+) IS=(0x[0-9A-Fa-f]+) ====");
+        Pattern instrEndPattern = Pattern.compile("==== INSTR_END ==== PC=(0x[0-9A-Fa-f]+) ====");
+        Pattern decodeFieldsPattern = Pattern.compile("DECODE_FIELDS: Opcode=(0x[0-9A-Fa-f]+), rd=(\\d+), rs1=(\\d+), rs2=(\\d+), imm=(0x[0-9A-Fa-f]+)");
+        Pattern writebackRegPattern = Pattern.compile("WRITEBACK_REG: R(\\d+) <= (0x[0-9A-Fa-f]+)");
+        Pattern registerFileWritePattern = Pattern.compile("REGISTER_FILE_WRITE: R(\\d+) <= (0x[0-9A-Fa-f]+)");
+        Pattern executeFlagsAfterPattern = Pattern.compile("EXECUTE_FLAGS_AFTER: C=(\\d+) Z=(\\d+) N=(\\d+) V=(\\d+)");
         
         List<InstructionInfo> instructions = new ArrayList<>();
         Map<Integer, Long> regValues = new HashMap<>();
@@ -937,78 +948,88 @@ public class SimulationLogTab extends BaseTab {
         String lastFlags = "0000";
         
         InstructionInfo currentInstruction = null;
+        List<String> currentInstructionLogs = new ArrayList<>();
         
+        // Multi-pass parsing approach using clear instruction markers
         for (String origLine : lines) {
             String line = stripLogPrefix(origLine);
             
-            // Parse instruction execution
-            Matcher executeMatcher = executePattern.matcher(line);
-            if (executeMatcher.find()) {
+            // Check for instruction start marker
+            Matcher instrStartMatcher = instrStartPattern.matcher(line);
+            if (instrStartMatcher.find()) {
                 // Save previous instruction if it exists
                 if (currentInstruction != null) {
+                    currentInstruction.logs = new ArrayList<>(currentInstructionLogs);
                     currentInstruction.finalizeRegisters(regValues, lastFlags);
                     instructions.add(currentInstruction);
                 }
+                
                 // Start new instruction
-                String pc = executeMatcher.group(1);
-                String isWord = executeMatcher.group(2); // May be null
-                int opcode = Integer.parseInt(executeMatcher.group(3), 16);
-                int rd = Integer.parseInt(executeMatcher.group(4));
-                int rs1 = Integer.parseInt(executeMatcher.group(5));
-                int rs2 = Integer.parseInt(executeMatcher.group(6));
-                String immStr = executeMatcher.group(7);
-                int imm = 0;
-                try {
-                    imm = Integer.parseInt(immStr, 16);
-                    if (imm > 0x7F) {
-                        imm = imm - 0x100;
-                    }
-                } catch (NumberFormatException e) {
-                    imm = 0;
-                }
-                currentInstruction = new InstructionInfo(pc, opcode, rd, rs1, rs2, imm);
-                if (isWord != null) {
-                    currentInstruction.instructionSet = "0x" + isWord;
+                String pc = instrStartMatcher.group(1);
+                String instructionSet = instrStartMatcher.group(2);
+                currentInstruction = new InstructionInfo(pc, 0, 0, 0, 0, 0);
+                currentInstruction.instructionSet = instructionSet;
+                currentInstructionLogs.clear();
+                currentInstructionLogs.add(origLine);
+                continue;
+            }
+            
+            // Check for instruction end marker
+            Matcher instrEndMatcher = instrEndPattern.matcher(line);
+            if (instrEndMatcher.find()) {
+                if (currentInstruction != null) {
+                    currentInstructionLogs.add(origLine);
                 }
                 continue;
             }
             
-            // Parse register writeback
-            Matcher writebackMatcher = writebackPattern.matcher(line);
-            if (writebackMatcher.find()) {
-                try {
-                    long value = Long.parseLong(writebackMatcher.group(1));
-                    int regNum = Integer.parseInt(writebackMatcher.group(2));
+            // If we're currently processing an instruction, collect all logs
+            if (currentInstruction != null) {
+                currentInstructionLogs.add(origLine);
+                
+                // Parse decode fields
+                Matcher decodeFieldsMatcher = decodeFieldsPattern.matcher(line);
+                if (decodeFieldsMatcher.find()) {
+                    currentInstruction.opcode = Integer.parseInt(decodeFieldsMatcher.group(1).substring(2), 16);
+                    currentInstruction.rd = Integer.parseInt(decodeFieldsMatcher.group(2));
+                    currentInstruction.rs1 = Integer.parseInt(decodeFieldsMatcher.group(3));
+                    currentInstruction.rs2 = Integer.parseInt(decodeFieldsMatcher.group(4));
+                    currentInstruction.imm = Integer.parseInt(decodeFieldsMatcher.group(5).substring(2), 16);
+                    // Convert to signed if needed
+                    if (currentInstruction.imm > 0x7FFFFFFF) {
+                        currentInstruction.imm = (int)(currentInstruction.imm - 0x100000000L);
+                    }
+                }
+                
+                // Parse flags after execution
+                Matcher executeFlagsAfterMatcher = executeFlagsAfterPattern.matcher(line);
+                if (executeFlagsAfterMatcher.find()) {
+                    String c = executeFlagsAfterMatcher.group(1);
+                    String z = executeFlagsAfterMatcher.group(2);
+                    String n = executeFlagsAfterMatcher.group(3);
+                    String v = executeFlagsAfterMatcher.group(4);
+                    lastFlags = c + z + n + v;
+                    regValues.put(1, Long.parseLong(lastFlags));
+                }
+                
+                // Parse register writes
+                Matcher writebackRegMatcher = writebackRegPattern.matcher(line);
+                if (writebackRegMatcher.find()) {
+                    int regNum = Integer.parseInt(writebackRegMatcher.group(1));
+                    long value = Long.parseLong(writebackRegMatcher.group(2).substring(2), 16);
                     if (regNum >= 0 && regNum < 32) {
                         regValues.put(regNum + 2, value);
-                        if (currentInstruction != null) {
-                            currentInstruction.changedRegisters.add(regNum);
-                        }
+                        currentInstruction.changedRegisters.add(regNum);
                     }
-                } catch (NumberFormatException e) {
-                    continue;
                 }
-            }
-            
-            // Parse flags update
-            Matcher flagsMatcher = flagsPattern.matcher(line);
-            if (flagsMatcher.find()) {
-                String c = flagsMatcher.group(1);
-                String z = flagsMatcher.group(2);
-                String n = flagsMatcher.group(3);
-                String v = flagsMatcher.group(4);
-                lastFlags = c + z + n + v;
-                regValues.put(1, Long.parseLong(lastFlags));
-            }
-            
-            // Parse register_file write
-            Matcher regfileWriteMatcher = regfileWritePattern.matcher(line);
-            if (regfileWriteMatcher.find()) {
-                int regNum = Integer.parseInt(regfileWriteMatcher.group(1));
-                long value = Long.parseLong(regfileWriteMatcher.group(2), 16);
-                if (regNum >= 0 && regNum < 32) {
-                    regValues.put(regNum + 2, value);
-                    if (currentInstruction != null) {
+                
+                // Parse register file writes
+                Matcher registerFileWriteMatcher = registerFileWritePattern.matcher(line);
+                if (registerFileWriteMatcher.find()) {
+                    int regNum = Integer.parseInt(registerFileWriteMatcher.group(1));
+                    long value = Long.parseLong(registerFileWriteMatcher.group(2).substring(2), 16);
+                    if (regNum >= 0 && regNum < 32) {
+                        regValues.put(regNum + 2, value);
                         currentInstruction.changedRegisters.add(regNum);
                     }
                 }
@@ -1017,6 +1038,7 @@ public class SimulationLogTab extends BaseTab {
         
         // Save the last instruction
         if (currentInstruction != null) {
+            currentInstruction.logs = new ArrayList<>(currentInstructionLogs);
             currentInstruction.finalizeRegisters(regValues, lastFlags);
             instructions.add(currentInstruction);
         }
@@ -1024,17 +1046,21 @@ public class SimulationLogTab extends BaseTab {
         // Now populate the tables with the collected instruction info
         int instructionCount = 0;
         for (InstructionInfo inst : instructions) {
-            // Add to decoded table, now including instruction set if available
-            Object[] row = InstructionDecoder.decodeFromSimLog(inst.pc, inst.opcode, inst.rd, inst.rs1, inst.rs2, inst.imm);
-            // If you have instruction set info, append it to the row (or insert at the right index)
-            // For demonstration, let's assume inst has a field 'instructionSet' (String)
-            // If not, you may need to extract it from the log or elsewhere
-            if (inst.instructionSet != null) {
-                Object[] newRow = Arrays.copyOf(row, row.length + 1);
-                newRow[row.length] = inst.instructionSet;
-                row = newRow;
+            // Use the instruction set (IS) for accurate decoding instead of parsed fields
+            Object[] row;
+            if (inst.instructionSet != null && !inst.instructionSet.isEmpty()) {
+                // Decode using the raw instruction word for maximum accuracy
+                long instructionWord = Long.parseLong(inst.instructionSet.substring(2), 16);
+                row = InstructionDecoder.decodeFromInstructionWord(inst.pc, instructionWord);
+            } else {
+                // Fallback to parsed fields if IS not available
+                row = InstructionDecoder.decodeFromSimLog(inst.pc, inst.opcode, inst.rd, inst.rs1, inst.rs2, inst.imm);
             }
-            decodedTableModel.addRow(row);
+            
+            // Add instruction set to the row
+            Object[] newRow = Arrays.copyOf(row, row.length + 1);
+            newRow[row.length] = inst.instructionSet != null ? inst.instructionSet : "N/A";
+            decodedTableModel.addRow(newRow);
             
             // Store register tracking info
             instructionRegisterChanges.put(instructionCount, new HashSet<>(inst.changedRegisters));
@@ -1063,8 +1089,167 @@ public class SimulationLogTab extends BaseTab {
             currentRegisterPanel.revalidate();
             currentRegisterPanel.repaint();
         }
-        updateStatus("Parsed " + instructionCount + " instructions from simulation log");
+        
+        // Store parsed instructions for the details window
+        parsedInstructions.clear();
+        parsedInstructions.addAll(instructions);
+        
+        updateStatus("Parsed " + instructions.size() + " instructions using enhanced multi-pass parsing with instruction markers");
     }
+    private JFrame instructionDetailsFrame = null;
+    private JTextArea instructionLogsArea;
+    private JTable instructionDetailsTable;
+    
+    private void showInstructionDetails(int instructionIndex) {
+        // Create or update instruction details window
+        if (instructionDetailsFrame == null) {
+            createInstructionDetailsWindow();
+        }
+        
+        // Update details for the selected instruction
+        updateInstructionDetailsWindow(instructionIndex);
+        
+        // Show window if hidden - without stealing focus
+        if (!instructionDetailsFrame.isVisible()) {
+            instructionDetailsFrame.setVisible(true);
+        }
+        
+        // Bring to front but don't request focus
+        instructionDetailsFrame.toFront();
+        instructionDetailsFrame.repaint();
+    }
+    
+    private void createInstructionDetailsWindow() {
+        instructionDetailsFrame = new JFrame("Instruction Details - Detachable Debug Panel");
+        instructionDetailsFrame.setDefaultCloseOperation(JFrame.HIDE_ON_CLOSE);
+        instructionDetailsFrame.setSize(800, 600);
+        instructionDetailsFrame.setLocationRelativeTo(this);
+        
+        // Prevent the window from stealing focus
+        instructionDetailsFrame.setFocusableWindowState(false);
+        instructionDetailsFrame.setAutoRequestFocus(false);
+        
+        JPanel mainPanel = new JPanel(new BorderLayout());
+        
+        // Top panel with instruction summary
+        JPanel summaryPanel = new JPanel(new BorderLayout());
+        summaryPanel.setBorder(BorderFactory.createTitledBorder("Instruction Summary"));
+        
+        String[] detailColumns = {"Field", "Value", "Description"};
+        DefaultTableModel detailModel = new DefaultTableModel(detailColumns, 0) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                return false;
+            }
+        };
+        instructionDetailsTable = new JTable(detailModel);
+        instructionDetailsTable.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+        summaryPanel.add(new JScrollPane(instructionDetailsTable), BorderLayout.CENTER);
+        
+        // Bottom panel with raw logs
+        JPanel logsPanel = new JPanel(new BorderLayout());
+        logsPanel.setBorder(BorderFactory.createTitledBorder("Raw Logs for this Instruction"));
+        
+        instructionLogsArea = new JTextArea();
+        instructionLogsArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 10));
+        instructionLogsArea.setEditable(false);
+        instructionLogsArea.setBackground(new Color(248, 248, 248));
+        logsPanel.add(new JScrollPane(instructionLogsArea), BorderLayout.CENTER);
+        
+        // Split the window
+        JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, summaryPanel, logsPanel);
+        splitPane.setResizeWeight(0.4);
+        splitPane.setOneTouchExpandable(true);
+        
+        mainPanel.add(splitPane, BorderLayout.CENTER);
+        
+        // Add a close button and detach info
+        JPanel buttonPanel = new JPanel(new FlowLayout());
+        
+        JButton focusButton = new JButton("Focus Window");
+        focusButton.addActionListener(e -> {
+            instructionDetailsFrame.setFocusableWindowState(true);
+            instructionDetailsFrame.requestFocus();
+            instructionDetailsFrame.toFront();
+        });
+        
+        JButton closeButton = new JButton("Close");
+        closeButton.addActionListener(e -> instructionDetailsFrame.setVisible(false));
+        
+        JLabel infoLabel = new JLabel("This window can be moved to another monitor for multi-screen debugging");
+        infoLabel.setFont(new Font(Font.SANS_SERIF, Font.ITALIC, 10));
+        
+        buttonPanel.add(infoLabel);
+        buttonPanel.add(focusButton);
+        buttonPanel.add(closeButton);
+        
+        mainPanel.add(buttonPanel, BorderLayout.SOUTH);
+        instructionDetailsFrame.add(mainPanel);
+    }
+    
+    private void updateInstructionDetailsWindow(int instructionIndex) {
+        if (instructionDetailsFrame == null || instructionDetailsTable == null) return;
+        
+        DefaultTableModel model = (DefaultTableModel) instructionDetailsTable.getModel();
+        model.setRowCount(0);
+        
+        // Get instruction details from the decoded table
+        if (instructionIndex >= 0 && instructionIndex < decodedTableModel.getRowCount()) {
+            Object[] rowData = new Object[decodedTableModel.getColumnCount()];
+            for (int i = 0; i < decodedTableModel.getColumnCount(); i++) {
+                rowData[i] = decodedTableModel.getValueAt(instructionIndex, i);
+            }
+            
+            // Add details to the table
+            model.addRow(new Object[]{"PC", rowData[0], "Program Counter"});
+            model.addRow(new Object[]{"OpCode", rowData[1], "Operation Code"});
+            model.addRow(new Object[]{"Mnemonic", rowData[2], "Instruction Name"});
+            model.addRow(new Object[]{"RD", rowData[3], "Destination Register"});
+            model.addRow(new Object[]{"RS1", rowData[4], "Source Register 1"});
+            model.addRow(new Object[]{"RS2", rowData[5], "Source Register 2"});
+            model.addRow(new Object[]{"IMM", rowData[6], "Immediate Value"});
+            model.addRow(new Object[]{"Description", rowData[7], "Operation Description"});
+            if (rowData.length > 8) {
+                model.addRow(new Object[]{"Instruction Set", rowData[8], "Raw 32-bit Instruction Word"});
+            }
+            
+            // Add register state information
+            if (instructionRegisterValues.containsKey(instructionIndex)) {
+                Map<Integer, Long> regValues = instructionRegisterValues.get(instructionIndex);
+                Set<Integer> changedRegs = instructionRegisterChanges.getOrDefault(instructionIndex, new HashSet<>());
+                
+                model.addRow(new Object[]{"", "", ""});
+                model.addRow(new Object[]{"Register Changes", "", ""});
+                for (int reg : changedRegs) {
+                    if (reg >= 0 && reg < 32) {
+                        Long value = regValues.get(reg + 2);
+                        model.addRow(new Object[]{"R" + reg + " (changed)", 
+                                                String.format("0x%08X", value), 
+                                                "Register " + reg + " was modified"});
+                    }
+                }
+            }
+        }
+        
+        // Update logs - this would need to be implemented with the stored logs
+        instructionLogsArea.setText("Raw logs for instruction " + (instructionIndex + 1) + ":\n\n");
+        if (instructionIndex < parsedInstructions.size()) {
+            InstructionInfo inst = parsedInstructions.get(instructionIndex);
+            if (inst.logs != null) {
+                for (String log : inst.logs) {
+                    instructionLogsArea.append(log + "\n");
+                }
+            }
+        } else {
+            instructionLogsArea.append("No detailed logs available for this instruction.");
+        }
+        
+        instructionDetailsFrame.setTitle("Instruction Details - #" + (instructionIndex + 1) + 
+                                       " @ " + decodedTableModel.getValueAt(instructionIndex, 0));
+    }
+    
+    // Store parsed instructions for details window
+    private List<InstructionInfo> parsedInstructions = new ArrayList<>();
     
     // Enhanced CollapsiblePanel class with modern styling and features
     private static class CollapsiblePanel extends JPanel {
@@ -1208,6 +1393,7 @@ public class SimulationLogTab extends BaseTab {
         Map<Integer, Long> registerSnapshot;
         String flags;
         String instructionSet; // Raw instruction word (IS=...)
+        List<String> logs = new ArrayList<>(); // All logs for this instruction
 
         InstructionInfo(String pc, int opcode, int rd, int rs1, int rs2, int imm) {
             this.pc = pc;

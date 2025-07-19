@@ -227,22 +227,24 @@ module cpu_core (
             state <= next_state;
             case (state)
                 FETCH: begin
-                    $display("FETCH_BEGIN: PC=0x%x, IS=0x%x Opcode=%h, rd=%d, rs1=%d, rs2=%d, imm=%h, alu_result=%d", pc_reg, instruction_reg, opcode, rd, rs1, rs2, immediate, alu_result);
                     if (mem_ready) begin
                         instruction_reg <= data_bus;
+                        $display("==== INSTR_START ==== PC=0x%08x IS=0x%08x ====", pc_reg, data_bus);
+                        $display("FETCH_DONE: PC=0x%x, fetched instruction=0x%x", pc_reg, data_bus);
                         pc_reg <= pc_reg + 32'h4;
                     end
-                    //Both log statements shows same result
-                    //$display("FETCH_DONE: PC=0x%x, IS=0x%x Opcode=%h, rd=%d, rs1=%d, rs2=%d, imm=%h, alu_result=%d", pc_reg, instruction_reg, opcode, rd, rs1, rs2, immediate, alu_result);
                 end
                 
                 DECODE: begin
-                    $display("DECODE_DONE: PC=0x%x, IS=0x%x Opcode=%h, rd=%d, rs1=%d, rs2=%d, imm=%h, alu_result=%d", pc_reg, instruction_reg, opcode, rd, rs1, rs2, immediate, alu_result);
+                    $display("DECODE_START: PC=0x%08x, IS=0x%08x", pc_reg, instruction_reg);
+                    $display("DECODE_FIELDS: Opcode=0x%02x, rd=%d, rs1=%d, rs2=%d, imm=0x%08x", opcode, rd, rs1, rs2, immediate);
+                    $display("DECODE_REGS_BEFORE: R%d=0x%08x, R%d=0x%08x", rs1, reg_data_a, rs2, reg_data_b);
+                    $display("DECODE_FLAGS_BEFORE: C=%b Z=%b N=%b V=%b", flags_reg[0], flags_reg[1], flags_reg[2], flags_reg[3]);
                     // Decode happens combinatorially
                 end
                 
                 EXECUTE: begin
-                    $display("EXECUTE_BEGIN: PC=0x%x, IS=0x%x Opcode=%h, rd=%d, rs1=%d, rs2=%d, imm=%h, alu_result=%d", pc_reg, instruction_reg, opcode, rd, rs1, rs2, immediate, alu_result);
+                    $display("EXECUTE_START: PC=0x%08x, IS=0x%08x, Opcode=0x%02x", pc_reg, instruction_reg, opcode);
                     
                     // ------ BEGIN: Handle the result of ALU operations-----
                     alu_result_reg <= alu_result;
@@ -253,7 +255,7 @@ module cpu_core (
                         opcode == ALU_MUL || opcode == ALU_DIV || opcode == ALU_MOD || opcode == ALU_CMP || 
                         opcode == ALU_SAR || opcode == ALU_ADDI || opcode == ALU_SUBI || opcode == ALU_CMPI) begin
                         flags_reg <= flags_out;
-                        $display("EXECUTE_DEBUG_ALU: Flags updated to C=%b Z=%b N=%b V=%b", 
+                        $display("EXECUTE_FLAGS_AFTER: C=%b Z=%b N=%b V=%b", 
                                 flags_out[0], flags_out[1], flags_out[2], flags_out[3]);
                     end
 
@@ -322,24 +324,27 @@ module cpu_core (
                         alu_result_reg <= immediate;
                         $display("DEBUG CPU: LOADI R%d = 0x%h", rd, immediate);
                     end
-                    $display("EXECUTE_DONE: PC=0x%x, IS=0x%x Opcode=%h, rd=%d, rs1=%d, rs2=%d, imm=%h", pc_reg, instruction_reg, opcode, rd, rs1, rs2, immediate);
+                    $display("EXECUTE_DONE: PC=0x%08x, IS=0x%08x Opcode=0x%02x, rd=%d, rs1=%d, rs2=%d, imm=0x%08x", pc_reg, instruction_reg, opcode, rd, rs1, rs2, immediate);
                 end
                 
                 MEMORY: begin
-                    $display("STATE_MEMORY:");
+                    $display("MEMORY_START: PC=0x%08x, IS=0x%08x", pc_reg, instruction_reg);
                     if (is_load_store && opcode == MEM_LOAD) begin // LOAD
                         memory_data_reg <= data_bus;
-                        $display("DEBUG CPU: LOAD from addr=0x%x (R%d), data=%d", reg_data_a, rs1, data_bus);
+                        $display("MEMORY_LOAD: addr=0x%08x, data=0x%08x", reg_data_a, data_bus);
                     end
                     if (opcode == MEM_STORE) begin // STORE
-                        $display("DEBUG CPU: STORE R%d=%d to addr=0x%x (R%d), mem_write=%b, data_bus=0x%x", 
-                                rd, reg_data_b, reg_data_a, rs1, mem_write, data_bus);
+                        $display("MEMORY_STORE: addr=0x%08x, data=0x%08x", reg_data_a, reg_data_b);
                     end
                 end
                 
                 WRITEBACK: begin
-                    $display("STATE_WRITEBACK:");
+                    $display("WRITEBACK_START: PC=0x%08x, IS=0x%08x", pc_reg, instruction_reg);
                     // Write back happens combinatorially
+                    if (reg_write_en) begin
+                        $display("WRITEBACK_REG: R%d <= 0x%08x", rd, reg_data_w);
+                    end
+                    $display("==== INSTR_END ==== PC=0x%08x ====", pc_reg);
                 end
             endcase
         end
@@ -428,8 +433,8 @@ module cpu_core (
                         alu_result_reg) : 32'h0;
     // DEBUG: Show what is being written to the register file
     always @(*) begin
-        if (state == WRITEBACK) begin
-            $display("DEBUG reg_data_w: state=WRITEBACK, reg_data_w=0x%h, opcode=0x%h, alu_result_reg=0x%h, memory_data_reg=0x%h, immediate=0x%h", reg_data_w, opcode, alu_result_reg, memory_data_reg, immediate);
+        if (state == WRITEBACK && reg_write_en) begin
+            $display("REGISTER_FILE_WRITE: R%d <= 0x%08x (opcode=0x%02x)", rd, reg_data_w, opcode);
         end
     end
     

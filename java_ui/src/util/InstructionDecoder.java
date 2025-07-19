@@ -126,6 +126,28 @@ public class InstructionDecoder {
         };
     }
     
+    public static Object[] decodeFromInstructionWord(String pc, long instructionWord) {
+        // Decode instruction word using the same format as CPU core
+        int opcode = (int)((instructionWord >> 26) & 0x3F);
+        int rd = (int)((instructionWord >> 19) & 0x1F);
+        int rs1 = (int)((instructionWord >> 14) & 0x1F);
+        int rs2 = (int)((instructionWord >> 9) & 0x1F);
+        
+        // Handle immediate based on instruction type
+        int imm;
+        if (opcode == 0x12) { // LOADI
+            imm = (int)(instructionWord & 0x7FFFF); // 19-bit immediate
+        } else if (opcode == 0x0D || opcode == 0x0E || opcode == 0x0F) { // ADDI, SUBI, CMPI
+            imm = (int)(instructionWord & 0xFFF); // 12-bit immediate
+            if (imm > 0x7FF) imm -= 0x1000; // Sign extend
+        } else {
+            imm = (int)(instructionWord & 0xFFF); // Default 12-bit
+            if (imm > 0x7FF) imm -= 0x1000; // Sign extend
+        }
+        
+        return decodeFromSimLog(pc, opcode, rd, rs1, rs2, imm);
+    }
+    
     private static String generateComment(int opcode, int rd, int rs1, int rs2, int imm) {
         String mnemonic = OPCODE_MAP.getOrDefault(opcode, "UNKNOWN");
         
