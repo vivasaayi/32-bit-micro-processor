@@ -7,6 +7,7 @@ import javax.swing.SwingWorker;
 
 import org.poriyiyal.CpuIDE;
 import org.poriyiyal.util.AppState;
+import org.poriyiyal.util.EnvLoader;
 
 /**
  * Combined V/VVP Tab for Verilog testbench files and compiled VVP files
@@ -184,7 +185,12 @@ public class VVvpTab extends BaseTab {
                     }
                     
                     // Save current Verilog content to temporary file
-                    File tempVerilogFile = new File("/Users/rajanpanneerselvam/work/hdl/temp/" + baseName + "_testbench.v");
+                    String tempDir = EnvLoader.getEnv("TEMP_DIR");
+                    if (tempDir == null) {
+                        // Fallback: create temp directory relative to current working directory
+                        tempDir = System.getProperty("user.dir") + "/temp";
+                    }
+                    File tempVerilogFile = new File(tempDir + "/" + baseName + "_testbench.v");
                     tempVerilogFile.getParentFile().mkdirs();
                     
                     try (FileWriter writer = new FileWriter(tempVerilogFile)) {
@@ -192,25 +198,30 @@ public class VVvpTab extends BaseTab {
                     }
                     
                     // Generate VVP file path
-                    File tempVvpFile = new File("/Users/rajanpanneerselvam/work/hdl/temp/" + baseName + "_testbench.vvp");
+                    File tempVvpFile = new File(tempDir + "/" + baseName + "_testbench.vvp");
                     
-                    // Build iverilog command
+                    // Build iverilog command using environment variables with intelligent defaults
                     ProcessBuilder pb = new ProcessBuilder(
                         "iverilog", 
                         "-o", tempVvpFile.getAbsolutePath(),
                         tempVerilogFile.getAbsolutePath(),
-                        "/Users/rajanpanneerselvam/work/hdl/processor/microprocessor_system.v",
-                        "/Users/rajanpanneerselvam/work/hdl/processor/cpu/cpu_core.v",
-                        "/Users/rajanpanneerselvam/work/hdl/processor/cpu/alu.v",
-                        "/Users/rajanpanneerselvam/work/hdl/processor/cpu/register_file.v",
-                        "/Users/rajanpanneerselvam/work/hdl/processor/memory/memory_controller.v",
-                        "/Users/rajanpanneerselvam/work/hdl/processor/memory/mmu.v",
-                        "/Users/rajanpanneerselvam/work/hdl/processor/io/uart.v",
-                        "/Users/rajanpanneerselvam/work/hdl/processor/io/timer.v",
-                        "/Users/rajanpanneerselvam/work/hdl/processor/io/interrupt_controller.v"
+                        EnvLoader.getEnv("MICROPROCESSOR_SYSTEM_V"),
+                        EnvLoader.getEnv("CPU_CORE_V"),
+                        EnvLoader.getEnv("ALU_V"),
+                        EnvLoader.getEnv("REGISTER_FILE_V"),
+                        EnvLoader.getEnv("MEMORY_CONTROLLER_V"),
+                        EnvLoader.getEnv("MMU_V"),
+                        EnvLoader.getEnv("UART_V"),
+                        EnvLoader.getEnv("TIMER_V"),
+                        EnvLoader.getEnv("INTERRUPT_CONTROLLER_V")
                     );
                     
-                    pb.directory(new File("/Users/rajanpanneerselvam/work/hdl"));
+                    String hdlBaseDir = EnvLoader.getEnv("HDL_BASE_DIR");
+                    if (hdlBaseDir == null) {
+                        // Fallback: use current working directory
+                        hdlBaseDir = System.getProperty("user.dir");
+                    }
+                    pb.directory(new File(hdlBaseDir));
                     
                     Process process = pb.start();
                     
@@ -287,7 +298,12 @@ public class VVvpTab extends BaseTab {
         }
         
         JFileChooser fileChooser = new JFileChooser();
-        fileChooser.setCurrentDirectory(new File("/Users/rajanpanneerselvam/work/hdl/temp"));
+        String tempDir = EnvLoader.getEnv("TEMP_DIR");
+        if (tempDir == null) {
+            // Fallback: use current working directory + temp
+            tempDir = System.getProperty("user.dir") + "/temp";
+        }
+        fileChooser.setCurrentDirectory(new File(tempDir));
         fileChooser.setSelectedFile(new File(defaultName));
         
         if (fileChooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {

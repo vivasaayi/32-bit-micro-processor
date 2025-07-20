@@ -22,8 +22,8 @@ public class FramebufferTab extends BaseTab {
     private JLabel imageLabel;
     private JLabel statusLabel;
     private JScrollPane scrollPane;
-    private String framebufferPath = "/Users/rajanpanneerselvam/work/hdl/temp/reports/framebuffer.ppm";
-    private String framebufferDir = "/Users/rajanpanneerselvam/work/hdl/temp/reports";
+    private String framebufferPath = "../temp/reports/framebuffer.ppm";
+    private String framebufferDir = "../temp/reports";
     private int frameCount = 0;
     private int zoomFactor = 1;
     private BufferedImage currentImage = null;

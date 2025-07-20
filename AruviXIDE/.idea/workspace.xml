@@ -5,11 +5,21 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="800a0758-028c-4074-b1b0-baaa884a4201" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/.idea/.gitignore" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/compiler.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/compiler.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/modules.xml" beforeDir="false" />
+      <change afterPath="$PROJECT_DIR$/.env" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ENVIRONMENT_CONFIG.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/SETTINGS_DIALOG_GUIDE.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/java/org/poriyiyal/dialogs/SettingsDialog.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/java/org/poriyiyal/util/EnvLoader.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/../.gitignore" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/java_ui.iml" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/pom.xml" beforeDir="false" afterPath="$PROJECT_DIR$/pom.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/java/org/poriyiyal/CpuIDE.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/java/org/poriyiyal/CpuIDE.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/java/org/poriyiyal/tabs/AssemblyTab.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/java/org/poriyiyal/tabs/AssemblyTab.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/java/org/poriyiyal/tabs/CTab.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/java/org/poriyiyal/tabs/CTab.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/java/org/poriyiyal/tabs/FramebufferTab.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/java/org/poriyiyal/tabs/FramebufferTab.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/java/org/poriyiyal/tabs/SimulationLogTab.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/java/org/poriyiyal/tabs/SimulationLogTab.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/java/org/poriyiyal/tabs/VVvpTab.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/java/org/poriyiyal/tabs/VVvpTab.java" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -41,17 +51,46 @@
   </component>
   <component name="PropertiesComponent"><![CDATA[{
   "keyToString": {
+    "Application.CpuIDE.executor": "Debug",
+    "Maven.AruviXIDE [clean].executor": "Run",
+    "Maven.AruviXIDE [compile].executor": "Run",
+    "Maven.AruviXIDE [test].executor": "Run",
     "ModuleVcsDetector.initialDetectionPerformed": "true",
     "RunOnceActivity.ShowReadmeOnStart": "true",
     "RunOnceActivity.git.unshallow": "true",
     "git-widget-placeholder": "get-bouncing-rectangle-assembly-working",
+    "last_opened_file_path": "/Users/rajanpanneerselvam/work/AruviXPlatform/AruviXIDE",
+    "node.js.detected.package.eslint": "true",
+    "node.js.detected.package.tslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "node.js.selected.package.tslint": "(autodetect)",
     "nodejs_package_manager_path": "npm",
     "project.structure.last.edited": "Modules",
-    "project.structure.proportion": "0.0",
-    "project.structure.side.proportion": "0.0",
+    "project.structure.proportion": "0.15",
+    "project.structure.side.proportion": "0.2",
     "vue.rearranger.settings.migration": "true"
   }
 }]]></component>
+  <component name="RunManager">
+    <configuration name="CpuIDE" type="Application" factoryName="Application" temporary="true" nameIsGenerated="true">
+      <option name="MAIN_CLASS_NAME" value="org.poriyiyal.CpuIDE" />
+      <module name="java-ui" />
+      <extension name="coverage">
+        <pattern>
+          <option name="PATTERN" value="org.poriyiyal.*" />
+          <option name="ENABLED" value="true" />
+        </pattern>
+      </extension>
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
+    <recent_temporary>
+      <list>
+        <item itemvalue="Application.CpuIDE" />
+      </list>
+    </recent_temporary>
+  </component>
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
@@ -69,6 +108,9 @@
       <updated>1752953466111</updated>
       <workItem from="1752953467130" duration="72000" />
       <workItem from="1752953541825" duration="87000" />
+      <workItem from="1752954554805" duration="23000" />
+      <workItem from="1752954580372" duration="1466000" />
+      <workItem from="1752956711844" duration="5889000" />
     </task>
     <servers />
   </component>

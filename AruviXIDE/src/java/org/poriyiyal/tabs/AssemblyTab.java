@@ -202,7 +202,7 @@ public class AssemblyTab extends BaseTab {
                     // Build assembler command with listing flag
                     String assemblerPath = "temp/assembler";
                     ProcessBuilder pb = new ProcessBuilder(assemblerPath, sourceFile.getAbsolutePath(), outputHex, "-l");
-                    pb.directory(new File("/Users/rajanpanneerselvam/work/hdl"));
+                    pb.directory(new File(".."));
                     
                     Process process = pb.start();
                     

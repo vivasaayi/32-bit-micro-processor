@@ -114,13 +114,19 @@ public class SimulationLogTab extends BaseTab {
         });
         historyTable.getSelectionModel().addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) {
-                int selectedRow = historyTable.getSelectedRow();
-                if (selectedRow >= 0) {
-                    decodedTable.setRowSelectionInterval(selectedRow, selectedRow);
-                    currentInstructionRow = selectedRow;
-                    updateCurrentRegisterDisplay();
-                    currentRegisterPanel.revalidate();
-                    currentRegisterPanel.repaint();
+                int selectedLocalRow = historyTable.getSelectedRow();
+                if (selectedLocalRow >= 0) {
+                    // Convert local row index to global instruction index
+                    int globalInstructionIndex = currentPage * rowsPerPage + selectedLocalRow;
+                    
+                    // Update decoded table selection
+                    if (globalInstructionIndex < decodedTable.getRowCount()) {
+                        decodedTable.setRowSelectionInterval(globalInstructionIndex, globalInstructionIndex);
+                        currentInstructionRow = globalInstructionIndex;
+                        updateCurrentRegisterDisplay();
+                        currentRegisterPanel.revalidate();
+                        currentRegisterPanel.repaint();
+                    }
                 }
             }
         });
@@ -388,7 +394,12 @@ public class SimulationLogTab extends BaseTab {
     }
     
     private void updateCurrentRegisterDisplay() {
+        System.out.println("[DEBUG] updateCurrentRegisterDisplay called: currentInstructionRow=" + currentInstructionRow);
+        System.out.println("[DEBUG] instructionRegisterValues.size()=" + instructionRegisterValues.size());
+        System.out.println("[DEBUG] instructionRegisterValues.containsKey(" + currentInstructionRow + ")=" + instructionRegisterValues.containsKey(currentInstructionRow));
+        
         if (currentInstructionRow < 0 || !instructionRegisterValues.containsKey(currentInstructionRow)) {
+            System.out.println("[DEBUG] Resetting register display to zeros");
             for (int i = 0; i < registerLabels.length; i++) {
                 if (registerLabels[i] == null) {
                     System.err.println("[WARN] registerLabels[" + i + "] is null in reset");
@@ -402,6 +413,9 @@ public class SimulationLogTab extends BaseTab {
         }
         Map<Integer, Long> regValues = instructionRegisterValues.get(currentInstructionRow);
         Set<Integer> changedRegs = instructionRegisterChanges.getOrDefault(currentInstructionRow, new HashSet<>());
+        
+        System.out.println("[DEBUG] Found register values for instruction " + currentInstructionRow + ": " + regValues.size() + " registers");
+        
         // Debug output
         System.out.println("[DEBUG] updateCurrentRegisterDisplay: row=" + currentInstructionRow);
         for (int i = 0; i < 34; i++) {
@@ -421,10 +435,23 @@ public class SimulationLogTab extends BaseTab {
         currentRegisterPanel.repaint();
     }
     
-    private void highlightHistoryRow(int row) {
-        if (row >= 0 && row < historyTable.getRowCount()) {
-            historyTable.setRowSelectionInterval(row, row);
-            historyTable.scrollRectToVisible(historyTable.getCellRect(row, 0, true));
+    private void highlightHistoryRow(int instructionRow) {
+        // Calculate which page this instruction is on
+        int targetPage = instructionRow / rowsPerPage;
+        
+        // If we need to switch pages, do it
+        if (targetPage != currentPage) {
+            currentPage = targetPage;
+            updateHistoryTable();
+        }
+        
+        // Calculate the row index within the current page
+        int localRowIndex = instructionRow - (currentPage * rowsPerPage);
+        
+        // Highlight the row if it's within the current page
+        if (localRowIndex >= 0 && localRowIndex < historyTable.getRowCount()) {
+            historyTable.setRowSelectionInterval(localRowIndex, localRowIndex);
+            historyTable.scrollRectToVisible(historyTable.getCellRect(localRowIndex, 0, true));
         }
     }
     
@@ -918,12 +945,14 @@ public class SimulationLogTab extends BaseTab {
         pageInfoLabel.setText("Page " + (currentPage + 1) + " of " + totalPages);
         prevPageButton.setEnabled(currentPage > 0);
         nextPageButton.setEnabled(currentPage < totalPages - 1);
-        // After updating table/page, update register display for selected row
-        if (decodedTable.getSelectedRow() >= 0) {
-            currentInstructionRow = decodedTable.getSelectedRow();
+        
+        // After updating table/page, maintain the selected instruction if it's on this page
+        if (currentInstructionRow >= 0) {
+            int localRowIndex = currentInstructionRow - (currentPage * rowsPerPage);
+            if (localRowIndex >= 0 && localRowIndex < historyTable.getRowCount()) {
+                historyTable.setRowSelectionInterval(localRowIndex, localRowIndex);
+            }
             updateCurrentRegisterDisplay();
-            currentRegisterPanel.revalidate();
-            currentRegisterPanel.repaint();
         }
     }
     
@@ -934,13 +963,17 @@ public class SimulationLogTab extends BaseTab {
         instructionRegisterValues.clear();
         String[] lines = content.split("\n");
         
-        // Enhanced patterns for parsing simulation log with clear markers
+        // Enhanced patterns for parsing simulation log with clear markers (NEW FORMAT)
         Pattern instrStartPattern = Pattern.compile("==== INSTR_START ==== PC=(0x[0-9A-Fa-f]+) IS=(0x[0-9A-Fa-f]+) ====");
         Pattern instrEndPattern = Pattern.compile("==== INSTR_END ==== PC=(0x[0-9A-Fa-f]+) ====");
         Pattern decodeFieldsPattern = Pattern.compile("DECODE_FIELDS: Opcode=(0x[0-9A-Fa-f]+), rd=(\\d+), rs1=(\\d+), rs2=(\\d+), imm=(0x[0-9A-Fa-f]+)");
-        Pattern writebackRegPattern = Pattern.compile("WRITEBACK_REG: R(\\d+) <= (0x[0-9A-Fa-f]+)");
-        Pattern registerFileWritePattern = Pattern.compile("REGISTER_FILE_WRITE: R(\\d+) <= (0x[0-9A-Fa-f]+)");
+        Pattern writebackRegPattern = Pattern.compile("WRITEBACK_REG: R\\s*(\\d+) <= (0x[0-9A-Fa-f]+)");
+        Pattern registerFileWritePattern = Pattern.compile("REGISTER_FILE_WRITE: R\\s*(\\d+) <= (0x[0-9A-Fa-f]+)(?:\\s*\\(opcode=0x[0-9A-Fa-f]+\\))?");
         Pattern executeFlagsAfterPattern = Pattern.compile("EXECUTE_FLAGS_AFTER: C=(\\d+) Z=(\\d+) N=(\\d+) V=(\\d+)");
+        
+        // Legacy patterns for older debug format (OLD FORMAT)
+        Pattern legacyExecutePattern = Pattern.compile("DEBUG CPU Execute: PC=(0x[0-9A-Fa-f]+), Opcode=([0-9A-Fa-f]+), rd=\\s*(\\d+), rs1=\\s*(\\d+), rs2=\\s*(\\d+), imm=([0-9A-Fa-f]+)");
+        Pattern legacyWritebackPattern = Pattern.compile("DEBUG CPU Writeback: Writing\\s+(\\d+) to R\\s+(\\d+)");
         
         List<InstructionInfo> instructions = new ArrayList<>();
         Map<Integer, Long> regValues = new HashMap<>();
@@ -950,114 +983,186 @@ public class SimulationLogTab extends BaseTab {
         InstructionInfo currentInstruction = null;
         List<String> currentInstructionLogs = new ArrayList<>();
         
-        // Multi-pass parsing approach using clear instruction markers
-        for (String origLine : lines) {
-            String line = stripLogPrefix(origLine);
-            
-            // Check for instruction start marker
-            Matcher instrStartMatcher = instrStartPattern.matcher(line);
-            if (instrStartMatcher.find()) {
-                // Save previous instruction if it exists
-                if (currentInstruction != null) {
-                    currentInstruction.logs = new ArrayList<>(currentInstructionLogs);
-                    currentInstruction.finalizeRegisters(regValues, lastFlags);
-                    instructions.add(currentInstruction);
+        // Detect log format by checking for new-style markers
+        boolean isNewFormat = content.contains("==== INSTR_START ====");
+        System.out.println("[DEBUG] Detected log format: " + (isNewFormat ? "NEW (structured with markers)" : "OLD (legacy debug)"));
+        
+        if (isNewFormat) {
+            // NEW FORMAT: Multi-pass parsing approach using clear instruction markers
+            for (String origLine : lines) {
+                String line = stripLogPrefix(origLine);
+                
+                // Check for instruction start marker
+                Matcher instrStartMatcher = instrStartPattern.matcher(line);
+                if (instrStartMatcher.find()) {
+                    // Save previous instruction if it exists
+                    if (currentInstruction != null) {
+                        currentInstruction.logs = new ArrayList<>(currentInstructionLogs);
+                        currentInstruction.finalizeRegisters(regValues, lastFlags);
+                        instructions.add(currentInstruction);
+                        System.out.println("[DEBUG] Completed instruction " + (instructions.size()) + " at PC " + currentInstruction.pc);
+                    }
+                    
+                    // Start new instruction
+                    String pc = instrStartMatcher.group(1);
+                    String instructionSet = instrStartMatcher.group(2);
+                    currentInstruction = new InstructionInfo(pc, 0, 0, 0, 0, 0);
+                    currentInstruction.instructionSet = instructionSet;
+                    currentInstructionLogs.clear();
+                    currentInstructionLogs.add(origLine);
+                    System.out.println("[DEBUG] Started new instruction at PC " + pc + " IS " + instructionSet);
+                    continue;
                 }
                 
-                // Start new instruction
-                String pc = instrStartMatcher.group(1);
-                String instructionSet = instrStartMatcher.group(2);
-                currentInstruction = new InstructionInfo(pc, 0, 0, 0, 0, 0);
-                currentInstruction.instructionSet = instructionSet;
-                currentInstructionLogs.clear();
-                currentInstructionLogs.add(origLine);
-                continue;
+                // Check for instruction end marker
+                Matcher instrEndMatcher = instrEndPattern.matcher(line);
+                if (instrEndMatcher.find()) {
+                    if (currentInstruction != null) {
+                        currentInstructionLogs.add(origLine);
+                    }
+                    continue;
+                }
+                
+                // If we're currently processing an instruction, collect all logs
+                if (currentInstruction != null) {
+                    currentInstructionLogs.add(origLine);
+                    
+                    // Parse decode fields
+                    Matcher decodeFieldsMatcher = decodeFieldsPattern.matcher(line);
+                    if (decodeFieldsMatcher.find()) {
+                        currentInstruction.opcode = Integer.parseInt(decodeFieldsMatcher.group(1).substring(2), 16);
+                        currentInstruction.rd = Integer.parseInt(decodeFieldsMatcher.group(2));
+                        currentInstruction.rs1 = Integer.parseInt(decodeFieldsMatcher.group(3));
+                        currentInstruction.rs2 = Integer.parseInt(decodeFieldsMatcher.group(4));
+                        currentInstruction.imm = Integer.parseInt(decodeFieldsMatcher.group(5).substring(2), 16);
+                        // Convert to signed if needed
+                        if (currentInstruction.imm > 0x7FFFFFFF) {
+                            currentInstruction.imm = (int)(currentInstruction.imm - 0x100000000L);
+                        }
+                    }
+                    
+                    // Parse flags after execution
+                    Matcher executeFlagsAfterMatcher = executeFlagsAfterPattern.matcher(line);
+                    if (executeFlagsAfterMatcher.find()) {
+                        String c = executeFlagsAfterMatcher.group(1);
+                        String z = executeFlagsAfterMatcher.group(2);
+                        String n = executeFlagsAfterMatcher.group(3);
+                        String v = executeFlagsAfterMatcher.group(4);
+                        lastFlags = c + z + n + v;
+                        regValues.put(1, Long.parseLong(lastFlags));
+                    }
+                    
+                    // Parse register writes
+                    Matcher writebackRegMatcher = writebackRegPattern.matcher(line);
+                    if (writebackRegMatcher.find()) {
+                        int regNum = Integer.parseInt(writebackRegMatcher.group(1));
+                        long value = Long.parseLong(writebackRegMatcher.group(2).substring(2), 16);
+                        System.out.println("[DEBUG] WRITEBACK_REG matched: R" + regNum + " <= " + writebackRegMatcher.group(2));
+                        if (regNum >= 0 && regNum < 32) {
+                            regValues.put(regNum + 2, value);
+                            currentInstruction.changedRegisters.add(regNum);
+                        }
+                    }
+                    
+                    // Parse register file writes
+                    Matcher registerFileWriteMatcher = registerFileWritePattern.matcher(line);
+                    if (registerFileWriteMatcher.find()) {
+                        int regNum = Integer.parseInt(registerFileWriteMatcher.group(1));
+                        long value = Long.parseLong(registerFileWriteMatcher.group(2).substring(2), 16);
+                        System.out.println("[DEBUG] REGISTER_FILE_WRITE matched: R" + regNum + " <= " + registerFileWriteMatcher.group(2));
+                        if (regNum >= 0 && regNum < 32) {
+                            regValues.put(regNum + 2, value);
+                            currentInstruction.changedRegisters.add(regNum);
+                        }
+                    }
+                }
             }
             
-            // Check for instruction end marker
-            Matcher instrEndMatcher = instrEndPattern.matcher(line);
-            if (instrEndMatcher.find()) {
+            // Save the last instruction
+            if (currentInstruction != null) {
+                currentInstruction.logs = new ArrayList<>(currentInstructionLogs);
+                currentInstruction.finalizeRegisters(regValues, lastFlags);
+                instructions.add(currentInstruction);
+            }
+        } else {
+            // OLD FORMAT: Parse legacy debug format
+            for (String origLine : lines) {
+                String line = stripLogPrefix(origLine);
+                
+                // Parse legacy execute pattern
+                Matcher legacyExecuteMatcher = legacyExecutePattern.matcher(line);
+                if (legacyExecuteMatcher.find()) {
+                    // Save previous instruction if it exists
+                    if (currentInstruction != null) {
+                        currentInstruction.logs = new ArrayList<>(currentInstructionLogs);
+                        currentInstruction.finalizeRegisters(regValues, lastFlags);
+                        instructions.add(currentInstruction);
+                    }
+                    
+                    // Create new instruction from legacy format
+                    String pc = legacyExecuteMatcher.group(1);
+                    int opcode = Integer.parseInt(legacyExecuteMatcher.group(2), 16);
+                    int rd = Integer.parseInt(legacyExecuteMatcher.group(3));
+                    int rs1 = Integer.parseInt(legacyExecuteMatcher.group(4));
+                    int rs2 = Integer.parseInt(legacyExecuteMatcher.group(5));
+                    int imm = Integer.parseInt(legacyExecuteMatcher.group(6), 16);
+                    
+                    // Convert to signed if needed
+                    if (imm > 0x7FFFFFFF) {
+                        imm = (int)(imm - 0x100000000L);
+                    }
+                    
+                    currentInstruction = new InstructionInfo(pc, opcode, rd, rs1, rs2, imm);
+                    currentInstructionLogs.clear();
+                    currentInstructionLogs.add(origLine);
+                    
+                    // Update PC register
+                    regValues.put(0, Long.decode(pc));
+                    continue;
+                }
+                
+                // Parse legacy writeback pattern
+                Matcher legacyWritebackMatcher = legacyWritebackPattern.matcher(line);
+                if (legacyWritebackMatcher.find() && currentInstruction != null) {
+                    currentInstructionLogs.add(origLine);
+                    long value = Long.parseLong(legacyWritebackMatcher.group(1));
+                    int regNum = Integer.parseInt(legacyWritebackMatcher.group(2));
+                    if (regNum >= 0 && regNum < 32) {
+                        regValues.put(regNum + 2, value);
+                        currentInstruction.changedRegisters.add(regNum);
+                    }
+                    continue;
+                }
+                
+                // Collect all logs for current instruction
                 if (currentInstruction != null) {
                     currentInstructionLogs.add(origLine);
                 }
-                continue;
             }
             
-            // If we're currently processing an instruction, collect all logs
+            // Save the last instruction
             if (currentInstruction != null) {
-                currentInstructionLogs.add(origLine);
-                
-                // Parse decode fields
-                Matcher decodeFieldsMatcher = decodeFieldsPattern.matcher(line);
-                if (decodeFieldsMatcher.find()) {
-                    currentInstruction.opcode = Integer.parseInt(decodeFieldsMatcher.group(1).substring(2), 16);
-                    currentInstruction.rd = Integer.parseInt(decodeFieldsMatcher.group(2));
-                    currentInstruction.rs1 = Integer.parseInt(decodeFieldsMatcher.group(3));
-                    currentInstruction.rs2 = Integer.parseInt(decodeFieldsMatcher.group(4));
-                    currentInstruction.imm = Integer.parseInt(decodeFieldsMatcher.group(5).substring(2), 16);
-                    // Convert to signed if needed
-                    if (currentInstruction.imm > 0x7FFFFFFF) {
-                        currentInstruction.imm = (int)(currentInstruction.imm - 0x100000000L);
-                    }
-                }
-                
-                // Parse flags after execution
-                Matcher executeFlagsAfterMatcher = executeFlagsAfterPattern.matcher(line);
-                if (executeFlagsAfterMatcher.find()) {
-                    String c = executeFlagsAfterMatcher.group(1);
-                    String z = executeFlagsAfterMatcher.group(2);
-                    String n = executeFlagsAfterMatcher.group(3);
-                    String v = executeFlagsAfterMatcher.group(4);
-                    lastFlags = c + z + n + v;
-                    regValues.put(1, Long.parseLong(lastFlags));
-                }
-                
-                // Parse register writes
-                Matcher writebackRegMatcher = writebackRegPattern.matcher(line);
-                if (writebackRegMatcher.find()) {
-                    int regNum = Integer.parseInt(writebackRegMatcher.group(1));
-                    long value = Long.parseLong(writebackRegMatcher.group(2).substring(2), 16);
-                    if (regNum >= 0 && regNum < 32) {
-                        regValues.put(regNum + 2, value);
-                        currentInstruction.changedRegisters.add(regNum);
-                    }
-                }
-                
-                // Parse register file writes
-                Matcher registerFileWriteMatcher = registerFileWritePattern.matcher(line);
-                if (registerFileWriteMatcher.find()) {
-                    int regNum = Integer.parseInt(registerFileWriteMatcher.group(1));
-                    long value = Long.parseLong(registerFileWriteMatcher.group(2).substring(2), 16);
-                    if (regNum >= 0 && regNum < 32) {
-                        regValues.put(regNum + 2, value);
-                        currentInstruction.changedRegisters.add(regNum);
-                    }
-                }
+                currentInstruction.logs = new ArrayList<>(currentInstructionLogs);
+                currentInstruction.finalizeRegisters(regValues, lastFlags);
+                instructions.add(currentInstruction);
             }
-        }
-        
-        // Save the last instruction
-        if (currentInstruction != null) {
-            currentInstruction.logs = new ArrayList<>(currentInstructionLogs);
-            currentInstruction.finalizeRegisters(regValues, lastFlags);
-            instructions.add(currentInstruction);
         }
         
         // Now populate the tables with the collected instruction info
         int instructionCount = 0;
         for (InstructionInfo inst : instructions) {
-            // Use the instruction set (IS) for accurate decoding instead of parsed fields
+            // Use the instruction set (IS) for accurate decoding if available (new format)
             Object[] row;
             if (inst.instructionSet != null && !inst.instructionSet.isEmpty()) {
                 // Decode using the raw instruction word for maximum accuracy
                 long instructionWord = Long.parseLong(inst.instructionSet.substring(2), 16);
                 row = InstructionDecoder.decodeFromInstructionWord(inst.pc, instructionWord);
             } else {
-                // Fallback to parsed fields if IS not available
+                // Use parsed fields from either format
                 row = InstructionDecoder.decodeFromSimLog(inst.pc, inst.opcode, inst.rd, inst.rs1, inst.rs2, inst.imm);
             }
             
-            // Add instruction set to the row
+            // Add instruction set to the row (will be "N/A" for legacy format)
             Object[] newRow = Arrays.copyOf(row, row.length + 1);
             newRow[row.length] = inst.instructionSet != null ? inst.instructionSet : "N/A";
             decodedTableModel.addRow(newRow);
@@ -1074,7 +1179,6 @@ public class SimulationLogTab extends BaseTab {
             for (int i = 0; i < 32; i++) {
                 historyRow[i + 3] = String.format("0x%08X", (int)(long)inst.registerSnapshot.getOrDefault(i + 2, 0L));
             }
-            historyRow[35] = String.format("Inst %d", instructionCount);
             historyTableModel.addRow(historyRow);
             
             instructionCount++;
@@ -1094,7 +1198,8 @@ public class SimulationLogTab extends BaseTab {
         parsedInstructions.clear();
         parsedInstructions.addAll(instructions);
         
-        updateStatus("Parsed " + instructions.size() + " instructions using enhanced multi-pass parsing with instruction markers");
+        String formatType = isNewFormat ? "new structured format" : "legacy debug format";
+        updateStatus("Parsed " + instructions.size() + " instructions using " + formatType + " - detected " + instructions.size() + " instruction sequences");
     }
     private JFrame instructionDetailsFrame = null;
     private JTextArea instructionLogsArea;

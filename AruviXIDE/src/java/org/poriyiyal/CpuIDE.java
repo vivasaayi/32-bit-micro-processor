@@ -13,6 +13,7 @@ import org.poriyiyal.tabs.*;
 import org.poriyiyal.tabs.*;
 import org.poriyiyal.util.AppState;
 import org.poriyiyal.util.FileWatcher;
+import org.poriyiyal.dialogs.SettingsDialog;
 
 /**
  * Main IDE Application for Custom CPU Development
@@ -20,7 +21,7 @@ import org.poriyiyal.util.FileWatcher;
  */
 public class CpuIDE extends JFrame {
     private static final String TITLE = "Custom CPU IDE";
-    private static final String TEST_PROGRAMS_PATH = "/Users/rajanpanneerselvam/work/hdl/test_programs";
+    private static final String TEST_PROGRAMS_PATH = "../test_programs";
     
     // UI Components
     private JTabbedPane tabbedPane;
@@ -127,12 +128,19 @@ public class CpuIDE extends JFrame {
         saveItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_S, KeyEvent.CTRL_DOWN_MASK));
         saveItem.addActionListener(_ -> saveCurrentFile());
         
+        JMenuItem settingsItem = new JMenuItem("Settings...");
+        settingsItem.setMnemonic(KeyEvent.VK_T);
+        settingsItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_COMMA, KeyEvent.CTRL_DOWN_MASK));
+        settingsItem.addActionListener(_ -> openSettings());
+        
         JMenuItem exitItem = new JMenuItem("Exit");
         exitItem.setMnemonic(KeyEvent.VK_X);
         exitItem.addActionListener(_ -> System.exit(0));
         
         fileMenu.add(openItem);
         fileMenu.add(saveItem);
+        fileMenu.addSeparator();
+        fileMenu.add(settingsItem);
         fileMenu.addSeparator();
         fileMenu.add(exitItem);
         
@@ -382,6 +390,11 @@ public class CpuIDE extends JFrame {
         if (selectedTab instanceof BaseTab) {
             ((BaseTab) selectedTab).saveContent();
         }
+    }
+    
+    private void openSettings() {
+        SettingsDialog settingsDialog = new SettingsDialog(this);
+        settingsDialog.setVisible(true);
     }
     
     private void runSimulation() {
