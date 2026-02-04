@@ -37,7 +37,7 @@ module tb_microprocessor_system;
     
     // Test variables
     integer cycle_count;
-    integer max_cycles = 10000;
+    integer max_cycles = 50000;
     reg [8*100:1] hexfile; // String for filename
     
     // Instantiate the 32-bit microprocessor

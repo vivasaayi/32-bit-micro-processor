@@ -4,54 +4,41 @@
  * Performs arithmetic and logic operations for the 32-bit microprocessor.
  * Supports all basic operations needed for a functional processor.
  *
- * ALU OPCODE TABLE (0x00–0x1F)
- * | Opcode | Mnemonic | Operation         |
- * |--------|----------|------------------|
- * | 0x00   | ADD      | a + b            |
- * | 0x01   | SUB      | a - b            |
- * | 0x02   | AND      | a & b            |
- * | 0x03   | OR       | a | b            |
- * | 0x04   | XOR      | a ^ b            |
- * | 0x05   | NOT      | ~a               |
- * | 0x06   | SHL      | a << b           |
- * | 0x07   | SHR      | a >> b           |
- * | 0x08   | MUL      | a * b            |
- * | 0x09   | DIV      | a / b            |
- * | 0x0A   | MOD      | a % b            |
- * | 0x0B   | CMP      | compare a, b     |
- * | 0x0C   | SAR      | a >>> b (arith)  |
- * | 0x0D   | ADDI     | a + immediate    |
- * | 0x0E   | SUBI     | a - immediate    |
- * | 0x0F   | CMPI     | compare a, imm   |
+ * ALU OPCODE TABLE (RV32I/M compatible)
+ * | Opcode | funct3 | funct7 | Operation         |
+ * |--------|--------|--------|------------------|
+ * | 0x33   | 0x0    | 0x00   | ADD              |
+ * | 0x33   | 0x0    | 0x20   | SUB              |
+ * | 0x33   | 0x1    | 0x00   | SLL              |
+ * | 0x33   | 0x2    | 0x00   | SLT              |
+ * | 0x33   | 0x4    | 0x00   | XOR              |
+ * | 0x33   | 0x5    | 0x00   | SRL              |
+ * | 0x33   | 0x5    | 0x20   | SRA              |
+ * | 0x33   | 0x6    | 0x00   | OR               |
+ * | 0x33   | 0x7    | 0x00   | AND              |
+ * | 0x13   | 0x0    | -      | ADDI             |
  * ---------------------------------------------------
  */
 
 module alu (
     input wire [31:0] a,         // First operand (32-bit)
     input wire [31:0] b,         // Second operand (32-bit)
-    input wire [5:0] op,         // Operation code (6-bit, matches CPU)
+    input wire [6:0] opcode,     // RISC-V Opcode (7-bit)
+    input wire [2:0] funct3,     // RISC-V funct3 (3-bit)
+    input wire [6:0] funct7,     // RISC-V funct7 (7-bit)
     input wire [7:0] flags_in,   // Input flags
     output reg [31:0] result,    // Result (32-bit)
     output reg [7:0] flags_out   // Output flags
 );
 
-    // ALU operation codes (0x00–0x1F, matches cpu_core.v)
-    localparam ALU_ADD  = 6'h00;
-    localparam ALU_SUB  = 6'h01;
-    localparam ALU_AND  = 6'h02;
-    localparam ALU_OR   = 6'h03;
-    localparam ALU_XOR  = 6'h04;
-    localparam ALU_NOT  = 6'h05;
-    localparam ALU_SHL  = 6'h06;
-    localparam ALU_SHR  = 6'h07;
-    localparam ALU_MUL  = 6'h08;
-    localparam ALU_DIV  = 6'h09;
-    localparam ALU_MOD  = 6'h0A;
-    localparam ALU_CMP  = 6'h0B;
-    localparam ALU_SAR  = 6'h0C;
-    localparam ALU_ADDI = 6'h0D;
-    localparam ALU_SUBI = 6'h0E;
-    localparam ALU_CMPI = 6'h0F;
+    // RISC-V Opcodes
+    localparam OP_IMM   = 7'h13;
+    localparam OP_REG   = 7'h33;
+    localparam OP_LUI   = 7'h37;
+    localparam OP_AUIPC = 7'h17;
+    localparam OP_M     = 7'h33; // funct7=0x01 for RV32M
+    localparam OP_LOAD  = 7'h03;
+    localparam OP_STORE = 7'h23;
 
     // Flag bit positions
     localparam FLAG_CARRY     = 0;
@@ -75,98 +62,70 @@ module alu (
         temp_result = 33'h0;
         flags_out = flags_in;
         carry_in = flags_in[FLAG_CARRY];
-        debug_op = op;
         
-        case (op)
-            ALU_ADD: begin
-                temp_result = {1'b0, operand_a} + {1'b0, operand_b};
-                result = temp_result[31:0];
-                flags_out[FLAG_CARRY] = temp_result[32];
-                flags_out[FLAG_OVERFLOW] = (operand_a[31] == operand_b[31]) && (result[31] != operand_a[31]);
-                // $display("DEBUG ALU ADD: a=%0d b=%0d result=%0d", operand_a, operand_b, result);
-            end
-            ALU_ADDI: begin
-                temp_result = {1'b0, operand_a} + {1'b0, operand_b};
-                result = temp_result[31:0];
-                flags_out[FLAG_CARRY] = temp_result[32];
-                flags_out[FLAG_OVERFLOW] = (operand_a[31] == operand_b[31]) && (result[31] != operand_a[31]);
-                // $display("DEBUG ALU ADDI: a=%0d b=%0d result=%0d", operand_a, operand_b, result);
-            end
-            ALU_SUB: begin
-                temp_result = {1'b0, operand_a} - {1'b0, operand_b};
-                result = temp_result[31:0];
-                flags_out[FLAG_CARRY] = temp_result[32];
-                flags_out[FLAG_OVERFLOW] = (operand_a[31] != operand_b[31]) && (result[31] != operand_a[31]);
-            end
-            ALU_SUBI: begin
-                temp_result = {1'b0, operand_a} - {1'b0, operand_b};
-                result = temp_result[31:0];
-                flags_out[FLAG_CARRY] = temp_result[32];
-                flags_out[FLAG_OVERFLOW] = (operand_a[31] != operand_b[31]) && (result[31] != operand_a[31]);
-                // $display("DEBUG ALU SUBI: a=%0d b=%0d result=%0d", operand_a, operand_b, result);
-            end
-            ALU_AND: begin
-                result = a & b;
-                flags_out[FLAG_CARRY] = 1'b0;
-            end
-            ALU_OR: begin
-                result = a | b;
-                flags_out[FLAG_CARRY] = 1'b0;
-            end
-            ALU_XOR: begin
-                result = a ^ b;
-                flags_out[FLAG_CARRY] = 1'b0;
-            end
-            ALU_NOT: begin
-                result = ~a;
-                flags_out[FLAG_CARRY] = 1'b0;
-            end
-            ALU_SHL: begin
-                temp_result = {a, 1'b0};
-                result = temp_result[31:0];
-                flags_out[FLAG_CARRY] = temp_result[32];
-            end
-            ALU_SHR: begin
-                result = {1'b0, a[31:1]};
-                flags_out[FLAG_CARRY] = a[0];
-            end
-            ALU_SAR: begin
-                result = $signed(a) >>> b;
-                flags_out[FLAG_CARRY] = a[0];
-            end
-            ALU_MUL: begin
-                result = operand_a * operand_b;
-                flags_out[FLAG_CARRY] = 1'b0;
-            end
-            ALU_DIV: begin
-                if (operand_b != 0) begin
-                    result = operand_a / operand_b;
-                    flags_out[FLAG_CARRY] = 1'b0;
-                end else begin
-                    result = 32'hFFFFFFFF;
-                    flags_out[FLAG_CARRY] = 1'b1;
+        case (opcode)
+            OP_REG: begin
+                if (funct7 == 7'h01) begin // RV32M
+                    case (funct3)
+                        3'h0: begin // MUL
+                            result = operand_a * operand_b;
+                        end
+                        3'h4: begin // DIV
+                            if (operand_b != 0) result = $signed(operand_a) / $signed(operand_b);
+                            else result = 32'hFFFFFFFF;
+                        end
+                        3'h6: begin // REM
+                            if (operand_b != 0) result = $signed(operand_a) % $signed(operand_b);
+                            else result = operand_a;
+                        end
+                        default: result = 32'h0;
+                    endcase
+                end else begin // RV32I
+                    case (funct3)
+                        3'h0: begin // ADD / SUB
+                            if (funct7 == 7'h20) begin // SUB
+                                temp_result = {1'b0, operand_a} - {1'b0, operand_b};
+                                result = temp_result[31:0];
+                                flags_out[FLAG_CARRY] = temp_result[32];
+                            end else begin // ADD
+                                temp_result = {1'b0, operand_a} + {1'b0, operand_b};
+                                result = temp_result[31:0];
+                                flags_out[FLAG_CARRY] = temp_result[32];
+                            end
+                        end
+                        3'h1: result = operand_a << operand_b[4:0]; // SLL
+                        3'h2: result = ($signed(operand_a) < $signed(operand_b)) ? 32'h1 : 32'h0; // SLT
+                        3'h3: result = (operand_a < operand_b) ? 32'h1 : 32'h0; // SLTU
+                        3'h4: result = operand_a ^ operand_b; // XOR
+                        3'h5: begin // SRL / SRA
+                            if (funct7 == 7'h20) result = $signed(operand_a) >>> operand_b[4:0]; // SRA
+                            else result = operand_a >> operand_b[4:0]; // SRL
+                        end
+                        3'h6: result = operand_a | operand_b; // OR
+                        3'h7: result = operand_a & operand_b; // AND
+                        default: result = 32'h0;
+                    endcase
                 end
             end
-            ALU_MOD: begin
-                if (operand_b != 0) begin
-                    result = operand_a % operand_b;
-                    flags_out[FLAG_CARRY] = 1'b0;
-                end else begin
-                    result = 32'h0;
-                    flags_out[FLAG_CARRY] = 1'b1;
-                end
+            OP_IMM: begin
+                case (funct3)
+                    3'h0: result = operand_a + operand_b; // ADDI
+                    3'h1: result = operand_a << operand_b[4:0]; // SLLI
+                    3'h2: result = ($signed(operand_a) < $signed(operand_b)) ? 32'h1 : 32'h0; // SLTI
+                    3'h3: result = (operand_a < operand_b) ? 32'h1 : 32'h0; // SLTIU
+                    3'h4: result = operand_a ^ operand_b; // XORI
+                    3'h5: begin // SRLI / SRAI
+                        if (funct7 == 7'h20) result = $signed(operand_a) >>> operand_b[4:0]; // SRAI
+                        else result = operand_a >> operand_b[4:0]; // SRLI
+                    end
+                    3'h6: result = operand_a | operand_b; // ORI
+                    3'h7: result = operand_a & operand_b; // ANDI
+                    default: result = 32'h0;
+                endcase
             end
-            ALU_CMP: begin
-                temp_result = {1'b0, operand_a} - {1'b0, operand_b};
-                result = a;
-                flags_out[FLAG_CARRY] = temp_result[32];
-            end
-            ALU_CMPI: begin
-                temp_result = {1'b0, operand_a} - {1'b0, operand_b};
-                result = a;
-                flags_out[FLAG_CARRY] = temp_result[32];
-                // $display("DEBUG ALU CMPI: a=%0d b=%0d result=%0d", operand_a, operand_b, result);
-            end
+            OP_LUI: result = operand_b; // LUI (immediate already shifted in decoder)
+            OP_AUIPC: result = operand_a + operand_b; // PC + immediate
+            OP_LOAD, OP_STORE: result = operand_a + operand_b; // Address calculation
             default: begin
                 result = 32'h0;
                 flags_out[FLAG_CARRY] = 1'b0;
