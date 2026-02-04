@@ -234,6 +234,10 @@ static const instruction_def_t instructions[] = {
     {"not", OP_IMM, 0, 0, RV_PSEUDO},
     {"NEG", OP_REG, 0, 0, RV_PSEUDO}, // sub rd, x0, rs1
     {"neg", OP_REG, 0, 0, RV_PSEUDO},
+    {"BEQZ", OP_BRANCH, 0, 0, RV_PSEUDO}, // beq rs1, x0, label
+    {"beqz", OP_BRANCH, 0, 0, RV_PSEUDO},
+    {"BNEZ", OP_BRANCH, 1, 0, RV_PSEUDO}, // bne rs1, x0, label
+    {"bnez", OP_BRANCH, 1, 0, RV_PSEUDO},
 };
 
 static int num_instructions = sizeof(instructions) / sizeof(instructions[0]);
@@ -419,13 +423,22 @@ static void add_label(const char *name, uint32_t address, bool is_data) {
     error("Too many labels", 0);
   }
 
-  // Check for duplicate labels
-  for (int i = 0; i < num_labels; i++) {
-    if (strcmp(labels[i].name, name) == 0) {
-      error("Duplicate label", 0);
+  // Check for duplicate labels (exempt numeric local labels)
+  bool is_numeric = true;
+  for (const char *p = name; *p; p++) {
+    if (!isdigit(*p)) {
+      is_numeric = false;
+      break;
     }
   }
 
+  if (!is_numeric) {
+    for (int i = 0; i < num_labels; i++) {
+      if (strcmp(labels[i].name, name) == 0) {
+        error("Duplicate label", 0);
+      }
+    }
+  }
   strncpy(labels[num_labels].name, name, MAX_LABEL_LENGTH - 1);
   labels[num_labels].name[MAX_LABEL_LENGTH - 1] = '\0';
   labels[num_labels].address = address;
@@ -433,7 +446,43 @@ static void add_label(const char *name, uint32_t address, bool is_data) {
   num_labels++;
 }
 
-static bool find_label(const char *name, uint32_t *address) {
+static bool find_label(const char *name, uint32_t current_pc,
+                       uint32_t *address) {
+  // Handle local numeric labels (e.g., 1f, 1b)
+  int len = strlen(name);
+  if (len >= 2 && isdigit(name[0]) &&
+      (name[len - 1] == 'f' || name[len - 1] == 'F' || name[len - 1] == 'b' ||
+       name[len - 1] == 'B')) {
+    char base_name[MAX_LABEL_LENGTH];
+    char direction = tolower(name[len - 1]);
+    strncpy(base_name, name, len - 1);
+    base_name[len - 1] = '\0';
+
+    if (direction == 'b') {
+      // Search backwards
+      for (int i = num_labels - 1; i >= 0; i--) {
+        if (strcmp(labels[i].name, base_name) == 0 &&
+            labels[i].address <= current_pc) {
+          if (address)
+            *address = labels[i].address;
+          return true;
+        }
+      }
+    } else {
+      // Search forwards
+      for (int i = 0; i < num_labels; i++) {
+        if (strcmp(labels[i].name, base_name) == 0 &&
+            labels[i].address > current_pc) {
+          if (address)
+            *address = labels[i].address;
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  // Regular global labels
   for (int i = 0; i < num_labels; i++) {
     if (strcmp(labels[i].name, name) == 0) {
       if (address)
@@ -773,7 +822,7 @@ static void assemble_instruction(const char *line, int line_num) {
       if (strcasecmp(work_inst.name, "LA") == 0 ||
           strcasecmp(work_inst.name, "la") == 0) {
         uint32_t label_addr;
-        if (find_label(tokens[2], &label_addr)) {
+        if (find_label(tokens[2], current_address, &label_addr)) {
           val = (int32_t)label_addr;
         } else {
           val = 0;
@@ -1042,7 +1091,7 @@ static void assemble_instruction(const char *line, int line_num) {
       rs2 = 0; // x0
       // Target is token 2
       uint32_t label_addr;
-      if (find_label(tokens[2], &label_addr)) {
+      if (find_label(tokens[2], current_address, &label_addr)) {
         immediate = label_addr - current_address;
       } else {
         immediate = 0;
@@ -1054,7 +1103,7 @@ static void assemble_instruction(const char *line, int line_num) {
       rs2 = parse_register(tokens[2]);
       // Target is token 3
       uint32_t label_addr;
-      if (find_label(tokens[3], &label_addr)) {
+      if (find_label(tokens[3], current_address, &label_addr)) {
         immediate = label_addr - current_address;
       } else {
         immediate = 0;
@@ -1070,7 +1119,7 @@ static void assemble_instruction(const char *line, int line_num) {
     rd = parse_register(tokens[1]);
     if (num_tokens > 2) {
       uint32_t label_addr;
-      if (find_label(tokens[2], &label_addr)) {
+      if (find_label(tokens[2], current_address, &label_addr)) {
         immediate = label_addr;
       } else if (isdigit(tokens[2][0]) || tokens[2][0] == '-') {
         immediate = parse_immediate(tokens[2]);
@@ -1100,7 +1149,7 @@ static void assemble_instruction(const char *line, int line_num) {
         }
 
         uint32_t label_addr;
-        if (find_label(tokens[1], &label_addr)) {
+        if (find_label(tokens[1], current_address, &label_addr)) {
           immediate = label_addr - current_address;
         } else {
           immediate = 0;
@@ -1111,7 +1160,7 @@ static void assemble_instruction(const char *line, int line_num) {
     } else {
       rd = parse_register(tokens[1]);
       uint32_t label_addr;
-      if (find_label(tokens[2], &label_addr)) {
+      if (find_label(tokens[2], current_address, &label_addr)) {
         immediate = label_addr - current_address;
       } else {
         immediate = 0;
@@ -1163,11 +1212,14 @@ static void first_pass(FILE *input) {
     line_num++;
     // printf("Line %d: %s", line_num, line);
 
-    // Remove comments (both ; and // style)
+    // Remove comments (;, //, and # style)
     char *comment = strstr(line, ";");
     if (comment)
       *comment = '\0';
     comment = strstr(line, "//");
+    if (comment)
+      *comment = '\0';
+    comment = strstr(line, "#");
     if (comment)
       *comment = '\0';
 
@@ -1222,7 +1274,8 @@ static void second_pass(void) {
   for (int i = 0; i < num_assembled; i++) {
     if (assembled[i].needs_resolution) {
       uint32_t label_addr;
-      if (find_label(assembled[i].forward_label, &label_addr)) {
+      if (find_label(assembled[i].forward_label, assembled[i].address,
+                     &label_addr)) {
         int32_t immediate = 0;
 
         // Calculate offsets for branches/jumps

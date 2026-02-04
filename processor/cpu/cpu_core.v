@@ -271,15 +271,8 @@ module cpu_core (
                 EXECUTE: begin
                     $display("EXECUTE_START: PC=0x%08x, IS=0x%08x, Opcode=0x%02x", pc_reg, instruction_reg, opcode);
                     
-                    // ------ BEGIN: Handle the result of ALU operations-----
+                    // Default ALU result handling (overridden for jumps and CSRs)
                     alu_result_reg <= alu_out_wire;
-                    
-                    // Update flags for ALU operations
-                    if (opcode == OP_REG || opcode == OP_IMM) begin
-                        flags_reg <= flags_out;
-                        $display("EXECUTE_FLAGS_AFTER: C=%b Z=%b N=%b V=%b", 
-                                flags_out[0], flags_out[1], flags_out[2], flags_out[3]);
-                    end
 
                     // Handle CSR operations
                     if (opcode == OP_SYSTEM) begin
@@ -300,15 +293,9 @@ module cpu_core (
                                 12'h340: mscratch <= csr_wdata;
                             endcase
                             
-                            alu_result_reg <= csr_rdata; // Read old value into RD
-                            
+                            alu_result_reg <= csr_rdata; // Read old value into RD for Writeback
                             $display("CSR_OP: addr=0x%03x, wdata=0x%08x, rdata=0x%08x", imm12_i, csr_wdata, csr_rdata);
                         end else if (instruction_reg[31:20] == 12'h1) begin // EBREAK
-                            // Use standard RISC-V Exception handling:
-                            // 1. Save PC to mepc
-                            // 2. Set mcause to 3 (Breakpoint)
-                            // 3. Jump to trap vector (mtvec)
-                            // For this simplified core, we'll just HALT as before but log it properly
                             halted_reg <= 1'b1;
                             mepc <= pc_reg;
                             mcause <= 32'd3; // Breakpoint
@@ -319,11 +306,22 @@ module cpu_core (
                         end
                     end
                     
-                    // Branch/jump PC update handled in FETCH for next cycle
-                    if ((is_branch && branch_taken) || is_jal || is_jalr) begin
-                        pc_reg <= (is_jalr) ? (alu_result & ~32'h1) : (pc_reg - 4 + immediate); // jalr/branch use current PC-4 because PC was already incremented
-                        $display("DEBUG CPU: Jump/Branch taken to PC=0x%x", 
-                                (is_jalr) ? (alu_result & ~32'h1) : (pc_reg - 4 + immediate));
+                    // Handle Jumps/Branches
+                    if (is_jal || is_jalr) begin
+                        alu_result_reg <= pc_reg; // Save return address (already PC+4)
+                        pc_reg <= (is_jalr) ? (alu_out_wire & ~32'h1) : (pc_reg - 4 + immediate);
+                        $display("DEBUG CPU: Jump taken to PC=0x%x, RA set to 0x%x", 
+                                (is_jalr) ? (alu_out_wire & ~32'h1) : (pc_reg - 4 + immediate), pc_reg);
+                    end else if (is_branch && branch_taken) begin
+                        pc_reg <= (pc_reg - 4 + immediate);
+                        $display("DEBUG CPU: Branch taken to PC=0x%x", pc_reg - 4 + immediate);
+                    end
+
+                    // Update flags for ALU operations
+                    if (opcode == OP_REG || opcode == OP_IMM) begin
+                        flags_reg <= flags_out;
+                        $display("EXECUTE_FLAGS_AFTER: C=%b Z=%b N=%b V=%b", 
+                                flags_out[0], flags_out[1], flags_out[2], flags_out[3]);
                     end
                     
                     $display("EXECUTE_DONE: PC=0x%08x, IS=0x%08x Opcode=0x%02x, rd=%d, rs1=%d, rs2=%d, imm=0x%08x", pc_reg, instruction_reg, opcode, rd, rs1, rs2, immediate);
@@ -442,7 +440,6 @@ module cpu_core (
 
     assign reg_data_w = (state == WRITEBACK) ? 
                        ((is_load) ? load_data_formatted :
-                        (is_jal || is_jalr) ? pc_reg : // pc_reg already points to next instruction
                         alu_result_reg) : 32'h0;
     // DEBUG: Show what is being written to the register file
     always @(*) begin

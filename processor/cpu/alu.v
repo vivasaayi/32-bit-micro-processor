@@ -39,6 +39,7 @@ module alu (
     localparam OP_M     = 7'h33; // funct7=0x01 for RV32M
     localparam OP_LOAD  = 7'h03;
     localparam OP_STORE = 7'h23;
+    localparam OP_JALR  = 7'h67;
 
     // Flag bit positions
     localparam FLAG_CARRY     = 0;
@@ -125,7 +126,7 @@ module alu (
             end
             OP_LUI: result = operand_b; // LUI (immediate already shifted in decoder)
             OP_AUIPC: result = operand_a + operand_b; // PC + immediate
-            OP_LOAD, OP_STORE: result = operand_a + operand_b; // Address calculation
+            OP_LOAD, OP_STORE, OP_JALR: result = operand_a + operand_b; // Address calculation
             default: begin
                 result = 32'h0;
                 flags_out[FLAG_CARRY] = 1'b0;
