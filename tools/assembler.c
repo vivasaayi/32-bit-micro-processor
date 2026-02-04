@@ -425,13 +425,15 @@ static void add_label(const char *name, uint32_t address, bool is_data) {
   num_labels++;
 }
 
-static int find_label(const char *name) {
+static bool find_label(const char *name, uint32_t *address) {
   for (int i = 0; i < num_labels; i++) {
     if (strcmp(labels[i].name, name) == 0) {
-      return (int)labels[i].address; // Cast to int for return
+      if (address)
+        *address = labels[i].address;
+      return true;
     }
   }
-  return -1;
+  return false;
 }
 
 static uint32_t encode_raw(opcode_t opcode, inst_type_t type, uint8_t funct3,
@@ -762,8 +764,10 @@ static void assemble_instruction(const char *line, int line_num) {
       // For LA: token[2] is label. For LI: token[2] is imm.
       if (strcasecmp(work_inst.name, "LA") == 0 ||
           strcasecmp(work_inst.name, "la") == 0) {
-        val = find_label(tokens[2]);
-        if (val < 0) {
+        uint32_t label_addr;
+        if (find_label(tokens[2], &label_addr)) {
+          val = (int32_t)label_addr;
+        } else {
           val = 0;
           // Check if it's a numeric constant even with LA
           if (isdigit(tokens[2][0]) ||
@@ -1007,8 +1011,8 @@ static void assemble_instruction(const char *line, int line_num) {
       rs1 = parse_register(tokens[1]);
       rs2 = 0; // x0
       // Target is token 2
-      int label_addr = find_label(tokens[2]);
-      if (label_addr >= 0) {
+      uint32_t label_addr;
+      if (find_label(tokens[2], &label_addr)) {
         immediate = label_addr - current_address;
       } else {
         immediate = 0;
@@ -1019,8 +1023,8 @@ static void assemble_instruction(const char *line, int line_num) {
       rs1 = parse_register(tokens[1]);
       rs2 = parse_register(tokens[2]);
       // Target is token 3
-      int label_addr = find_label(tokens[3]);
-      if (label_addr >= 0) {
+      uint32_t label_addr;
+      if (find_label(tokens[3], &label_addr)) {
         immediate = label_addr - current_address;
       } else {
         immediate = 0;
@@ -1034,32 +1038,50 @@ static void assemble_instruction(const char *line, int line_num) {
   case RV_TYPE_U:
     // LUI rd, imm
     rd = parse_register(tokens[1]);
-    immediate = parse_immediate(tokens[2]);
+    if (num_tokens > 2) {
+      uint32_t label_addr;
+      if (find_label(tokens[2], &label_addr)) {
+        immediate = label_addr;
+      } else if (isdigit(tokens[2][0]) || tokens[2][0] == '-') {
+        immediate = parse_immediate(tokens[2]);
+      } else {
+        immediate = 0;
+        needs_resolution = true;
+        strcpy(forward_label, tokens[2]);
+      }
+    }
     encoded = encode_instruction(&work_inst, rd, 0, 0, immediate);
     break;
 
   case RV_TYPE_J:
     // JAL rd, label
     if (inst->type == RV_PSEUDO) { // JMP/CALL/J
-      // rd set above in pseudo block (JMP/J -> x0, CALL -> ra)
-      if (strcasecmp(work_inst.name, "J") == 0 ||
-          strcasecmp(work_inst.name, "j") == 0) {
-        // j label -> jal x0, label
-        rd = 0; // x0
-      }
+      if (strcasecmp(inst->name, "JMP") == 0 ||
+          strcasecmp(inst->name, "jmp") == 0 ||
+          strcasecmp(inst->name, "CALL") == 0 ||
+          strcasecmp(inst->name, "call") == 0 ||
+          strcasecmp(inst->name, "J") == 0 ||
+          strcasecmp(inst->name, "j") == 0) {
+        // rd set above in pseudo block (JMP/J -> x0, CALL -> ra)
+        if (strcasecmp(work_inst.name, "J") == 0 ||
+            strcasecmp(work_inst.name, "j") == 0) {
+          // j label -> jal x0, label
+          rd = 0; // x0
+        }
 
-      int label_addr = find_label(tokens[1]);
-      if (label_addr >= 0) {
-        immediate = label_addr - current_address;
-      } else {
-        immediate = 0;
-        needs_resolution = true;
-        strcpy(forward_label, tokens[1]);
+        uint32_t label_addr;
+        if (find_label(tokens[1], &label_addr)) {
+          immediate = label_addr - current_address;
+        } else {
+          immediate = 0;
+          needs_resolution = true;
+          strcpy(forward_label, tokens[1]);
+        }
       }
     } else {
       rd = parse_register(tokens[1]);
-      int label_addr = find_label(tokens[2]);
-      if (label_addr >= 0) {
+      uint32_t label_addr;
+      if (find_label(tokens[2], &label_addr)) {
         immediate = label_addr - current_address;
       } else {
         immediate = 0;
@@ -1169,35 +1191,25 @@ static void second_pass(void) {
   // Resolve forward references now that we know all label addresses
   for (int i = 0; i < num_assembled; i++) {
     if (assembled[i].needs_resolution) {
-
-      int label_addr = find_label(assembled[i].forward_label);
-      if (label_addr >= 0) {
+      uint32_t label_addr;
+      if (find_label(assembled[i].forward_label, &label_addr)) {
         int32_t immediate = 0;
 
         // Calculate offsets for branches/jumps
         if (assembled[i].type == RV_TYPE_B || assembled[i].type == RV_TYPE_J) {
           // PC-relative offset
-          immediate = label_addr - assembled[i].address;
+          immediate = (int32_t)label_addr - (int32_t)assembled[i].address;
         } else if (assembled[i].type == RV_TYPE_U) {
           // LUI/AUIPC absolute high
-          // Handle sign-extension of low part (ADDI) if this is part of a pair
-          // Standard lowering: hi = (val + 0x800) >> 12
-          immediate = (label_addr + 0x800) >> 12;
+          immediate = (int32_t)(label_addr + 0x800) >> 12;
         } else if (assembled[i].type == RV_TYPE_I &&
                    assembled[i].opcode == OP_IMM) {
           // ADDI low part (signed 12-bit)
-          immediate = label_addr & 0xFFF;
-          // Logic: when 12-bit immediate is cast to 32-bit signed, it sign
-          // extends. If bit 11 is 1, it becomes negative. The LUI part must
-          // compensate by adding 1. (label + 0x800) >> 12 does this.
+          immediate = (int32_t)label_addr & 0xFFF;
         } else if (assembled[i].type == RV_TYPE_I) {
-          // Other I-type (e.g. LW offset) ???
-          // Usually LW rd, offset(rs1). If rs1 is x0, it's absolute.
-          // But existing logic doesn't support splitting LW.
-          // We assume small absolute or handled via LA.
-          immediate = label_addr & 0xFFF;
+          immediate = (int32_t)label_addr & 0xFFF;
         } else {
-          immediate = label_addr; // Fallback
+          immediate = (int32_t)label_addr; // Fallback
         }
 
         assembled[i].instruction = encode_raw(
