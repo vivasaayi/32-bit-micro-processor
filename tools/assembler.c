@@ -188,6 +188,14 @@ static const instruction_def_t instructions[] = {
     {"ecall", OP_SYSTEM, 0, 0, RV_TYPE_I},
     {"EBREAK", OP_SYSTEM, 0, 0, RV_TYPE_I},
     {"ebreak", OP_SYSTEM, 0, 0, RV_TYPE_I},
+    {"CSRRW", OP_SYSTEM, 0x1, 0, RV_TYPE_I},
+    {"csrrw", OP_SYSTEM, 0x1, 0, RV_TYPE_I},
+    {"CSRRS", OP_SYSTEM, 0x2, 0, RV_TYPE_I},
+    {"csrrs", OP_SYSTEM, 0x2, 0, RV_TYPE_I},
+    {"CSRRC", OP_SYSTEM, 0x3, 0, RV_TYPE_I},
+    {"csrrc", OP_SYSTEM, 0x3, 0, RV_TYPE_I},
+    {"MRET", OP_SYSTEM, 0x0, 0x30, RV_TYPE_I},
+    {"mret", OP_SYSTEM, 0x0, 0x30, RV_TYPE_I},
 
     // Helper mappings for legacy support (Pseudo-instructions)
     {"JMP", OP_JAL, 0, 0, RV_PSEUDO}, // jal x0, label
@@ -935,25 +943,47 @@ static void assemble_instruction(const char *line, int line_num) {
       rs1 = parse_register(tokens[2]);
       immediate = -1;
       encoded = encode_instruction(&work_inst, rd, rs1, 0, immediate);
-    } else if (work_inst.opcode == OP_SYSTEM) {
-      // ECALL, EBREAK
-      rd = 0;
-      rs1 = 0;
-      if (strcasecmp(work_inst.name, "EBREAK") == 0 ||
-          strcasecmp(work_inst.name, "ebreak") == 0 ||
-          strcasecmp(work_inst.name, "HALT") == 0 ||
-          strcasecmp(work_inst.name, "halt") == 0) {
-        immediate = 1;
-      } else {
-        immediate = 0;
-      }
     } else {
-      // Arithmetic I-type: ADDI rd, rs1, imm
-      // Also handle MV rd, rs1 -> ADDI rd, rs1, 0
-      if (inst->type == RV_PSEUDO && (strcasecmp(inst->name, "MOV") == 0 ||
-                                      strcasecmp(inst->name, "MOVE") == 0 ||
-                                      strcasecmp(inst->name, "MV") == 0 ||
-                                      strcasecmp(inst->name, "mv") == 0)) {
+      // Check for CSR instructions (I-type) or System instructions
+      if (inst->opcode == OP_SYSTEM) {
+        if (strcasecmp(inst->name, "CSRRW") == 0 ||
+            strcasecmp(inst->name, "csrrw") == 0 ||
+            strcasecmp(inst->name, "CSRRS") == 0 ||
+            strcasecmp(inst->name, "csrrs") == 0 ||
+            strcasecmp(inst->name, "CSRRC") == 0 ||
+            strcasecmp(inst->name, "csrrc") == 0) {
+
+          if (num_tokens < 4)
+            error("Missing operands for CSR", line_num);
+          rd = parse_register(tokens[1]);
+          immediate = parse_immediate(tokens[2]); // CSR address
+          rs1 = parse_register(tokens[3]);
+        } else if (strcasecmp(inst->name, "EBREAK") == 0 ||
+                   strcasecmp(inst->name, "ebreak") == 0 ||
+                   strcasecmp(inst->name, "HALT") == 0 ||
+                   strcasecmp(inst->name, "halt") == 0) {
+          rd = 0;
+          rs1 = 0;
+          immediate = 1; // imm[0]=1 for EBREAK/HALT convention in this core
+        } else if (strcasecmp(inst->name, "ECALL") == 0 ||
+                   strcasecmp(inst->name, "ecall") == 0) {
+          rd = 0;
+          rs1 = 0;
+          immediate = 0;
+        } else if (strcasecmp(inst->name, "MRET") == 0 ||
+                   strcasecmp(inst->name, "mret") == 0) {
+          rd = 0;
+          rs1 = 0;
+          immediate = 0x302; // MRET encoding
+        } else {
+          error("Unknown system instruction", line_num);
+        }
+      } else if (inst->type == RV_PSEUDO &&
+                 (strcasecmp(inst->name, "MOV") == 0 ||
+                  strcasecmp(inst->name, "MOVE") == 0 ||
+                  strcasecmp(inst->name, "MV") == 0 ||
+                  strcasecmp(inst->name, "mv") == 0)) {
+        // ... existing MOV logic ...
         rd = parse_register(tokens[1]);
         rs1 = parse_register(tokens[2]);
         immediate = 0;

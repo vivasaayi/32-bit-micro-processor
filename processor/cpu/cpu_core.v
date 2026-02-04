@@ -48,13 +48,40 @@ module cpu_core (
     reg [31:0] alu_result_reg;
     reg [31:0] memory_data_reg;
     reg [7:0] flags_reg;  // Store ALU flags
-    reg [31:0] stack_pointer; // Stack pointer (R30 equivalent)
-    reg [31:0] saved_pc; // For function calls and interrupts
+    reg [31:0] stack_pointer; // Stack pointer
     reg privilege_mode; // 0=user, 1=kernel
     reg halted_reg;
     reg user_mode_reg;
+
+    // CSR Registers
+    reg [31:0] mepc;    // Machine Exception Program Counter
+    reg [31:0] mcause;  // Machine Cause
+    reg [31:0] mstatus; // Machine Status
+    reg [31:0] mtvec;   // Machine Trap Vector
+    reg [31:0] mscratch; // Machine Scratch
     
-    // ALU signals
+    // CSR Interface
+    reg [31:0] csr_wdata;
+    reg csr_write;
+    reg [31:0] csr_rdata;
+    wire [11:0] csr_addr = imm12_i;
+    wire [31:0] rs1_data = reg_data_a;
+    
+    // CSR Read Logic
+    always @(*) begin
+        case (csr_addr)
+            12'h341: csr_rdata = mepc;
+            12'h342: csr_rdata = mcause;
+            12'h300: csr_rdata = mstatus;
+            12'h305: csr_rdata = mtvec;
+            12'h340: csr_rdata = mscratch;
+            // Cycle counters
+            12'hC00: csr_rdata = 32'h0; // cycle (low) - TODO: implement counter
+            12'hC80: csr_rdata = 32'h0; // cycle (high)
+            default: csr_rdata = 32'h0;
+        endcase
+    end
+    
     wire [31:0] operand_a, operand_b;
     wire [31:0] alu_out_wire;
     wire [31:0] alu_result;
@@ -106,6 +133,12 @@ module cpu_core (
         F3_BGE  = 3'h5,
         F3_BLTU = 3'h6,
         F3_BGEU = 3'h7;
+
+    // Flag bit positions (Must match ALU)
+    localparam FLAG_CARRY     = 0;
+    localparam FLAG_ZERO      = 1;
+    localparam FLAG_NEGATIVE  = 2;
+    localparam FLAG_OVERFLOW  = 3;
 
     // ----------------------------------------------------------------------
     // ALU OPCODE TABLE (0x00–0x0F)
@@ -169,9 +202,12 @@ module cpu_core (
     alu u_alu (
         .a(operand_a),
         .b(operand_b),
-        .opcode(opcode),
-        .funct3(funct3),
-        .funct7(funct7),
+        .opcode((is_branch) ? OP_REG : opcode), // Force ALU to do REG-REG op for branches
+        .funct3((is_branch) ? ((funct3 == F3_BEQ || funct3 == F3_BNE) ? 3'h0 : // SUB via funct7
+                               (funct3 == F3_BLT || funct3 == F3_BGE) ? 3'h2 : // SLT
+                               (funct3 == F3_BLTU || funct3 == F3_BGEU) ? 3'h3 : // SLTU
+                               3'h0) : funct3),
+        .funct7((is_branch && (funct3 == F3_BEQ || funct3 == F3_BNE)) ? 7'h20 : funct7), // SUB for BEQ/BNE
         .flags_in(flags_reg),
         .result(alu_out_wire),
         .flags_out(flags_out)
@@ -202,8 +238,18 @@ module cpu_core (
             stack_pointer <= 32'h000F0000; // Initialize stack to high memory
             halted_reg <= 1'b0;
             user_mode_reg <= 1'b0;
+            
+            // CSR Reset
+            mepc <= 32'h0;
+            mcause <= 32'h0;
+            mstatus <= 32'h00001800; // MPP=11 (Machine mode)
+            mtvec <= 32'h0;
+            mscratch <= 32'h0;
+            csr_write <= 1'b0;
         end else if (mem_ready && !halted_reg) begin
             state <= next_state;
+            
+            
             case (state)
                 FETCH: begin
                     if (mem_ready) begin
@@ -235,9 +281,42 @@ module cpu_core (
                                 flags_out[0], flags_out[1], flags_out[2], flags_out[3]);
                     end
 
-                    if (opcode == OP_SYSTEM && funct3 == 3'h0 && instruction_reg[31:20] == 12'h1) begin // EBREAK / HALT
-                        halted_reg <= 1'b1;
-                        $display("CPU HALTED via EBREAK at PC=0x%08x", pc_reg - 4);
+                    // Handle CSR operations
+                    if (opcode == OP_SYSTEM) begin
+                        if (funct3 != 3'h0) begin // CSR Instructions
+                            // Calculate write value
+                            case (funct3)
+                                3'h1: csr_wdata = rs1_data; // CSRRW
+                                3'h2: csr_wdata = csr_rdata | rs1_data; // CSRRS
+                                3'h3: csr_wdata = csr_rdata & ~rs1_data; // CSRRC
+                            endcase
+                            
+                            // Perform Write
+                            case (csr_addr)
+                                12'h341: mepc <= csr_wdata;
+                                12'h342: mcause <= csr_wdata;
+                                12'h300: mstatus <= csr_wdata;
+                                12'h305: mtvec <= csr_wdata;
+                                12'h340: mscratch <= csr_wdata;
+                            endcase
+                            
+                            alu_result_reg <= csr_rdata; // Read old value into RD
+                            
+                            $display("CSR_OP: addr=0x%03x, wdata=0x%08x, rdata=0x%08x", imm12_i, csr_wdata, csr_rdata);
+                        end else if (instruction_reg[31:20] == 12'h1) begin // EBREAK
+                            // Use standard RISC-V Exception handling:
+                            // 1. Save PC to mepc
+                            // 2. Set mcause to 3 (Breakpoint)
+                            // 3. Jump to trap vector (mtvec)
+                            // For this simplified core, we'll just HALT as before but log it properly
+                            halted_reg <= 1'b1;
+                            mepc <= pc_reg;
+                            mcause <= 32'd3; // Breakpoint
+                            $display("EXCEPTION: EBREAK at PC=0x%08x", pc_reg - 4);
+                        end else if (instruction_reg[31:20] == 12'h302) begin // MRET
+                             pc_reg <= mepc;
+                             $display("MRET: Returning to PC=0x%08x", mepc);
+                        end
                     end
                     
                     // Branch/jump PC update handled in FETCH for next cycle
@@ -318,19 +397,20 @@ module cpu_core (
     assign is_op_imm = (opcode == OP_IMM);
     assign is_op_reg = (opcode == OP_REG);
 
-    // Branch condition logic
+    // Branch condition logic - uses current ALU output flags (combinatorial)
     wire branch_taken =
-        (funct3 == F3_BEQ)  ? (flags_reg[1]) : // Z
-        (funct3 == F3_BNE)  ? (~flags_reg[1]) : // !Z
-        (funct3 == F3_BLT)  ? (flags_reg[2]) : // N
-        (funct3 == F3_BGE)  ? (~flags_reg[2]) : // !N
-        (funct3 == F3_BLTU) ? (flags_reg[0]) : // C (unsigned less than)
-        (funct3 == F3_BGEU) ? (~flags_reg[0]) : // !C
+        (funct3 == F3_BEQ)  ? (flags_out[FLAG_ZERO]) : // Z
+        (funct3 == F3_BNE)  ? (~flags_out[FLAG_ZERO]) : // !Z
+        (funct3 == F3_BLT)  ? (alu_out_wire[0]) : // SLT result (1 if taken)
+        (funct3 == F3_BGE)  ? (~alu_out_wire[0]) : // !SLT
+        (funct3 == F3_BLTU) ? (alu_out_wire[0]) : // SLTU result
+        (funct3 == F3_BGEU) ? (~alu_out_wire[0]) : // !SLTU
         1'b0;
 
     // ALU connections
     assign operand_a = (opcode == OP_AUIPC) ? (pc_reg - 4) : reg_data_a;
-    assign operand_b = (opcode == OP_REG) ? reg_data_b : immediate;
+    // For branches, we compare rs1 and rs2. rs2 is on reg_data_b.
+    assign operand_b = (opcode == OP_REG || opcode == OP_BRANCH) ? reg_data_b : immediate;
     
     // Register file connections
     assign reg_addr_a = rs1;
@@ -373,7 +453,7 @@ module cpu_core (
     
     assign reg_write_en = (state == WRITEBACK) && 
                           (rd != 5'h0) && // x0 is always zero
-                          (is_load || is_jal || is_jalr || is_op_imm || is_op_reg || opcode == OP_LUI || opcode == OP_AUIPC);
+                          (is_load || is_jal || is_jalr || is_op_imm || is_op_reg || opcode == OP_LUI || opcode == OP_AUIPC || opcode == OP_SYSTEM);
 
                          
 

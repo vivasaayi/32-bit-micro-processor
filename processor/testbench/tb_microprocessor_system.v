@@ -140,11 +140,16 @@ module tb_microprocessor_system;
         $finish;
     end
     
-    // Monitor important signals
+    // Monitor important signals & UART Simulation
     always @(posedge clk) begin
         if (ext_mem_read || ext_mem_write) begin
-            $display("External memory access: addr=0x%08X, read=%b, write=%b", 
-                     ext_addr, ext_mem_read, ext_mem_write);
+            // UART TX at 0x10000000
+            if (ext_mem_write && ext_addr == 32'h10000000) begin
+                $write("%c", ext_data[7:0]);
+            end else begin
+                $display("External memory access: addr=0x%08X, read=%b, write=%b, data=0x%08x", 
+                     ext_addr, ext_mem_read, ext_mem_write, ext_data);
+            end
         end
     end
 
