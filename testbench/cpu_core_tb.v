@@ -50,26 +50,45 @@ module cpu_core_tb;
     // Clock generation
     always #5 clk = ~clk;
 
-    // Instruction encoding helper
-    function [31:0] encode_rrr;
-        input [5:0] opcode;
-        input [4:0] rd, rs1, rs2;
-        reg [31:0] instr;
+    // RISC-V Instruction encoding helpers
+    function [31:0] encode_r;
+        input [6:0] funct7;
+        input [4:0] rs2, rs1;
+        input [2:0] funct3;
+        input [4:0] rd;
+        input [6:0] opcode;
         begin
-            instr = {opcode, 2'b00, rd, rs1, rs2, 9'b0};
-            $display("[encode_rrr] opcode=0x%02h rd=%0d rs1=%0d rs2=%0d => instr=0x%08h (bin=%032b)", opcode, rd, rs1, rs2, instr, instr);
-            encode_rrr = instr;
+            encode_r = {funct7, rs2, rs1, funct3, rd, opcode};
         end
     endfunction
-    function [31:0] encode_ri;
-        input [5:0] opcode;
-        input [4:0] rd, rs1;
-        input [18:0] imm;
-        reg [31:0] instr;
+
+    function [31:0] encode_i;
+        input [11:0] imm;
+        input [4:0] rs1;
+        input [2:0] funct3;
+        input [4:0] rd;
+        input [6:0] opcode;
         begin
-            instr = {opcode, 2'b00, rd, rs1, imm[13:0]};
-            $display("[encode_ri] opcode=0x%02h rd=%0d rs1=%0d imm=0x%05h => instr=0x%08h (bin=%032b)", opcode, rd, rs1, imm, instr, instr);
-            encode_ri = instr;
+            encode_i = {imm, rs1, funct3, rd, opcode};
+        end
+    endfunction
+
+    function [31:0] encode_u;
+        input [19:0] imm20;
+        input [4:0] rd;
+        input [6:0] opcode;
+        begin
+            encode_u = {imm20, rd, opcode};
+        end
+    endfunction
+
+    function [31:0] encode_j;
+        input [20:0] imm21;
+        input [4:0] rd;
+        input [6:0] opcode;
+        begin
+            // J-type scrambled immediate: imm[20]|imm[10:1]|imm[11]|imm[19:12]
+            encode_j = {imm21[20], imm21[10:1], imm21[11], imm21[19:12], rd, opcode};
         end
     endfunction
 
@@ -80,24 +99,34 @@ module cpu_core_tb;
         for (i = 0; i < 256; i = i + 1) mem[i] = 32'h0;
 
         // Place instructions at the correct memory base (PC=0x8000)
-        // Load test values into R1 and R2
-        mem[MEM_BASE + 0] = encode_ri(6'h12, 5'd1, 5'd0, 19'd5);   // LOADI R1, 5
-        mem[MEM_BASE + 1] = encode_ri(6'h12, 5'd2, 5'd0, 19'd3);   // LOADI R2, 3
-        // ALU ops: R3 = R1 op R2
-        mem[MEM_BASE + 2] = encode_rrr(6'h00, 5'd3, 5'd1, 5'd2);   // ADD R3, R1, R2
-        mem[MEM_BASE + 3] = encode_rrr(6'h01, 5'd4, 5'd1, 5'd2);   // SUB R4, R1, R2
-        mem[MEM_BASE + 4] = encode_rrr(6'h02, 5'd5, 5'd1, 5'd2);   // AND R5, R1, R2
-        mem[MEM_BASE + 5] = encode_rrr(6'h03, 5'd6, 5'd1, 5'd2);   // OR  R6, R1, R2
-        mem[MEM_BASE + 6] = encode_rrr(6'h04, 5'd7, 5'd1, 5'd2);   // XOR R7, R1, R2
-        mem[MEM_BASE + 7] = encode_rrr(6'h05, 5'd8, 5'd1, 5'd0);   // NOT R8, R1
-        mem[MEM_BASE + 8] = encode_rrr(6'h06, 5'd9, 5'd1, 5'd2);   // SHL R9, R1, R2
-        mem[MEM_BASE + 9] = encode_rrr(6'h07, 5'd10, 5'd1, 5'd2);  // SHR R10, R1, R2
-        mem[MEM_BASE + 10] = encode_rrr(6'h0C, 5'd11, 5'd1, 5'd2); // SAR R11, R1, R2
-        mem[MEM_BASE + 11] = encode_rrr(6'h08, 5'd12, 5'd1, 5'd2); // MUL R12, R1, R2
-        mem[MEM_BASE + 12] = encode_rrr(6'h09, 5'd13, 5'd1, 5'd2); // DIV R13, R1, R2
-        mem[MEM_BASE + 13] = encode_rrr(6'h0A, 5'd14, 5'd1, 5'd2); // MOD R14, R1, R2
-        mem[MEM_BASE + 14] = encode_rrr(6'h0B, 5'd15, 5'd1, 5'd2); // CMP R15, R1, R2
-        mem[MEM_BASE + 15] = encode_rrr(6'h3E, 5'd0, 5'd0, 5'd0);  // HALT (updated opcode to 0x3E)
+        // R1 = 5, R2 = 3
+        mem[MEM_BASE + 0] = encode_i(12'd5, 5'd0, 3'h0, 5'd1, 7'h13); // ADDI R1, x0, 5
+        mem[MEM_BASE + 1] = encode_i(12'd3, 5'd0, 3'h0, 5'd2, 7'h13); // ADDI R2, x0, 3
+        
+        // ALU ops: R3 = R1 + R2 = 8
+        mem[MEM_BASE + 2] = encode_r(7'h00, 5'd2, 5'd1, 3'h0, 5'd3, 7'h33); // ADD R3, R1, R2
+
+        // JAL test: Jump forward 8 bytes (2 instructions)
+        // PC is at 0x800C. Target = 0x800C + 8 = 0x8014.
+        // rd = R4 (holds 0x8010, which is PC+4)
+        mem[MEM_BASE + 3] = encode_j(21'd8, 5'd4, 7'h6F); // JAL R4, +8
+        
+        // This instruction (0x8010) should be skipped
+        mem[MEM_BASE + 4] = encode_i(12'd100, 5'd0, 3'h0, 5'd10, 7'h13); // ADDI R10, x0, 100 (SKIPPED)
+        
+        // Target of JAL (0x8014)
+        mem[MEM_BASE + 5] = encode_i(12'd200, 5'd0, 3'h0, 5'd11, 7'h13); // ADDI R11, x0, 200 (EXECUTED)
+
+        // JALR test: Jump to R7 + 16 => PC = 0x8020 + 16 = 0x8030. R8 gets PC+4 = 0x802C.
+        mem[MEM_BASE + 9] = encode_i(12'd16, 5'd7, 3'h0, 5'd8, 7'h67); // JALR R8, R7, 16
+        
+        // Skip to 0x8030 (MEM_BASE + 12)
+        mem[MEM_BASE + 10] = encode_i(12'd300, 5'd0, 3'h0, 5'd12, 7'h13); // ADDI R12, x0, 300 (at 0x8030)
+        mem[MEM_BASE + 11] = encode_u(20'hFFFFF, 5'd0, 7'h73); // SYSTEM/HALT
+        
+        // 0x8030 (MEM_BASE + 12) - target of JALR
+        mem[MEM_BASE + 12] = encode_i(12'd400, 5'd0, 3'h0, 5'd13, 7'h13); // ADDI R13, x0, 400
+        mem[MEM_BASE + 13] = encode_u(20'hFFFFF, 5'd0, 7'h73); // SYSTEM/HALT
 
         // Print loaded instructions for verification
         for (i = 0; i < 16; i = i + 1) begin

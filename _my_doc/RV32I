@@ -24,3 +24,18 @@ OP - SLL - Shift Left Logical
 OP - SRL - Shift Right Logical
 OP - SUB - Substract
 OP - SRA - Shift Right Arithmatic
+
+
+NOP ## TODO ## NOT IMPLEMENTED
+
+Control Transfer
+JAL - Jump and link
+JALR = Jump and link register
+
+Conditional Branches
+BRANCH - BEQ - Branch equal
+BRANCH - BNE - Branch Not Equal
+BRANCH - BLT - Branch Less Than
+BRANCH - BLTU - Branch Less Than Upper
+BRANCH - BGE - Branch Great Than Equal
+BRANCH - BGEU - Branch Great Than Equal

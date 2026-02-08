@@ -237,6 +237,8 @@ module alu_tb;
         #1; check(32'd7,            "DIV 42/6");
         a = 32'd42;        b = 32'd0;         opcode = OP_REG; funct3 = 3'h4; funct7 = 7'h01;
         #1; check(32'hFFFFFFFF,     "DIV by zero");
+        a = 32'h80000000;  b = 32'hFFFFFFFF;  opcode = OP_REG; funct3 = 3'h4; funct7 = 7'h01;
+        #1; check(32'h80000000,     "DIV INT_MIN/-1");
 
         // --- DIVU (funct3=0x5) ---
         a = 32'hFFFFFFFF;  b = 32'd2;         opcode = OP_REG; funct3 = 3'h5; funct7 = 7'h01;
@@ -247,6 +249,8 @@ module alu_tb;
         #1; check(32'd1,            "REM 43%6");
         a = 32'd43;        b = 32'd0;         opcode = OP_REG; funct3 = 3'h6; funct7 = 7'h01;
         #1; check(32'd43,           "REM div by zero");
+        a = 32'h80000000;  b = 32'hFFFFFFFF;  opcode = OP_REG; funct3 = 3'h6; funct7 = 7'h01;
+        #1; check(32'd0,            "REM INT_MIN%-1");
 
         // --- REMU (funct3=0x7) ---
         a = 32'hFFFFFFFF;  b = 32'd10;        opcode = OP_REG; funct3 = 3'h7; funct7 = 7'h01;

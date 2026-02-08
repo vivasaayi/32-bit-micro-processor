@@ -283,14 +283,12 @@ module cpu_core (
         endcase
     end
     
-    // Instruction decode
-    // 6 bit opcodes
     // Instruction decode (RISC-V)
     assign opcode = instruction_reg[6:0];
     assign rd     = instruction_reg[11:7];
     assign funct3 = instruction_reg[14:12];
     assign rs1    = instruction_reg[19:15];
-    assign rs2    = instruction_reg[24:20];
+    assign rs2    = (opcode == 7'h33 || opcode == 7'h63 || opcode == 7'h23) ? instruction_reg[24:20] : 5'h0;
     assign funct7 = instruction_reg[31:25];
 
     // Immediates

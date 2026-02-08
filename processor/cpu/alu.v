@@ -81,20 +81,46 @@ module alu (
     localparam OP_LUI   = 7'h37;
     localparam OP_AUIPC = 7'h17;
     
+    reg [63:0] mul_res;
+    
     always @(*) begin
         result = 32'h0;
+        mul_res = 64'h0;
 
         case (opcode)
             OP_REG: begin
                 if (funct7 == 7'h01) begin // RV32M extension
                     case (funct3)
-                        3'h0: result = a * b;                                               // MUL
-                        3'h1: result = (64'($signed(a)) * 64'($signed(b))) >> 32;                    // MULH
-                        3'h2: result = (64'($signed(a)) * 64'(b)) >> 32;                              // MULHSU
-                        3'h3: result = (64'(a) * 64'(b)) >> 32;                                        // MULHU
-                        3'h4: result = (b != 0) ? $signed(a) / $signed(b) : 32'hFFFFFFFF;   // DIV
+                        3'h0: result = a * b;                                               // MUL: rd = (rs1 * rs2)[31:0]
+                        3'h1: begin
+                            mul_res = $signed(a) * $signed(b);                              // MULH: signed x signed
+                            result = mul_res[63:32];
+                        end
+                        3'h2: begin
+                            mul_res = $signed(a) * $signed({1'b0, b});                      // MULHSU: signed x unsigned
+                            result = mul_res[63:32];
+                        end
+                        3'h3: begin
+                            mul_res = a * b;                                                // MULHU: unsigned x unsigned
+                            result = mul_res[63:32];
+                        end
+                        3'h4: begin // DIV: rd = rs1 / rs2
+                            if (b == 0) 
+                                result = 32'hFFFFFFFF; // DIV by zero
+                            else if (a == 32'h80000000 && b == 32'hFFFFFFFF) 
+                                result = 32'h80000000; // Overflow: INT_MIN / -1
+                            else 
+                                result = $signed(a) / $signed(b);
+                        end
                         3'h5: result = (b != 0) ? a / b : 32'hFFFFFFFF;                      // DIVU
-                        3'h6: result = (b != 0) ? $signed(a) % $signed(b) : a;               // REM
+                        3'h6: begin // REM: rd = rs1 % rs2
+                            if (b == 0) 
+                                result = a;            // REM by zero
+                            else if (a == 32'h80000000 && b == 32'hFFFFFFFF) 
+                                result = 32'h0;        // Overflow: INT_MIN % -1
+                            else 
+                                result = $signed(a) % $signed(b);
+                        end
                         3'h7: result = (b != 0) ? a % b : a;                                 // REMU
                         default: result = 32'h0;
                     endcase
