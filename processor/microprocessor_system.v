@@ -40,7 +40,6 @@ module microprocessor_system (
     // Status outputs
     output wire system_halted,
     output wire [31:0] pc_out,
-    output wire [7:0] cpu_flags,
     
     // Debug outputs for testing
     output wire [31:0] debug_pc,
@@ -62,7 +61,6 @@ module microprocessor_system (
     wire cpu_user_mode;
     wire [7:0] cpu_interrupt_req;
     wire cpu_interrupt_ack;
-    wire [7:0] cpu_flags_out;
     wire [2:0] mem_op_width;
     
     // Memory controller signals
@@ -135,7 +133,6 @@ module microprocessor_system (
         .io_write(io_write),
         .halted(cpu_halted),
         .user_mode(cpu_user_mode),
-        .cpu_flags(cpu_flags_out),
         .mem_op_width(mem_op_width)
     );
     
@@ -197,7 +194,6 @@ module microprocessor_system (
     // Status outputs
     assign system_halted = cpu_halted;
     assign pc_out = cpu_addr_bus; // Simplified - should be actual PC
-    assign cpu_flags = cpu_flags_out; // Output actual CPU flags
     
     // Debug outputs
     assign debug_pc = cpu_addr_bus;

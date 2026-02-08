@@ -29,7 +29,6 @@ module cpu_core (
     // Status outputs
     output wire halted,
     output wire user_mode,
-    output wire [7:0] cpu_flags,
     output wire [2:0] mem_op_width // Output for memory controller (byte/half/word)
 );
 
@@ -47,7 +46,6 @@ module cpu_core (
     reg [31:0] instruction_reg;
     reg [31:0] alu_result_reg;
     reg [31:0] memory_data_reg;
-    reg [7:0] flags_reg;  // Store ALU flags
     reg [31:0] stack_pointer; // Stack pointer
     reg privilege_mode; // 0=user, 1=kernel
     reg halted_reg;
@@ -85,7 +83,6 @@ module cpu_core (
     wire [31:0] operand_a, operand_b;
     wire [31:0] alu_out_wire;
     wire [31:0] alu_result;
-    wire [7:0] flags_out;
     
     // Register file signals
     wire [4:0] reg_addr_a, reg_addr_b, reg_addr_w; 
@@ -134,83 +131,16 @@ module cpu_core (
         F3_BLTU = 3'h6,
         F3_BGEU = 3'h7;
 
-    // Flag bit positions (Must match ALU)
-    localparam FLAG_CARRY     = 0;
-    localparam FLAG_ZERO      = 1;
-    localparam FLAG_NEGATIVE  = 2;
-    localparam FLAG_OVERFLOW  = 3;
 
-    // ----------------------------------------------------------------------
-    // ALU OPCODE TABLE (0x00–0x0F)
-    // ----------------------------------------------------------------------
-    // | Opcode | Mnemonic | Operation         |
-    // |--------|----------|------------------|
-    // | 0x00   | ADD      | a + b            |
-    // | 0x01   | SUB      | a - b            |
-    // | 0x02   | AND      | a & b            |
-    // | 0x03   | OR       | a | b            |
-    // | 0x04   | XOR      | a ^ b            |
-    // | 0x05   | NOT      | ~a               |
-    // | 0x06   | SHL      | a << b           |
-    // | 0x07   | SHR      | a >> b           |
-    // | 0x08   | MUL      | a * b            |
-    // | 0x09   | DIV      | a / b            |
-    // | 0x0A   | MOD      | a % b            |
-    // | 0x0B   | CMP      | compare a, b     |
-    // | 0x0C   | SAR      | a >>> b (arith)  |
-    // | 0x0D   | ADDI     | a + immediate    |
-    // | 0x0E   | SUBI     | a - immediate    |
-    // | 0x0F   | CMPI     | compare a, imm   |
-    // ----------------------------------------------------------------------
-    // Memory OPCODE TABLE (0x10–0x1F)
-    // | Opcode | Mnemonic | Operation         |
-    // |--------|----------|------------------|
-    // | 0x10   | LOAD     | R[rd] = MEM[imm] |
-    // | 0x11   | STORE    | MEM[imm] = R[rd] |
-    // | 0x12   | LOADI    | R[rd] = imm      |
-    // ----------------------------------------------------------------------
-    // Control/Branch OPCODE TABLE (0x20–0x2F)
-    // | Opcode | Mnemonic | Operation         |
-    // |--------|----------|------------------|
-    // | 0x20   | JMP      | Jump unconditional|
-    // | 0x21   | JZ       | Jump if zero      |
-    // | 0x22   | JNZ      | Jump if not zero  |
-    // | 0x23   | JC       | Jump if carry     |
-    // | 0x24   | JNC      | Jump if no carry  |
-    // | 0x25   | JLT      | Jump if less than |
-    // | 0x26   | JGE      | Jump if greater/eq|
-    // | 0x27   | JLE      | Jump if less/eq   |
-    // | 0x28   | CALL     | Call function     |
-    // | 0x29   | RET      | Return from call  |
-    // | 0x2A   | PUSH     | Push to stack     |
-    // | 0x2B   | POP      | Pop from stack    |
-    // ----------------------------------------------------------------------
-    // Set/Compare/System OPCODE TABLE (0x30–0x3F)
-    // | Opcode | Mnemonic | Operation         |
-    // |--------|----------|------------------|
-    // | 0x30   | SETEQ    | Set if equal      |
-    // | 0x31   | SETNE    | Set if not equal  |
-    // | 0x32   | SETLT    | Set if less than  |
-    // | 0x33   | SETGE    | Set if greater/eq |
-    // | 0x34   | SETLE    | Set if less/eq    |
-    // | 0x35   | SETGT    | Set if greater    |
-    // | 0x3E   | HALT     | Halt processor    |
-    // | 0x3F   | INT      | Software interrupt|
-    // ----------------------------------------------------------------------
     
-    // Instantiate ALU
+    // Instantiate ALU (pure RISC-V — no flags)
     alu u_alu (
         .a(operand_a),
         .b(operand_b),
-        .opcode((is_branch) ? OP_REG : opcode), // Force ALU to do REG-REG op for branches
-        .funct3((is_branch) ? ((funct3 == F3_BEQ || funct3 == F3_BNE) ? 3'h0 : // SUB via funct7
-                               (funct3 == F3_BLT || funct3 == F3_BGE) ? 3'h2 : // SLT
-                               (funct3 == F3_BLTU || funct3 == F3_BGEU) ? 3'h3 : // SLTU
-                               3'h0) : funct3),
-        .funct7((is_branch && (funct3 == F3_BEQ || funct3 == F3_BNE)) ? 7'h20 : funct7), // SUB for BEQ/BNE
-        .flags_in(flags_reg),
-        .result(alu_out_wire),
-        .flags_out(flags_out)
+        .opcode(opcode),
+        .funct3(funct3),
+        .funct7(funct7),
+        .result(alu_out_wire)
     );
     
     // Instantiate register file
@@ -234,7 +164,6 @@ module cpu_core (
             instruction_reg <= 32'h00000000;
             alu_result_reg <= 32'h00000000;
             memory_data_reg <= 32'h00000000;
-            flags_reg <= 8'h00;
             stack_pointer <= 32'h000F0000; // Initialize stack to high memory
             halted_reg <= 1'b0;
             user_mode_reg <= 1'b0;
@@ -264,7 +193,6 @@ module cpu_core (
                     $display("DECODE_START: PC=0x%08x, IS=0x%08x", pc_reg, instruction_reg);
                     $display("DECODE_FIELDS: Opcode=0x%02x, rd=%d, rs1=%d, rs2=%d, imm=0x%08x", opcode, rd, rs1, rs2, immediate);
                     $display("DECODE_REGS_BEFORE: R%d=0x%08x, R%d=0x%08x", rs1, reg_data_a, rs2, reg_data_b);
-                    $display("DECODE_FLAGS_BEFORE: C=%b Z=%b N=%b V=%b", flags_reg[0], flags_reg[1], flags_reg[2], flags_reg[3]);
                     // Decode happens combinatorially
                 end
                 
@@ -317,13 +245,6 @@ module cpu_core (
                         $display("DEBUG CPU: Branch taken to PC=0x%x", pc_reg - 4 + immediate);
                     end
 
-                    // Update flags for ALU operations
-                    if (opcode == OP_REG || opcode == OP_IMM) begin
-                        flags_reg <= flags_out;
-                        $display("EXECUTE_FLAGS_AFTER: C=%b Z=%b N=%b V=%b", 
-                                flags_out[0], flags_out[1], flags_out[2], flags_out[3]);
-                    end
-                    
                     $display("EXECUTE_DONE: PC=0x%08x, IS=0x%08x Opcode=0x%02x, rd=%d, rs1=%d, rs2=%d, imm=0x%08x", pc_reg, instruction_reg, opcode, rd, rs1, rs2, immediate);
                 end
                 
@@ -395,14 +316,14 @@ module cpu_core (
     assign is_op_imm = (opcode == OP_IMM);
     assign is_op_reg = (opcode == OP_REG);
 
-    // Branch condition logic - uses current ALU output flags (combinatorial)
+    // Branch condition logic — RISC-V compares registers directly (no flags)
     wire branch_taken =
-        (funct3 == F3_BEQ)  ? (flags_out[FLAG_ZERO]) : // Z
-        (funct3 == F3_BNE)  ? (~flags_out[FLAG_ZERO]) : // !Z
-        (funct3 == F3_BLT)  ? (alu_out_wire[0]) : // SLT result (1 if taken)
-        (funct3 == F3_BGE)  ? (~alu_out_wire[0]) : // !SLT
-        (funct3 == F3_BLTU) ? (alu_out_wire[0]) : // SLTU result
-        (funct3 == F3_BGEU) ? (~alu_out_wire[0]) : // !SLTU
+        (funct3 == F3_BEQ)  ? (reg_data_a == reg_data_b) :
+        (funct3 == F3_BNE)  ? (reg_data_a != reg_data_b) :
+        (funct3 == F3_BLT)  ? ($signed(reg_data_a) < $signed(reg_data_b)) :
+        (funct3 == F3_BGE)  ? ($signed(reg_data_a) >= $signed(reg_data_b)) :
+        (funct3 == F3_BLTU) ? (reg_data_a < reg_data_b) :
+        (funct3 == F3_BGEU) ? (reg_data_a >= reg_data_b) :
         1'b0;
 
     // ALU connections
@@ -493,7 +414,6 @@ module cpu_core (
     assign halted = halted_reg;
     assign alu_result = alu_result_reg;
     assign user_mode = user_mode_reg;
-    assign cpu_flags = flags_reg;
     assign mem_op_width = funct3; // Expose funct3 for memory controller
 
 endmodule

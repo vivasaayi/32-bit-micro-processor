@@ -149,7 +149,7 @@ module tb_with_framebuffer;
         .halted(halted),
         .interrupt_req(8'h00), .interrupt_ack(),
         .io_addr(), .io_data(), .io_read(), .io_write(),
-        .user_mode(), .cpu_flags()
+        .user_mode()
     );
     
     // Display buffer

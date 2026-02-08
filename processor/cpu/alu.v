@@ -5,27 +5,54 @@
  * Supports all basic operations needed for a functional processor.
  *
  * ALU OPCODE TABLE (RV32I/M compatible)
- * | Opcode | funct3 | funct7 | Operation         |
- * |--------|--------|--------|------------------|
- * | 0x33   | 0x0    | 0x00   | ADD              |
- * | 0x33   | 0x0    | 0x20   | SUB              |
- * | 0x33   | 0x1    | 0x00   | SLL              |
- * | 0x33   | 0x2    | 0x00   | SLT              |
- * | 0x33   | 0x3    | 0x00   | SLTU             |
- * | 0x33   | 0x4    | 0x00   | XOR              |
- * | 0x33   | 0x5    | 0x00   | SRL              |
- * | 0x33   | 0x5    | 0x20   | SRA              |
- * | 0x33   | 0x6    | 0x00   | OR               |
- * | 0x33   | 0x7    | 0x00   | AND              |
- * | 0x13   | 0x0    | -      | ADDI             |
- * | 0x13   | 0x1    | 0x00   | SLLI             |
- * | 0x13   | 0x2    | -      | SLTI             |
- * | 0x13   | 0x3    | -      | SLTIU            |
- * | 0x13   | 0x4    | -      | XORI             |
- * | 0x13   | 0x5    | 0x00   | SRLI             |
- * | 0x13   | 0x5    | 0x20   | SRAI             |
- * | 0x13   | 0x6    | -      | ORI              |
- * | 0x13   | 0x7    | -      | ANDI             |
+ * 
+ * R-TYPE (0x33 - Register-Register operations):
+ * | funct3 | funct7 | Operation         |
+ * |--------|--------|------------------|
+ * | 0x0    | 0x00   | ADD              |
+ * | 0x0    | 0x20   | SUB              |
+ * | 0x1    | 0x00   | SLL              |
+ * | 0x2    | 0x00   | SLT              |
+ * | 0x3    | 0x00   | SLTU             |
+ * | 0x4    | 0x00   | XOR              |
+ * | 0x5    | 0x00   | SRL              |
+ * | 0x5    | 0x20   | SRA              |
+ * | 0x6    | 0x00   | OR               |
+ * | 0x7    | 0x00   | AND              |
+ * | 0x0    | 0x01   | MUL (RV32M)      |
+ * | 0x1    | 0x01   | MULH (RV32M)     |
+ * | 0x2    | 0x01   | MULHSU (RV32M)   |
+ * | 0x3    | 0x01   | MULHU (RV32M)    |
+ * | 0x4    | 0x01   | DIV (RV32M)      |
+ * | 0x5    | 0x01   | DIVU (RV32M)     |
+ * | 0x6    | 0x01   | REM (RV32M)      |
+ * | 0x7    | 0x01   | REMU (RV32M)     |
+ * 
+ * I-TYPE (0x13 - Immediate operations):
+ * | funct3 | funct7 | Operation         |
+ * |--------|--------|------------------|
+ * | 0x0    | -      | ADDI             |
+ * | 0x1    | 0x00   | SLLI             |
+ * | 0x2    | -      | SLTI             |
+ * | 0x3    | -      | SLTIU            |
+ * | 0x4    | -      | XORI             |
+ * | 0x5    | 0x00   | SRLI             |
+ * | 0x5    | 0x20   | SRAI             |
+ * | 0x6    | -      | ORI              |
+ * | 0x7    | -      | ANDI             |
+ * 
+ * Address Calculations (0x03, 0x23, 0x67):
+ * | Opcode | Operation         |
+ * |--------|------------------|
+ * | 0x03   | LOAD address      |
+ * | 0x23   | STORE address     |
+ * | 0x67   | JALR address      |
+ * 
+ * U-TYPE (0x37, 0x17 - Upper immediate):
+ * | Opcode | Operation         |
+ * |--------|------------------|
+ * | 0x37   | LUI              |
+ * | 0x17   | AUIPC            |
  * ---------------------------------------------------
  */
 
@@ -39,13 +66,20 @@ module alu (
 );
 
     // RISC-V Opcodes
-    localparam OP_IMM   = 7'h13;
+    // R-TYPE (Register-Register operations)
     localparam OP_REG   = 7'h33;
+
+    // I-TYPE (Immediate operations, loads, JALR)
+    localparam OP_IMM   = 7'h13;
+    localparam OP_LOAD  = 7'h03;
+    localparam OP_JALR  = 7'h67;
+    
+    // S-TYPE (Store operations)
+    localparam OP_STORE = 7'h23;
+    
+    // U-TYPE (Upper immediate operations)
     localparam OP_LUI   = 7'h37;
     localparam OP_AUIPC = 7'h17;
-    localparam OP_LOAD  = 7'h03;
-    localparam OP_STORE = 7'h23;
-    localparam OP_JALR  = 7'h67;
     
     always @(*) begin
         result = 32'h0;
@@ -55,6 +89,9 @@ module alu (
                 if (funct7 == 7'h01) begin // RV32M extension
                     case (funct3)
                         3'h0: result = a * b;                                               // MUL
+                        3'h1: result = (64'($signed(a)) * 64'($signed(b))) >> 32;                    // MULH
+                        3'h2: result = (64'($signed(a)) * 64'(b)) >> 32;                              // MULHSU
+                        3'h3: result = (64'(a) * 64'(b)) >> 32;                                        // MULHU
                         3'h4: result = (b != 0) ? $signed(a) / $signed(b) : 32'hFFFFFFFF;   // DIV
                         3'h5: result = (b != 0) ? a / b : 32'hFFFFFFFF;                      // DIVU
                         3'h6: result = (b != 0) ? $signed(a) % $signed(b) : a;               // REM

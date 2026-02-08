@@ -33,7 +33,6 @@ module tb_microprocessor_system;
     // Status
     wire system_halted;
     wire [31:0] pc_out;
-    wire [7:0] cpu_flags;
     
     // Test variables
     integer cycle_count;
@@ -56,8 +55,7 @@ module tb_microprocessor_system;
         .io_write(io_write),
         .external_interrupts(external_interrupts),
         .system_halted(system_halted),
-        .pc_out(pc_out),
-        .cpu_flags(cpu_flags)
+        .pc_out(pc_out)
     );
     
     // Clock generation

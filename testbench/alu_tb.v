@@ -214,6 +214,24 @@ module alu_tb;
         a = 32'd0;         b = 32'd999;       opcode = OP_REG; funct3 = 3'h0; funct7 = 7'h01;
         #1; check(32'd0,            "MUL by zero");
 
+        // --- MULH (funct3=0x1) ---
+        a = 32'h00008000;  b = 32'h00008000;  opcode = OP_REG; funct3 = 3'h1; funct7 = 7'h01;
+        #1; check(32'h00000000,     "MULH 0x8000*0x8000");
+        a = -32'd1000;     b = 32'd1000;      opcode = OP_REG; funct3 = 3'h1; funct7 = 7'h01;
+        #1; check(32'hFFFFFFFF,     "MULH (-1000)*1000");
+
+        // --- MULHSU (funct3=0x2) ---
+        a = -32'd1;        b = 32'h80000000;  opcode = OP_REG; funct3 = 3'h2; funct7 = 7'h01;
+        #1; check(32'hFFFFFFFF,     "MULHSU (-1)*0x80000000");
+        a = 32'h40000000;  b = 32'h40000000;  opcode = OP_REG; funct3 = 3'h2; funct7 = 7'h01;
+        #1; check(32'h10000000,     "MULHSU 0x40000000*0x40000000");
+
+        // --- MULHU (funct3=0x3) ---
+        a = 32'h80000000;  b = 32'h80000000;  opcode = OP_REG; funct3 = 3'h3; funct7 = 7'h01;
+        #1; check(32'h40000000,     "MULHU 0x80000000*0x80000000");
+        a = 32'hFFFFFFFF;  b = 32'hFFFFFFFF;  opcode = OP_REG; funct3 = 3'h3; funct7 = 7'h01;
+        #1; check(32'hFFFFFFFE,     "MULHU max*max");
+
         // --- DIV (funct3=0x4) ---
         a = 32'd42;        b = 32'd6;         opcode = OP_REG; funct3 = 3'h4; funct7 = 7'h01;
         #1; check(32'd7,            "DIV 42/6");

@@ -15,7 +15,6 @@ module cpu_core_tb;
     reg data_bus_drive = 0;
     wire halted;
     wire user_mode;
-    wire [7:0] cpu_flags;
 
     localparam MEM_BASE = 32'h8000 >> 2; // 0x2000
 
@@ -45,8 +44,7 @@ module cpu_core_tb;
         .io_read(io_read),
         .io_write(io_write),
         .halted(halted),
-        .user_mode(user_mode),
-        .cpu_flags(cpu_flags)
+        .user_mode(user_mode)
     );
 
     // Clock generation

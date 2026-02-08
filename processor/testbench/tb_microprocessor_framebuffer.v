@@ -33,7 +33,6 @@ module tb_microprocessor_framebuffer;
     // Status
     wire system_halted;
     wire [31:0] pc_out;
-    wire [7:0] cpu_flags;
     
     // Framebuffer parameters
     parameter FB_WIDTH = 320;
@@ -69,8 +68,7 @@ module tb_microprocessor_framebuffer;
         .io_write(io_write),
         .external_interrupts(external_interrupts),
         .system_halted(system_halted),
-        .pc_out(pc_out),
-        .cpu_flags(cpu_flags)
+        .pc_out(pc_out)
     );
     
     // Clock generation

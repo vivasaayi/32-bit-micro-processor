@@ -1,0 +1,10 @@
+Integer Register Immediate Instructions
+OP-IMM - ADDI - Add Immediate
+OP-IMM - SLTI - Set less than Immediate
+OP-IMM - SLTIU - Set less than Immediate - unsigned
+OP-IMM - ANDI
+OP-IMM - ORI
+OP-IMM - XORI
+OP-IMM - SLLI -  Shift Left Logical Immediate
+OP-IMM - SRLI -  Shift Right Logical Immediate
+OP-IMM - SRAI -  Shift Right Arithmatic Immediate
