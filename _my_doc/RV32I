@@ -24,3 +24,6 @@ OP - SLL - Shift Left Logical
 OP - SRL - Shift Right Logical
 OP - SUB - Substract
 OP - SRA - Shift Right Arithmatic
+
+
+NOP ## TODO ## NOT IMPLEMENTED
