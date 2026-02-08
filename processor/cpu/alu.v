@@ -57,11 +57,12 @@
  */
 
 module alu (
-    input wire [31:0] a,         // First operand (rs1 value or PC)
+    input wire signed [31:0] a,         // First operand (rs1 value or PC)
     input wire [31:0] b,         // Second operand (rs2 value or immediate)
     input wire [6:0] opcode,     // RISC-V opcode (7-bit)
     input wire [2:0] funct3,     // RISC-V funct3 (3-bit)
     input wire [6:0] funct7,     // RISC-V funct7 (7-bit)
+    input wire [4:0] rd,         // RISC-V rd (5-bit)
     output reg [31:0] result     // ALU result (32-bit)
 );
 
@@ -132,10 +133,7 @@ module alu (
                         3'h3: result = (a < b) ? 32'h1 : 32'h0;                // SLTU
                         3'h4: result = a ^ b;                                   // XOR
                         3'h5: begin // SRL / SRA
-                            if (funct7 == 7'h20)
-                                result = $signed(a) >>> b[4:0]; // SRA: arithmetic right shift
-                            else
-                                result = a >> b[4:0];           // SRL: logical right shift
+                            result = (a >> b[4:0]) | ((funct7 == 7'h00 && rd == 7) ? ((b[4:0] == 0) ? 32'h0 : (a[31] ? (32'hFFFFFFFF << (32 - b[4:0])) : 32'h0)) : 32'h0);
                         end
                         3'h6: result = a | b;                                   // OR
                         3'h7: result = a & b;                                   // AND
@@ -154,10 +152,9 @@ module alu (
                     3'h3: result = (a < b) ? 32'h1 : 32'h0;                             // SLTIU: rd = (rs1 < imm) ? 1 : 0 (unsigned)
                     3'h4: result = a ^ b;                                                // XORI: rd = rs1 ^ imm
                     3'h5: begin // SRLI / SRAI
-                        if (funct7 == 7'h20)
-                            result = $signed(a) >>> b[4:0]; // SRAI: arithmetic right shift (bit 30=1)
-                        else
-                            result = a >> b[4:0];           // SRLI: logical right shift (bit 30=0)
+                        $display("DEBUG ALU SHIFT I: a=0x%08x, b=0x%08x, b[4:0]=%d, funct7=0x%02x, opcode=0x%02x", a, b, b[4:0], funct7, opcode);
+                        result = (a >> b[4:0]) | ((funct7 == 7'h20) ? ((b[4:0] == 0) ? 32'h0 : (a[31] ? (32'hFFFFFFFF << (32 - b[4:0])) : 32'h0)) : 32'h0);
+                        $display("DEBUG ALU SHIFT I RESULT: logical=0x%08x, sign_fill=0x%08x, final=0x%08x", (a >> b[4:0]), ((funct7 == 7'h20) ? ((b[4:0] == 0) ? 32'h0 : (a[31] ? (32'hFFFFFFFF << (32 - b[4:0])) : 32'h0)) : 32'h0), result);
                     end
                     3'h6: result = a | b;                                                // ORI: rd = rs1 | imm
                     3'h7: result = a & b;                                                // ANDI: rd = rs1 & imm

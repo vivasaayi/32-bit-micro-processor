@@ -148,6 +148,7 @@ module cpu_core (
         .opcode(opcode),
         .funct3(funct3),
         .funct7(funct7),
+        .rd(rd),
         .result(alu_out_wire)
     );
     
@@ -294,7 +295,11 @@ module cpu_core (
     assign rs1    = instruction_reg[19:15];
     assign rs2    = instruction_reg[24:20];
     assign funct3 = instruction_reg[14:12];
-    assign funct7 = instruction_reg[31:25];
+    assign funct7_raw = instruction_reg[31:25];
+    
+    // For I-type shift instructions, funct7 is in imm[11:5], otherwise in instruction[31:25]
+    wire is_i_type_shift = (opcode == OP_IMM) && (funct3 == 3'h1 || funct3 == 3'h5);
+    assign funct7 = is_i_type_shift ? imm12_i[11:5] : funct7_raw;
     
     // Immediate field decoding
     assign imm12_i = instruction_reg[31:20];

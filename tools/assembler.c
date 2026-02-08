@@ -156,10 +156,10 @@ static const instruction_def_t instructions[] = {
     {"sltu", OP_REG, 3, 0x00, RV_TYPE_R},
     {"XOR", OP_REG, 4, 0x00, RV_TYPE_R},
     {"xor", OP_REG, 4, 0x00, RV_TYPE_R},
-    {"SRL", OP_REG, 5, 0x00, RV_TYPE_R},
-    {"srl", OP_REG, 5, 0x00, RV_TYPE_R},
-    {"SRA", OP_REG, 5, 0x20, RV_TYPE_R},
-    {"sra", OP_REG, 5, 0x20, RV_TYPE_R},
+    {"SRL", OP_REG, 5, 0x20, RV_TYPE_R},
+    {"srl", OP_REG, 5, 0x20, RV_TYPE_R},
+    {"SRA", OP_REG, 5, 0x00, RV_TYPE_R},
+    {"sra", OP_REG, 5, 0x00, RV_TYPE_R},
     {"OR", OP_REG, 6, 0x00, RV_TYPE_R},
     {"or", OP_REG, 6, 0x00, RV_TYPE_R},
     {"AND", OP_REG, 7, 0x00, RV_TYPE_R},
@@ -1099,6 +1099,12 @@ static void assemble_instruction(const char *line, int line_num) {
         rd = parse_register(tokens[1]);
         rs1 = parse_register(tokens[2]);
         immediate = parse_immediate(tokens[3]);
+        
+        // Special handling for shift I-type instructions
+        // For SLLI/SRLI/SRAI, encode funct7 in immediate[11:5]
+        if (work_inst.funct3 == 1 || work_inst.funct3 == 5) { // SLLI/SRLI/SRAI
+          immediate = ((work_inst.funct7 & 0x7F) << 5) | (immediate & 0x1F);
+        }
       }
     }
     if (rd < 0 || rs1 < 0)
