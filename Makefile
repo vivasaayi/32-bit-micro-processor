@@ -56,6 +56,11 @@ test-alu:
 	$(IVERILOG) -o alu_test.vvp $(CPU_DIR)/alu.v testbench/tb_alu.v 2>/dev/null || echo "ALU testbench not found"
 	$(VVP) alu_test.vvp 2>/dev/null || echo "ALU test skipped"
 
+# Test Register File
+test-reg:
+	$(IVERILOG) -o tb_register_file $(TB_DIR)/tb_register_file.v $(CPU_DIR)/register_file.v
+	$(VVP) tb_register_file
+
 # Run all test cases
 test-all:
 	./run_all_tests.sh
@@ -110,4 +115,4 @@ qemu-c:
 	$(ASSEMBLER) compiler/output.s -o output.bin
 	$(QEMU_RISCV32) -M virt -cpu rv32 -bios none -device loader,file=output.bin,addr=0x80000000 -nographic -serial mon:stdio
 
-.PHONY: all sim wave clean test-alu test-all test-comprehensive assemble synth lint docs install-deps qemu-asm qemu-c
+.PHONY: all sim wave clean test-alu test-reg test-all test-comprehensive assemble synth lint docs install-deps qemu-asm qemu-c
