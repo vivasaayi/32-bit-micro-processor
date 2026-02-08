@@ -8,3 +8,19 @@ OP-IMM - XORI
 OP-IMM - SLLI -  Shift Left Logical Immediate
 OP-IMM - SRLI -  Shift Right Logical Immediate
 OP-IMM - SRAI -  Shift Right Arithmatic Immediate
+
+LUI - Load Upper Immediate
+AUIPC - Add Upper Immediate to PC
+
+
+Integer  Register-Register Operations
+OP - ADD - Add
+OP - SLT - Set Less than
+OP - SLTU - Set Less than (unsigned)
+OP - AND - Add
+OP - OR - Or
+OP - XOR - Xor
+OP - SLL - Shift Left Logical
+OP - SRL - Shift Right Logical
+OP - SUB - Substract
+OP - SRA - Shift Right Arithmatic

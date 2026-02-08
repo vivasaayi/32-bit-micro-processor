@@ -101,15 +101,15 @@ module alu (
                 end else begin // RV32I
                     case (funct3)
                         3'h0: result = (funct7 == 7'h20) ? (a - b) : (a + b); // ADD / SUB
-                        3'h1: result = a << b[4:0];                             // SLL
+                        3'h1: result = a << b[4:0];                             // SLL: rd = rs1 << rs2[4:0]
                         3'h2: result = ($signed(a) < $signed(b)) ? 32'h1 : 32'h0; // SLT
                         3'h3: result = (a < b) ? 32'h1 : 32'h0;                // SLTU
                         3'h4: result = a ^ b;                                   // XOR
                         3'h5: begin // SRL / SRA
                             if (funct7 == 7'h20)
-                                result = $signed(a) >>> b[4:0]; // SRA
+                                result = $signed(a) >>> b[4:0]; // SRA: arithmetic right shift
                             else
-                                result = a >> b[4:0];           // SRL
+                                result = a >> b[4:0];           // SRL: logical right shift
                         end
                         3'h6: result = a | b;                                   // OR
                         3'h7: result = a & b;                                   // AND
@@ -118,26 +118,29 @@ module alu (
                 end
             end
             OP_IMM: begin
+                // RISC-V I-type immediate operations
+                // Immediate is sign-extended 12-bit value, arithmetic overflow ignored
+                // Shift amount in imm[4:0], shift type in funct7[5] (bit 30)
                 case (funct3)
-                    3'h0: result = a + b;                                               // ADDI
-                    3'h1: result = a << b[4:0];                                         // SLLI
-                    3'h2: result = ($signed(a) < $signed(b)) ? 32'h1 : 32'h0;           // SLTI
-                    3'h3: result = (a < b) ? 32'h1 : 32'h0;                             // SLTIU
-                    3'h4: result = a ^ b;                                                // XORI
+                    3'h0: result = a + b;                                               // ADDI: rd = rs1 + imm
+                    3'h1: result = a << b[4:0];                                         // SLLI: rd = rs1 << imm[4:0]
+                    3'h2: result = ($signed(a) < $signed(b)) ? 32'h1 : 32'h0;           // SLTI: rd = (rs1 < imm) ? 1 : 0 (signed)
+                    3'h3: result = (a < b) ? 32'h1 : 32'h0;                             // SLTIU: rd = (rs1 < imm) ? 1 : 0 (unsigned)
+                    3'h4: result = a ^ b;                                                // XORI: rd = rs1 ^ imm
                     3'h5: begin // SRLI / SRAI
                         if (funct7 == 7'h20)
-                            result = $signed(a) >>> b[4:0]; // SRAI
+                            result = $signed(a) >>> b[4:0]; // SRAI: arithmetic right shift (bit 30=1)
                         else
-                            result = a >> b[4:0];           // SRLI
+                            result = a >> b[4:0];           // SRLI: logical right shift (bit 30=0)
                     end
-                    3'h6: result = a | b;                                                // ORI
-                    3'h7: result = a & b;                                                // ANDI
+                    3'h6: result = a | b;                                                // ORI: rd = rs1 | imm
+                    3'h7: result = a & b;                                                // ANDI: rd = rs1 & imm
                     default: result = 32'h0;
                 endcase
             end
-            OP_LUI:                     result = b;     // LUI (immediate already shifted)
-            OP_AUIPC:                   result = a + b; // PC + upper immediate
-            OP_LOAD, OP_STORE, OP_JALR: result = a + b; // Address calculation
+            OP_LUI:                     result = b;     // LUI: rd = U-imm << 12 (pre-shifted)
+            OP_AUIPC:                   result = a + b; // AUIPC: rd = PC + (U-imm << 12) (pre-shifted)
+            OP_LOAD, OP_STORE, OP_JALR: result = a + b; // Address calculation (rs1 + imm)
             default:                    result = 32'h0;
         endcase
     end
