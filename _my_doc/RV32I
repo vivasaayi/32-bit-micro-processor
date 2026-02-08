@@ -39,3 +39,24 @@ BRANCH - BLT - Branch Less Than
 BRANCH - BLTU - Branch Less Than Upper
 BRANCH - BGE - Branch Great Than Equal
 BRANCH - BGEU - Branch Great Than Equal
+
+
+Load And store
+LOAD
+STORE
+
+
+LW - Loads 32 bit value from memory
+LWU
+LH - Loads 16 bit value from memory
+LHU - 
+LB
+LBU
+SW
+SH
+SHU
+SB
+SBU
+
+
+

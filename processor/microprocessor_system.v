@@ -131,6 +131,7 @@ module microprocessor_system (
         .io_data(io_data),
         .io_read(io_read),
         .io_write(io_write),
+        .little_endian(1'b1),  // Configure as little-endian
         .halted(cpu_halted),
         .user_mode(cpu_user_mode),
         .mem_op_width(mem_op_width)
