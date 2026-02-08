@@ -1,15 +1,23 @@
 /**
- * 32-bit Register File
+ * 32-bit Register File (RISC-V RV32I)
  * 
- * 32 general-purpose 32-bit registers (R0-R31) with dual read ports
- * and one write port for the 32-bit microprocessor.
+ * Implements the base integer ISA register state with 32 x registers (x0-x31),
+ * each 32 bits wide (XLEN=32). Register x0 is hardwired with all bits equal to 0.
+ * General purpose registers x1–x31 hold values that various instructions interpret
+ * as a collection of Boolean values, or as two’s complement signed binary integers
+ * or unsigned binary integers.
+ * 
+ * Standard calling convention:
+ * - x1: return address for calls (link register)
+ * - x2: stack pointer
+ * - x5: alternate link register
  * 
  * Features:
  * - 32 registers of 32 bits each (RISC-V style)
  * - Dual read ports for ALU operations
  * - Single write port
  * - Synchronous write, asynchronous read
- * - R0 is hardwired to zero (RISC convention)
+ * - x0 is hardwired to zero (RISC-V convention)
  */
 
 module register_file #(
@@ -33,8 +41,8 @@ module register_file #(
     input wire write_en
 );
 
-    // Register array - Stores R1 to R(2^ADDR_WIDTH - 1)
-    // R0 is hardwired to zero and not stored to save area
+    // Register array - Stores x1 to x(2^ADDR_WIDTH - 1)
+    // x0 is hardwired to zero and not stored to save area
     reg [DATA_WIDTH-1:0] registers [1:(1<<ADDR_WIDTH)-1];
     
     integer i;
@@ -49,9 +57,9 @@ module register_file #(
                 registers[i] <= {DATA_WIDTH{1'b0}};
             end
         end else if (write_en && addr_w != {ADDR_WIDTH{1'b0}}) begin
-            // Write only if write enable is high and not writing to R0
+            // Write only if write enable is high and not writing to x0
             `ifdef DEBUG
-            $display("[register_file] Write: R%0d <= 0x%h", addr_w, data_w);
+            $display("[register_file] Write: x%0d <= 0x%h", addr_w, data_w);
             `endif
             registers[addr_w] <= data_w;
         end
@@ -65,7 +73,7 @@ module register_file #(
     // Debug monitoring (simulation only)
 `ifdef DEBUG
     always @(*) begin
-        $display("[register_file] Read: R%0d = 0x%h (port A), R%0d = 0x%h (port B)",
+        $display("[register_file] Read: x%0d = 0x%h (port A), x%0d = 0x%h (port B)",
             addr_a, data_a, addr_b, data_b);
     end
 `endif
@@ -75,9 +83,9 @@ module register_file #(
         integer j;
         begin
             $display("[register_file] Register Dump:");
-            $display("REG[0] = 0x%h (Hardwired)", {DATA_WIDTH{1'b0}});
+            $display("x[0] = 0x%h (Hardwired)", {DATA_WIDTH{1'b0}});
             for (j = 1; j < (1<<ADDR_WIDTH); j = j + 1) begin
-                $display("REG[%0d] = 0x%h", j, registers[j]);
+                $display("x[%0d] = 0x%h", j, registers[j]);
             end
         end
     endtask
