@@ -210,6 +210,28 @@ static const instruction_def_t instructions[] = {
     {"JNZ", OP_BRANCH, 1, 0, RV_PSEUDO}, // bne rs1, x0, label
     {"jnz", OP_BRANCH, 1, 0, RV_PSEUDO},
 
+    {"BEQZ", OP_BRANCH, 0, 0, RV_PSEUDO}, // beq rs1, x0, label
+    {"beqz", OP_BRANCH, 0, 0, RV_PSEUDO},
+    {"BNEZ", OP_BRANCH, 1, 0, RV_PSEUDO}, // bne rs1, x0, label
+    {"bnez", OP_BRANCH, 1, 0, RV_PSEUDO},
+    {"BLTZ", OP_BRANCH, 4, 0, RV_PSEUDO}, // blt rs1, x0, label
+    {"bltz", OP_BRANCH, 4, 0, RV_PSEUDO},
+    {"BGEZ", OP_BRANCH, 5, 0, RV_PSEUDO}, // bge rs1, x0, label
+    {"bgez", OP_BRANCH, 5, 0, RV_PSEUDO},
+    {"BLEZ", OP_BRANCH, 5, 0, RV_PSEUDO}, // bge x0, rs1, label (blez)
+    {"blez", OP_BRANCH, 5, 0, RV_PSEUDO},
+    {"BGTZ", OP_BRANCH, 4, 0, RV_PSEUDO}, // blt x0, rs1, label (bgtz)
+    {"bgtz", OP_BRANCH, 4, 0, RV_PSEUDO},
+
+    {"BGT", OP_BRANCH, 4, 0, RV_PSEUDO}, // blt rs2, rs1, label (bgt rs1, rs2)
+    {"bgt", OP_BRANCH, 4, 0, RV_PSEUDO},
+    {"BLE", OP_BRANCH, 5, 0, RV_PSEUDO}, // bge rs2, rs1, label (ble rs1, rs2)
+    {"ble", OP_BRANCH, 5, 0, RV_PSEUDO},
+    {"BGTU", OP_BRANCH, 6, 0, RV_PSEUDO}, // bltu rs2, rs1, label (bgtu rs1, rs2)
+    {"bgtu", OP_BRANCH, 6, 0, RV_PSEUDO},
+    {"BLEU", OP_BRANCH, 7, 0, RV_PSEUDO}, // bgeu rs2, rs1, label (bleu rs1, rs2)
+    {"bleu", OP_BRANCH, 7, 0, RV_PSEUDO},
+
     {"MOVE", OP_IMM, 0, 0, RV_PSEUDO}, // addi rd, rs1, 0
     {"move", OP_IMM, 0, 0, RV_PSEUDO},
     {"MOV", OP_IMM, 0, 0, RV_PSEUDO},
@@ -1149,17 +1171,35 @@ static void assemble_instruction(const char *line, int line_num) {
 
   case RV_TYPE_B:
     // BEQ rs1, rs2, label
-    if (inst->type == RV_PSEUDO) { // JZ/JNZ
-      rs1 = parse_register(tokens[1]);
-      rs2 = 0; // x0
-      // Target is token 2
+    if (inst->type == RV_PSEUDO) { // JZ/JNZ/BEQZ/etc
+      // Special handling for blez/bgtz which swap operands
+      if (strcasecmp(inst->name, "BLEZ") == 0 || strcasecmp(inst->name, "blez") == 0 ||
+          strcasecmp(inst->name, "BGTZ") == 0 || strcasecmp(inst->name, "bgtz") == 0) {
+        rs1 = 0; // x0
+        rs2 = parse_register(tokens[1]);
+      } else if (strcasecmp(inst->name, "BGT") == 0 || strcasecmp(inst->name, "bgt") == 0 ||
+                 strcasecmp(inst->name, "BLE") == 0 || strcasecmp(inst->name, "ble") == 0 ||
+                 strcasecmp(inst->name, "BGTU") == 0 || strcasecmp(inst->name, "bgtu") == 0 ||
+                 strcasecmp(inst->name, "BLEU") == 0 || strcasecmp(inst->name, "bleu") == 0) {
+        // Two-operand pseudos: bgt rs1, rs2 → blt rs2, rs1
+        rs1 = parse_register(tokens[2]);
+        rs2 = parse_register(tokens[1]);
+      } else {
+        rs1 = parse_register(tokens[1]);
+        rs2 = 0; // x0
+      }
+      // Target is token 2 for single-operand, token 3 for two-operand
+      int target_token = (strcasecmp(inst->name, "BGT") == 0 || strcasecmp(inst->name, "bgt") == 0 ||
+                          strcasecmp(inst->name, "BLE") == 0 || strcasecmp(inst->name, "ble") == 0 ||
+                          strcasecmp(inst->name, "BGTU") == 0 || strcasecmp(inst->name, "bgtu") == 0 ||
+                          strcasecmp(inst->name, "BLEU") == 0 || strcasecmp(inst->name, "bleu") == 0) ? 3 : 2;
       uint32_t label_addr;
-      if (find_label(tokens[2], current_address, &label_addr)) {
+      if (find_label(tokens[target_token], current_address, &label_addr)) {
         immediate = label_addr - current_address;
       } else {
         immediate = 0;
         needs_resolution = true;
-        strcpy(forward_label, tokens[2]);
+        strcpy(forward_label, tokens[target_token]);
       }
     } else {
       rs1 = parse_register(tokens[1]);
