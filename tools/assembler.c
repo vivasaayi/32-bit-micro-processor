@@ -232,6 +232,15 @@ static const instruction_def_t instructions[] = {
     {"BLEU", OP_BRANCH, 7, 0, RV_PSEUDO}, // bgeu rs2, rs1, label (bleu rs1, rs2)
     {"bleu", OP_BRANCH, 7, 0, RV_PSEUDO},
 
+    {"SEQZ", OP_IMM, 3, 0, RV_PSEUDO}, // sltiu rd, rs, 1
+    {"seqz", OP_IMM, 3, 0, RV_PSEUDO},
+    {"SNEZ", OP_REG, 3, 0, RV_PSEUDO}, // sltu rd, x0, rs
+    {"snez", OP_REG, 3, 0, RV_PSEUDO},
+    {"SLTZ", OP_REG, 2, 0, RV_PSEUDO}, // slt rd, rs, x0
+    {"sltz", OP_REG, 2, 0, RV_PSEUDO},
+    {"SGTZ", OP_REG, 2, 0, RV_PSEUDO}, // slt rd, x0, rs
+    {"sgtz", OP_REG, 2, 0, RV_PSEUDO},
+
     {"MOVE", OP_IMM, 0, 0, RV_PSEUDO}, // addi rd, rs1, 0
     {"move", OP_IMM, 0, 0, RV_PSEUDO},
     {"MOV", OP_IMM, 0, 0, RV_PSEUDO},
@@ -877,6 +886,8 @@ static void assemble_instruction(const char *line, int line_num) {
         rs1 = 0; // x0 will be set later? No, NEG rd, rs -> SUB rd, x0, rs
         // Parsing will extract rd, rs(as rs2?).
         // SUB rd, rs1, rs2. we want rs1=x0, rs2=src.
+      } else {
+        work_inst.type = RV_TYPE_R; // For set pseudos: SNEZ, SLTZ, SGTZ
       }
     }
   }
@@ -985,7 +996,20 @@ static void assemble_instruction(const char *line, int line_num) {
   switch (work_inst.type) {
   case RV_TYPE_R:
     // ADD rd, rs1, rs2
-    if (strcasecmp(work_inst.name, "NEG") == 0 ||
+    if (inst->type == RV_PSEUDO) {
+      rd = parse_register(tokens[1]);
+      rs1 = parse_register(tokens[2]);
+      if (strcasecmp(inst->name, "SNEZ") == 0 || strcasecmp(inst->name, "snez") == 0) {
+        // SNEZ rd, rs → sltu rd, x0, rs
+        encoded = encode_raw(OP_REG, RV_TYPE_R, 3, 0, rd, 0, rs1, 0);
+      } else if (strcasecmp(inst->name, "SLTZ") == 0 || strcasecmp(inst->name, "sltz") == 0) {
+        // SLTZ rd, rs → slt rd, rs, x0
+        encoded = encode_raw(OP_REG, RV_TYPE_R, 2, 0, rd, rs1, 0, 0);
+      } else if (strcasecmp(inst->name, "SGTZ") == 0 || strcasecmp(inst->name, "sgtz") == 0) {
+        // SGTZ rd, rs → slt rd, x0, rs
+        encoded = encode_raw(OP_REG, RV_TYPE_R, 2, 0, rd, 0, rs1, 0);
+      }
+    } else if (strcasecmp(work_inst.name, "NEG") == 0 ||
         strcasecmp(work_inst.name, "neg") == 0) {
       if (num_tokens < 3)
         error("Missing operands for NEG", line_num);
@@ -1008,7 +1032,13 @@ static void assemble_instruction(const char *line, int line_num) {
 
   case RV_TYPE_I:
     // ADDI rd, rs1, imm  OR  LW rd, offset(rs1)
-    if (work_inst.opcode == OP_LOAD) { // Load instructions
+    if (inst->type == RV_PSEUDO) {
+      // SEQZ rd, rs → sltiu rd, rs, 1
+      rd = parse_register(tokens[1]);
+      rs1 = parse_register(tokens[2]);
+      immediate = 1;
+      encoded = encode_instruction(&work_inst, rd, rs1, 0, immediate);
+    } else if (work_inst.opcode == OP_LOAD) { // Load instructions
       // Support LW rd, offset(rs1) OR LW rd, [rs1+offset] (legacy)
       rd = parse_register(tokens[1]);
       if (rd < 0)
