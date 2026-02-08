@@ -238,6 +238,8 @@ static const instruction_def_t instructions[] = {
     {"beqz", OP_BRANCH, 0, 0, RV_PSEUDO},
     {"BNEZ", OP_BRANCH, 1, 0, RV_PSEUDO}, // bne rs1, x0, label
     {"bnez", OP_BRANCH, 1, 0, RV_PSEUDO},
+    {"NOP", OP_IMM, 0, 0, RV_PSEUDO},
+    {"nop", OP_IMM, 0, 0, RV_PSEUDO},
 };
 
 static int num_instructions = sizeof(instructions) / sizeof(instructions[0]);
@@ -297,6 +299,7 @@ static int parse_register(const char *token) {
     return 8; // s0/fp
 
   // Standard x0-x31
+
   if (token[0] == 'x' || token[0] == 'X') {
     int reg = atoi(token + 1);
     if (reg >= 0 && reg < 32)
@@ -628,16 +631,54 @@ static void handle_data_directive(const char *line, int line_num) {
       // The null terminator is already included in the last word
     } else {
       // Need an extra word for null terminator
-      if (num_data_words >= MAX_DATA_WORDS) {
-        error("Too many data words", line_num);
-      }
-
       data_words[num_data_words].address = current_address;
       data_words[num_data_words].value = 0; // Null terminator
       data_words[num_data_words].label[0] = '\0';
       num_data_words++;
 
       current_address += 4;
+    }
+  }
+  // Handle .byte directive
+  else if (strncasecmp(line, ".byte", 5) == 0) {
+    char *value_str = (char *)line + 5;
+    value_str = trim_whitespace(value_str);
+    uint8_t value = (uint8_t)parse_immediate(value_str);
+
+    if (num_data_words >= MAX_DATA_WORDS) {
+      error("Too many data words", line_num);
+    }
+
+    data_words[num_data_words].address = current_address;
+    data_words[num_data_words].value = value;
+    data_words[num_data_words].label[0] = '\0';
+    num_data_words++;
+    current_address += 1;
+  }
+  // Handle .half directive
+  else if (strncasecmp(line, ".half", 5) == 0) {
+    char *value_str = (char *)line + 5;
+    value_str = trim_whitespace(value_str);
+    uint16_t value = (uint16_t)parse_immediate(value_str);
+
+    if (num_data_words >= MAX_DATA_WORDS) {
+      error("Too many data words", line_num);
+    }
+
+    data_words[num_data_words].address = current_address;
+    data_words[num_data_words].value = value;
+    data_words[num_data_words].label[0] = '\0';
+    num_data_words++;
+    current_address += 2;
+  }
+  // Handle .align directive
+  else if (strncasecmp(line, ".align", 6) == 0) {
+    char *value_str = (char *)line + 6;
+    value_str = trim_whitespace(value_str);
+    int align = parse_immediate(value_str);
+    uint32_t mask = (1 << align) - 1;
+    if (current_address & mask) {
+      current_address = (current_address + mask) & ~mask;
     }
   }
 }
@@ -679,6 +720,11 @@ static void assemble_instruction(const char *line, int line_num) {
   if (line_copy[0] == '.') {
     handle_data_directive(line_copy, line_num);
     return;
+  }
+
+  // Auto-align to 4 bytes before instructions
+  if (current_address % 4 != 0) {
+    current_address = (current_address + 3) & ~3;
   }
 
   // Tokenize the line manually - be more flexible with C compiler output
@@ -781,6 +827,12 @@ static void assemble_instruction(const char *line, int line_num) {
         // If small, map to ADDI. large to LUI/ADDI.
         // For now, map to I-type ADDI as placeholder, special handling later.
         work_inst.type = RV_TYPE_I;
+      } else if (strcasecmp(work_inst.name, "NOP") == 0 ||
+                 strcasecmp(work_inst.name, "nop") == 0) {
+        work_inst.type = RV_TYPE_I;
+        rd = 0;
+        rs1 = 0;
+        immediate = 0;
       } else {
         work_inst.type = RV_TYPE_I; // MOVE -> ADDI
       }
@@ -1027,6 +1079,11 @@ static void assemble_instruction(const char *line, int line_num) {
         } else {
           error("Unknown system instruction", line_num);
         }
+      } else if (strcasecmp(work_inst.name, "NOP") == 0 ||
+                 strcasecmp(work_inst.name, "nop") == 0) {
+        rd = 0;
+        rs1 = 0;
+        immediate = 0;
       } else if (inst->type == RV_PSEUDO &&
                  (strcasecmp(inst->name, "MOV") == 0 ||
                   strcasecmp(inst->name, "MOVE") == 0 ||

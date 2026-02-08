@@ -26,9 +26,9 @@ module alu (
     input wire [6:0] opcode,     // RISC-V Opcode (7-bit)
     input wire [2:0] funct3,     // RISC-V funct3 (3-bit)
     input wire [6:0] funct7,     // RISC-V funct7 (7-bit)
-    input wire [7:0] flags_in,   // Input flags
+    input wire [7:0] flags_in,   // Input flags (8-bit)
     output reg [31:0] result,    // Result (32-bit)
-    output reg [7:0] flags_out   // Output flags
+    output reg [7:0] flags_out   // Output flags (8-bit)
 );
 
     // RISC-V Opcodes

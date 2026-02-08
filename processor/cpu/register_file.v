@@ -12,58 +12,72 @@
  * - R0 is hardwired to zero (RISC convention)
  */
 
-module register_file (
+module register_file #(
+    parameter DATA_WIDTH = 32,
+    parameter ADDR_WIDTH = 5
+) (
     input wire clk,
     input wire rst_n,
     
     // Read port A
-    input wire [4:0] addr_a,        // 5-bit address for 32 registers
-    output wire [31:0] data_a,      // 32-bit data output
+    input wire [ADDR_WIDTH-1:0] addr_a,    // Address for port A
+    output wire [DATA_WIDTH-1:0] data_a,   // Data output A
     
     // Read port B  
-    input wire [4:0] addr_b,        // 5-bit address for 32 registers
-    output wire [31:0] data_b,      // 32-bit data output
+    input wire [ADDR_WIDTH-1:0] addr_b,    // Address for port B
+    output wire [DATA_WIDTH-1:0] data_b,   // Data output B
     
     // Write port
-    input wire [4:0] addr_w,        // 5-bit address for 32 registers
-    input wire [31:0] data_w,       // 32-bit data input
+    input wire [ADDR_WIDTH-1:0] addr_w,    // Write address
+    input wire [DATA_WIDTH-1:0] data_w,    // Data input
     input wire write_en
 );
 
-    // Register array - 32 registers of 32 bits each
-    reg [31:0] registers [1:31];    // R1-R31, R0 is hardwired to zero
+    // Register array - Stores R1 to R(2^ADDR_WIDTH - 1)
+    // R0 is hardwired to zero and not stored to save area
+    reg [DATA_WIDTH-1:0] registers [1:(1<<ADDR_WIDTH)-1];
     
-    // Initialize registers
     integer i;
+    
+    // Synchronous Write Logic
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
+            `ifdef DEBUG
             $display("[register_file] Reset: Clearing all registers to 0");
-            for (i = 1; i < 32; i = i + 1) begin
-                registers[i] <= 32'h00000000;
+            `endif
+            for (i = 1; i < (1<<ADDR_WIDTH); i = i + 1) begin
+                registers[i] <= {DATA_WIDTH{1'b0}};
             end
-        end else if (write_en && addr_w != 5'h0) begin
-            // R0 cannot be written to (always zero)
-            $display("[register_file] Write: R%0d <= 0x%08h", addr_w, data_w);
+        end else if (write_en && addr_w != {ADDR_WIDTH{1'b0}}) begin
+            // Write only if write enable is high and not writing to R0
+            `ifdef DEBUG
+            $display("[register_file] Write: R%0d <= 0x%h", addr_w, data_w);
+            `endif
             registers[addr_w] <= data_w;
         end
     end
     
-    // Asynchronous read with R0 hardwired to zero
-    assign data_a = (addr_a == 5'h0) ? 32'h00000000 : registers[addr_a];
-    assign data_b = (addr_b == 5'h0) ? 32'h00000000 : registers[addr_b];
+    // Asynchronous Read Logic
+    // If address is 0, return 0, otherwise read from array
+    assign data_a = (addr_a == {ADDR_WIDTH{1'b0}}) ? {DATA_WIDTH{1'b0}} : registers[addr_a];
+    assign data_b = (addr_b == {ADDR_WIDTH{1'b0}}) ? {DATA_WIDTH{1'b0}} : registers[addr_b];
 
+    // Debug monitoring (simulation only)
+`ifdef DEBUG
     always @(*) begin
-        $display("[register_file] Read: R%0d = 0x%08h (port A), R%0d = 0x%08h (port B)",
+        $display("[register_file] Read: R%0d = 0x%h (port A), R%0d = 0x%h (port B)",
             addr_a, data_a, addr_b, data_b);
     end
+`endif
 
     // Task to dump all register values
     task dump_regs;
         integer j;
         begin
             $display("[register_file] Register Dump:");
-            for (j = 0; j < 32; j = j + 1) begin
-                $display("REG[%0d] = 0x%08h", j, (j == 0) ? 32'h00000000 : registers[j]);
+            $display("REG[0] = 0x%h (Hardwired)", {DATA_WIDTH{1'b0}});
+            for (j = 1; j < (1<<ADDR_WIDTH); j = j + 1) begin
+                $display("REG[%0d] = 0x%h", j, registers[j]);
             end
         end
     endtask
