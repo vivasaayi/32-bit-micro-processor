@@ -562,3 +562,249 @@ mod tests {
         assert_eq!(emu.registers[0], 0);
     }
 }
+
+#[cfg(test)]
+mod instruction_tests {
+    use super::*;
+
+    fn run_program(asm: &str) -> Custom32Emulator {
+        let mut emu = Custom32Emulator::default();
+        emu.load_assembly_text(asm).expect("parse failed");
+        emu.run(20_000, false).expect("run failed");
+        emu
+    }
+
+    #[test]
+    fn loadi_works() {
+        let emu = run_program(
+            r#"
+            LOADI R1, #123
+            HALT
+            "#,
+        );
+        assert_eq!(emu.registers[1], 123);
+    }
+
+    #[test]
+    fn add_and_addi_work() {
+        let emu = run_program(
+            r#"
+            LOADI R1, #10
+            LOADI R2, #20
+            ADD R3, R1, R2
+            ADDI R4, R3, #5
+            HALT
+            "#,
+        );
+        assert_eq!(emu.registers[3], 30);
+        assert_eq!(emu.registers[4], 35);
+    }
+
+    #[test]
+    fn sub_and_subi_work() {
+        let emu = run_program(
+            r#"
+            LOADI R1, #50
+            LOADI R2, #8
+            SUB R3, R1, R2
+            SUBI R4, R3, #2
+            HALT
+            "#,
+        );
+        assert_eq!(emu.registers[3], 42);
+        assert_eq!(emu.registers[4], 40);
+    }
+
+    #[test]
+    fn and_or_xor_work() {
+        let emu = run_program(
+            r#"
+            LOADI R1, #0xF0
+            LOADI R2, #0xCC
+            AND R3, R1, R2
+            OR R4, R1, R2
+            XOR R5, R1, R2
+            HALT
+            "#,
+        );
+        assert_eq!(emu.registers[3], 0xC0);
+        assert_eq!(emu.registers[4], 0xFC);
+        assert_eq!(emu.registers[5], 0x3C);
+    }
+
+    #[test]
+    fn shl_and_shr_work() {
+        let emu = run_program(
+            r#"
+            LOADI R1, #1
+            SHL R2, R1, #5
+            SHR R3, R2, #2
+            HALT
+            "#,
+        );
+        assert_eq!(emu.registers[2], 32);
+        assert_eq!(emu.registers[3], 8);
+    }
+
+    #[test]
+    fn load_and_store_work() {
+        let emu = run_program(
+            r#"
+            LOADI R7, #0x11223344
+            STORE R7, #0x300
+            LOADI R8, #0
+            LOAD R8, #0x300
+            HALT
+            "#,
+        );
+        assert_eq!(emu.registers[8], 0x11223344);
+        assert_eq!(emu.read_word(0x300).unwrap(), 0x11223344);
+    }
+
+    #[test]
+    fn jmp_works() {
+        let emu = run_program(
+            r#"
+            JMP SKIP
+            LOADI R1, #999
+        SKIP:
+            LOADI R1, #55
+            HALT
+            "#,
+        );
+        assert_eq!(emu.registers[1], 55);
+    }
+
+    #[test]
+    fn cmp_and_jz_work() {
+        let emu = run_program(
+            r#"
+            LOADI R1, #42
+            LOADI R2, #42
+            CMP R1, R2
+            JZ EQUAL
+            LOADI R3, #0
+            JMP END
+        EQUAL:
+            LOADI R3, #1
+        END:
+            HALT
+            "#,
+        );
+        assert_eq!(emu.registers[3], 1);
+    }
+
+    #[test]
+    fn jnz_works() {
+        let emu = run_program(
+            r#"
+            LOADI R1, #7
+            LOADI R2, #8
+            CMP R1, R2
+            JNZ NEQ
+            LOADI R3, #0
+            JMP END
+        NEQ:
+            LOADI R3, #1
+        END:
+            HALT
+            "#,
+        );
+        assert_eq!(emu.registers[3], 1);
+    }
+
+    #[test]
+    fn jc_and_jnc_work() {
+        let emu = run_program(
+            r#"
+            LOADI R1, #5
+            LOADI R2, #3
+            CMP R1, R2
+            JC HAS_CARRY
+            LOADI R3, #0
+            JMP CHECK_JNC
+        HAS_CARRY:
+            LOADI R3, #1
+
+        CHECK_JNC:
+            CMP R2, R1
+            JNC NO_CARRY
+            LOADI R4, #0
+            JMP END
+        NO_CARRY:
+            LOADI R4, #1
+        END:
+            HALT
+            "#,
+        );
+        assert_eq!(emu.registers[3], 1);
+        assert_eq!(emu.registers[4], 1);
+    }
+
+    #[test]
+    fn jlt_jge_jle_work() {
+        let emu = run_program(
+            r#"
+            LOADI R1, #1
+            LOADI R2, #2
+            CMP R1, R2
+            JLT LESS
+            LOADI R10, #0
+            JMP CHECK_JGE
+        LESS:
+            LOADI R10, #1
+
+        CHECK_JGE:
+            CMP R2, R1
+            JGE GE_TRUE
+            LOADI R11, #0
+            JMP CHECK_JLE
+        GE_TRUE:
+            LOADI R11, #1
+
+        CHECK_JLE:
+            CMP R1, R1
+            JLE LE_TRUE
+            LOADI R12, #0
+            JMP END
+        LE_TRUE:
+            LOADI R12, #1
+        END:
+            HALT
+            "#,
+        );
+        assert_eq!(emu.registers[10], 1);
+        assert_eq!(emu.registers[11], 1);
+        assert_eq!(emu.registers[12], 1);
+    }
+
+    #[test]
+    fn directives_are_ignored() {
+        let emu = run_program(
+            r#"
+            .org 0x8000
+            .text
+            LOADI R1, #77
+            HALT
+            "#,
+        );
+        assert_eq!(emu.registers[1], 77);
+    }
+
+    #[test]
+    fn unaligned_memory_errors() {
+        let mut emu = Custom32Emulator::default();
+        emu.load_assembly_text(
+            r#"
+            LOADI R1, #1
+            STORE R1, #0x101
+            HALT
+            "#,
+        )
+        .unwrap();
+
+        let err = emu.run(100, false).unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("Unaligned STORE"));
+    }
+}
