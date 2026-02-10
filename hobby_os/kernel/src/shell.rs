@@ -1,4 +1,4 @@
-use crate::{keyboard, vga};
+use crate::{keyboard, serial, vga};
 
 const MAX_INPUT: usize = 128;
 
@@ -48,7 +48,10 @@ fn read_line(buf: &mut [u8; MAX_INPUT]) -> usize {
     let mut len = 0;
 
     loop {
-        let c = keyboard::read_char_blocking();
+        let Some(c) = serial::try_read_char().or_else(keyboard::try_read_char) else {
+            x86_64::instructions::hlt();
+            continue;
+        };
 
         match c {
             '\n' => {

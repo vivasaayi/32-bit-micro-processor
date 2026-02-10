@@ -9,7 +9,16 @@ pub fn read_char_blocking() -> char {
     }
 }
 
-fn try_read_char() -> Option<char> {
+pub fn try_read_char() -> Option<char> {
+    let data_ready = unsafe {
+        let mut status_port = Port::<u8>::new(0x64);
+        status_port.read() & 0x01 != 0
+    };
+
+    if !data_ready {
+        return None;
+    }
+
     let scancode = unsafe {
         let mut data_port = Port::<u8>::new(0x60);
         data_port.read()

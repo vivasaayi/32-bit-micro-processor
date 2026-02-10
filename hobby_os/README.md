@@ -7,7 +7,8 @@ This folder is a self-contained starter operating system project with a **simple
 ```
 hobby_os/
 ├── build/
-│   └── Makefile                 # Build/run helper commands
+│   └── Makefile                 # Low-level image build helper
+├── Makefile                     # Top-level build/run/test orchestration
 ├── docs/
 │   └── roadmap.md               # Suggested evolution plan
 ├── kernel/
@@ -19,6 +20,13 @@ hobby_os/
 │       ├── shell.rs             # Simple shell + command parsing
 │       ├── keyboard.rs          # PS/2 scancode input
 │       └── vga.rs               # VGA text output
+├── programs/
+│   ├── c/                        # Sample host-side C utilities
+│   └── asm/                      # Sample host-side ASM utility
+├── scripts/
+│   └── test_terminal.py          # QEMU serial smoke test runner
+├── tests/
+│   └── test_cases.md             # Documented test scenarios
 └── user_utils/
     └── src/
         ├── echo.c               # Example C utility skeleton
@@ -43,9 +51,19 @@ hobby_os/
 ## Build and run
 
 ```bash
-cd hobby_os/build
+cd hobby_os
 make image
 make run
+```
+
+
+## Test workflow
+
+```bash
+cd hobby_os
+make test-programs   # checks C/ASM sample utilities
+make test-terminal   # boots QEMU and validates shell behavior
+make test            # full test suite
 ```
 
 ## Run in VirtualBox

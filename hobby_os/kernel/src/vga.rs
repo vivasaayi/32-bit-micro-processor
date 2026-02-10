@@ -1,3 +1,4 @@
+use crate::serial;
 use core::fmt;
 use lazy_static::lazy_static;
 use spin::Mutex;
@@ -141,6 +142,7 @@ pub fn clear_screen() {
 pub fn print(text: &str) {
     use core::fmt::Write;
     let _ = WRITER.lock().write_str(text);
+    serial::print(text);
 }
 
 pub fn print_line(text: &str) {

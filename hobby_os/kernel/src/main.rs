@@ -2,6 +2,7 @@
 #![no_main]
 
 mod keyboard;
+mod serial;
 mod shell;
 mod vga;
 
@@ -9,6 +10,7 @@ use core::panic::PanicInfo;
 
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
+    serial::init();
     vga::init();
     shell::banner();
     shell::repl();
