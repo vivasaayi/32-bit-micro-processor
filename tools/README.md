@@ -63,6 +63,17 @@ Converts assembly code to machine code hex format.
 ### 3. Legacy Python C Compiler (`c_compiler.py`)
 The original Python implementation of the C compiler (deprecated, use C version).
 
+
+### 4. Custom Educational Emulator (`custom_qemu_emulator`)
+A small, readable **Rust** emulator for the custom 32-bit assembly dialect used in this repo.
+
+```bash
+cd tools/custom_qemu_emulator
+cargo run -- ../../test_programs/assembly/0_9_0_simple_store_test.asm --dump-addr 0x100
+```
+
+This is useful for understanding instruction semantics and comparing behavior with QEMU/RTL.
+
 ## Instruction Set
 
 The processor supports the following instruction format:
