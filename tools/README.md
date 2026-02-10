@@ -65,11 +65,11 @@ The original Python implementation of the C compiler (deprecated, use C version)
 
 
 ### 4. Custom Educational Emulator (`custom_qemu_emulator`)
-A small, readable emulator for the custom 32-bit assembly dialect used in this repo.
+A small, readable **Rust** emulator for the custom 32-bit assembly dialect used in this repo.
 
 ```bash
 cd tools/custom_qemu_emulator
-python3 emulator.py ../../test_programs/assembly/0_9_0_simple_store_test.asm
+cargo run -- ../../test_programs/assembly/0_9_0_simple_store_test.asm --dump-addr 0x100
 ```
 
 This is useful for understanding instruction semantics and comparing behavior with QEMU/RTL.
