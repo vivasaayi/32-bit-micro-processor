@@ -64,3 +64,7 @@ While this is an 8-bit processor, it includes features necessary for a minimal L
 
 Note: This will be a severely limited Linux implementation, more like a microkernel.
 # micro-processor
+
+## Hobby OS Starter
+
+A new starter operating system scaffold is available in `hobby_os/` with a Rust kernel, simple shell, and VirtualBox boot flow. See `hobby_os/README.md` for usage.

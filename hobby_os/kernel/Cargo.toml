@@ -1,0 +1,18 @@
+[package]
+name = "aruvix_hobby_os"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bootloader = { version = "0.11", features = ["binary"] }
+lazy_static = { version = "1.4", features = ["spin_no_std"] }
+spin = "0.9"
+volatile = "0.4"
+x86_64 = "0.14"
+heapless = { version = "0.8", default-features = false }
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"

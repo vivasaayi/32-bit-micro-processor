@@ -1,0 +1,30 @@
+#![no_std]
+#![no_main]
+
+mod keyboard;
+mod shell;
+mod vga;
+
+use core::panic::PanicInfo;
+
+#[no_mangle]
+pub extern "C" fn _start() -> ! {
+    vga::init();
+    shell::banner();
+    shell::repl();
+}
+
+#[panic_handler]
+fn panic(info: &PanicInfo) -> ! {
+    vga::clear_screen();
+    vga::print_line("Kernel panic");
+
+    if let Some(msg) = info.message() {
+        vga::print_line("Reason:");
+        vga::print_fmt(*msg);
+    }
+
+    loop {
+        x86_64::instructions::hlt();
+    }
+}
