@@ -54,6 +54,9 @@ hdl/
 3. Run tests: `make test`
 4. Synthesize: `make synth`
 
+## Architecture Roadmaps
+- SoC and autonomous agriculture drone roadmap: `docs/soc_drone_roadmap.md`
+
 ## Linux Compatibility
 While this is an 8-bit processor, it includes features necessary for a minimal Linux-like system:
 - Virtual memory management
