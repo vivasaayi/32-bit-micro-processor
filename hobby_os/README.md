@@ -10,7 +10,8 @@ hobby_os/
 │   └── Makefile                 # Low-level image build helper
 ├── Makefile                     # Top-level build/run/test orchestration
 ├── docs/
-│   └── roadmap.md               # Suggested evolution plan
+│   ├── roadmap.md               # Suggested evolution plan
+│   └── readiness.md             # Gap analysis vs DOS-like goals
 ├── kernel/
 │   ├── .cargo/config.toml       # Bare-metal target
 │   ├── Cargo.toml               # Kernel crate dependencies
@@ -24,6 +25,7 @@ hobby_os/
 │   ├── c/                        # Sample host-side C utilities
 │   └── asm/                      # Sample host-side ASM utility
 ├── scripts/
+│   ├── create_vdi.sh            # VirtualBox VDI conversion helper
 │   └── test_terminal.py          # QEMU serial smoke test runner
 ├── tests/
 │   └── test_cases.md             # Documented test scenarios
@@ -54,6 +56,7 @@ hobby_os/
 cd hobby_os
 make image
 make run
+make bundle-programs
 ```
 
 
@@ -71,11 +74,25 @@ make test            # full test suite
 1. Build image (`make image`).
 2. Convert raw image to VDI:
    ```bash
+   make vdi
+   # or manually:
    VBoxManage convertfromraw ../kernel/target/x86_64-unknown-none/debug/bootimage-aruvix_hobby_os.bin hobby_os.vdi --format VDI
    ```
 3. Create VM (Other/Unknown OS).
 4. Attach `hobby_os.vdi` as primary disk.
 5. Boot VM.
+
+## Readiness (important)
+
+This repo currently provides a DOS-like shell experience, but **external program execution is not complete yet**.
+
+Run:
+
+```bash
+make readiness
+```
+
+for an exact requirement-by-requirement status and missing pieces.
 
 ## Next milestone for C utilities
 

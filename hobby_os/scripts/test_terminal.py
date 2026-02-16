@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 import os
-import selectors
 import shutil
 import subprocess
 import sys
@@ -9,6 +8,26 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 IMAGE = ROOT / "kernel/target/x86_64-unknown-none/debug/bootimage-aruvix_hobby_os.bin"
+
+
+def read_available(proc: subprocess.Popen[str], timeout_s: float = 0.2) -> str:
+    if proc.stdout is None:
+        return ""
+
+    fd = proc.stdout.fileno()
+    data = []
+    end = time.time() + timeout_s
+
+    while time.time() < end:
+        try:
+            chunk = os.read(fd, 4096)
+            if not chunk:
+                break
+            data.append(chunk.decode(errors="replace"))
+        except BlockingIOError:
+            time.sleep(0.03)
+
+    return "".join(data)
 
 
 def main() -> int:
@@ -39,24 +58,26 @@ def main() -> int:
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
-        text=True,
+        text=False,
         cwd=ROOT,
         env={**os.environ, "LC_ALL": "C"},
-        bufsize=1,
+        bufsize=0,
     )
 
-    sel = selectors.DefaultSelector()
     assert proc.stdout is not None
-    sel.register(proc.stdout, selectors.EVENT_READ)
+    os.set_blocking(proc.stdout.fileno(), False)
 
     def write_line(line: str) -> None:
-        assert proc.stdin is not None
-        proc.stdin.write(line)
+        if proc.stdin is None:
+            return
+        proc.stdin.write(line.encode())
         proc.stdin.flush()
 
     output = ""
     try:
         time.sleep(2.0)
+        output += read_available(proc, 0.8)
+
         for line in [
             "help\n",
             "ls\n",
@@ -65,16 +86,10 @@ def main() -> int:
             "run noexist\n",
         ]:
             write_line(line)
-            time.sleep(0.4)
+            time.sleep(0.35)
+            output += read_available(proc, 0.5)
 
-        deadline = time.time() + 6.0
-        while time.time() < deadline:
-            events = sel.select(timeout=0.25)
-            for key, _ in events:
-                chunk = key.fileobj.read()  # line-buffered chunks
-                if not chunk:
-                    continue
-                output += chunk
+        output += read_available(proc, 2.5)
 
         required = [
             "AruviX HobbyOS (Rust)",

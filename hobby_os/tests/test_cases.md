@@ -20,11 +20,24 @@ make test-terminal
 1. Compile sample C utilities.
 2. Assemble sample ASM utility object.
 3. Execute compiled `sum_util` and assert expected result (`42`).
+4. Bundle generated utilities into `out/program_bundle/` with a manifest.
 
 Run with:
 
 ```bash
 make test-programs
+make bundle-programs
+```
+
+## VirtualBox packaging check
+
+1. Ensure VirtualBox is installed (`VBoxManage` in PATH).
+2. Build image and convert to VDI.
+
+Run with:
+
+```bash
+make vdi
 ```
 
 ## End-to-end test
