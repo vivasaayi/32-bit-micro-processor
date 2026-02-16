@@ -56,6 +56,7 @@ hdl/
 
 ## Architecture Roadmaps
 - SoC and autonomous agriculture drone roadmap: `docs/soc_drone_roadmap.md`
+- FPGA-first execution playbook for hardware bring-up/testing: `docs/fpga_soc_execution_playbook.md`
 
 ## Linux Compatibility
 While this is an 8-bit processor, it includes features necessary for a minimal Linux-like system:

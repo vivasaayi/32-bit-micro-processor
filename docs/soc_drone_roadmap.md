@@ -167,3 +167,27 @@ A good near-term success metric is:
 
 If you can do that reliably, you have crossed from CPU project to credible SoC platform.
 
+## 11) FPGA-first conversion path (from your current CPU)
+
+Because you already have a working CPU in RTL, the fastest transition to SoC is:
+
+1. Wrap CPU with SRAM + UART and prove repeatable boot on FPGA.
+2. Add timer + interrupt controller and measure ISR latency on real pins.
+3. Add PWM outputs and validate ESC-safe timing on a logic analyzer.
+4. Add SPI/I2C sensor ingress with timestamp registers.
+5. Add watchdog/reset-cause logic before closed-loop flight tests.
+
+Use the detailed implementation checklist in `docs/fpga_soc_execution_playbook.md`.
+
+## 12) Open-source-first tool flow (with pragmatic fallback)
+
+Preferred flow:
+- Simulation: Icarus/Verilator + GTKWave.
+- Verification hardening: Verilator lint + SymbiYosys properties.
+- Build: Yosys + nextpnr (board permitting).
+
+Fallback rule when blocked by silicon/tool support:
+- Keep RTL/tests/firmware fully open-source.
+- Use vendor tool only for the final place-and-route/bitstream stage.
+
+This gives you maximum freedom without letting tooling become a project blocker.
