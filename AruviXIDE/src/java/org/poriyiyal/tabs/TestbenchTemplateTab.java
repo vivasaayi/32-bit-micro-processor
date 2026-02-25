@@ -259,7 +259,6 @@ public class TestbenchTemplateTab extends BaseTab {
             "        .external_interrupts(8'b0),\n" +
             "        .system_halted(),\n" +
             "        .pc_out(debug_pc),\n" +
-            "        .cpu_flags(),\n" +
             "        .debug_pc(debug_pc),\n" +
             "        .debug_instruction(debug_instruction),\n" +
             "        .debug_reg_data(debug_reg_data),\n" +

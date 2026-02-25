@@ -33,11 +33,10 @@ module tb_microprocessor_system;
     // Status
     wire system_halted;
     wire [31:0] pc_out;
-    wire [7:0] cpu_flags;
     
     // Test variables
     integer cycle_count;
-    integer max_cycles = 10000;
+    integer max_cycles = 50000;
     reg [8*100:1] hexfile; // String for filename
     
     // Instantiate the 32-bit microprocessor
@@ -56,8 +55,7 @@ module tb_microprocessor_system;
         .io_write(io_write),
         .external_interrupts(external_interrupts),
         .system_halted(system_halted),
-        .pc_out(pc_out),
-        .cpu_flags(cpu_flags)
+        .pc_out(pc_out)
     );
     
     // Clock generation
@@ -140,11 +138,16 @@ module tb_microprocessor_system;
         $finish;
     end
     
-    // Monitor important signals
+    // Monitor important signals & UART Simulation
     always @(posedge clk) begin
         if (ext_mem_read || ext_mem_write) begin
-            $display("External memory access: addr=0x%08X, read=%b, write=%b", 
-                     ext_addr, ext_mem_read, ext_mem_write);
+            // UART TX at 0x10000000
+            if (ext_mem_write && ext_addr == 32'h10000000) begin
+                $write("%c", ext_data[7:0]);
+            end else begin
+                $display("External memory access: addr=0x%08X, read=%b, write=%b, data=0x%08x", 
+                     ext_addr, ext_mem_read, ext_mem_write, ext_data);
+            end
         end
     end
 

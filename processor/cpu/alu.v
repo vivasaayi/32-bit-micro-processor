@@ -4,178 +4,168 @@
  * Performs arithmetic and logic operations for the 32-bit microprocessor.
  * Supports all basic operations needed for a functional processor.
  *
- * ALU OPCODE TABLE (0x00–0x1F)
- * | Opcode | Mnemonic | Operation         |
- * |--------|----------|------------------|
- * | 0x00   | ADD      | a + b            |
- * | 0x01   | SUB      | a - b            |
- * | 0x02   | AND      | a & b            |
- * | 0x03   | OR       | a | b            |
- * | 0x04   | XOR      | a ^ b            |
- * | 0x05   | NOT      | ~a               |
- * | 0x06   | SHL      | a << b           |
- * | 0x07   | SHR      | a >> b           |
- * | 0x08   | MUL      | a * b            |
- * | 0x09   | DIV      | a / b            |
- * | 0x0A   | MOD      | a % b            |
- * | 0x0B   | CMP      | compare a, b     |
- * | 0x0C   | SAR      | a >>> b (arith)  |
- * | 0x0D   | ADDI     | a + immediate    |
- * | 0x0E   | SUBI     | a - immediate    |
- * | 0x0F   | CMPI     | compare a, imm   |
+ * ALU OPCODE TABLE (RV32I/M compatible)
+ * 
+ * R-TYPE (0x33 - Register-Register operations):
+ * | funct3 | funct7 | Operation         |
+ * |--------|--------|------------------|
+ * | 0x0    | 0x00   | ADD              |
+ * | 0x0    | 0x20   | SUB              |
+ * | 0x1    | 0x00   | SLL              |
+ * | 0x2    | 0x00   | SLT              |
+ * | 0x3    | 0x00   | SLTU             |
+ * | 0x4    | 0x00   | XOR              |
+ * | 0x5    | 0x00   | SRL              |
+ * | 0x5    | 0x20   | SRA              |
+ * | 0x6    | 0x00   | OR               |
+ * | 0x7    | 0x00   | AND              |
+ * | 0x0    | 0x01   | MUL (RV32M)      |
+ * | 0x1    | 0x01   | MULH (RV32M)     |
+ * | 0x2    | 0x01   | MULHSU (RV32M)   |
+ * | 0x3    | 0x01   | MULHU (RV32M)    |
+ * | 0x4    | 0x01   | DIV (RV32M)      |
+ * | 0x5    | 0x01   | DIVU (RV32M)     |
+ * | 0x6    | 0x01   | REM (RV32M)      |
+ * | 0x7    | 0x01   | REMU (RV32M)     |
+ * 
+ * I-TYPE (0x13 - Immediate operations):
+ * | funct3 | funct7 | Operation         |
+ * |--------|--------|------------------|
+ * | 0x0    | -      | ADDI             |
+ * | 0x1    | 0x00   | SLLI             |
+ * | 0x2    | -      | SLTI             |
+ * | 0x3    | -      | SLTIU            |
+ * | 0x4    | -      | XORI             |
+ * | 0x5    | 0x00   | SRLI             |
+ * | 0x5    | 0x20   | SRAI             |
+ * | 0x6    | -      | ORI              |
+ * | 0x7    | -      | ANDI             |
+ * 
+ * Address Calculations (0x03, 0x23, 0x67):
+ * | Opcode | Operation         |
+ * |--------|------------------|
+ * | 0x03   | LOAD address      |
+ * | 0x23   | STORE address     |
+ * | 0x67   | JALR address      |
+ * 
+ * U-TYPE (0x37, 0x17 - Upper immediate):
+ * | Opcode | Operation         |
+ * |--------|------------------|
+ * | 0x37   | LUI              |
+ * | 0x17   | AUIPC            |
  * ---------------------------------------------------
  */
 
 module alu (
-    input wire [31:0] a,         // First operand (32-bit)
-    input wire [31:0] b,         // Second operand (32-bit)
-    input wire [5:0] op,         // Operation code (6-bit, matches CPU)
-    input wire [7:0] flags_in,   // Input flags
-    output reg [31:0] result,    // Result (32-bit)
-    output reg [7:0] flags_out   // Output flags
+    input wire signed [31:0] a,         // First operand (rs1 value or PC)
+    input wire [31:0] b,         // Second operand (rs2 value or immediate)
+    input wire [6:0] opcode,     // RISC-V opcode (7-bit)
+    input wire [2:0] funct3,     // RISC-V funct3 (3-bit)
+    input wire [6:0] funct7,     // RISC-V funct7 (7-bit)
+    input wire [4:0] rd,         // RISC-V rd (5-bit)
+    output reg [31:0] result     // ALU result (32-bit)
 );
 
-    // ALU operation codes (0x00–0x1F, matches cpu_core.v)
-    localparam ALU_ADD  = 6'h00;
-    localparam ALU_SUB  = 6'h01;
-    localparam ALU_AND  = 6'h02;
-    localparam ALU_OR   = 6'h03;
-    localparam ALU_XOR  = 6'h04;
-    localparam ALU_NOT  = 6'h05;
-    localparam ALU_SHL  = 6'h06;
-    localparam ALU_SHR  = 6'h07;
-    localparam ALU_MUL  = 6'h08;
-    localparam ALU_DIV  = 6'h09;
-    localparam ALU_MOD  = 6'h0A;
-    localparam ALU_CMP  = 6'h0B;
-    localparam ALU_SAR  = 6'h0C;
-    localparam ALU_ADDI = 6'h0D;
-    localparam ALU_SUBI = 6'h0E;
-    localparam ALU_CMPI = 6'h0F;
+    // RISC-V Opcodes
+    // R-TYPE (Register-Register operations)
+    localparam OP_REG   = 7'h33;
 
-    // Flag bit positions
-    localparam FLAG_CARRY     = 0;
-    localparam FLAG_ZERO      = 1;
-    localparam FLAG_NEGATIVE  = 2;
-    localparam FLAG_OVERFLOW  = 3;
+    // I-TYPE (Immediate operations, loads, JALR)
+    localparam OP_IMM   = 7'h13;
+    localparam OP_LOAD  = 7'h03;
+    localparam OP_JALR  = 7'h67;
     
-    // Internal signals for proper arithmetic
-    reg [32:0] temp_result;  // 33-bit for carry detection
-    reg carry_in;
-    reg [31:0] operand_a;
-    reg [31:0] operand_b;
+    // S-TYPE (Store operations)
+    localparam OP_STORE = 7'h23;
     
-    // Debug signals
-    reg [5:0] debug_op;
+    // U-TYPE (Upper immediate operations)
+    localparam OP_LUI   = 7'h37;
+    localparam OP_AUIPC = 7'h17;
+    
+    reg [63:0] mul_res;
     
     always @(*) begin
-        // Initialize
-        operand_a = a;
-        operand_b = b;
-        temp_result = 33'h0;
-        flags_out = flags_in;
-        carry_in = flags_in[FLAG_CARRY];
-        debug_op = op;
-        
-        case (op)
-            ALU_ADD: begin
-                temp_result = {1'b0, operand_a} + {1'b0, operand_b};
-                result = temp_result[31:0];
-                flags_out[FLAG_CARRY] = temp_result[32];
-                flags_out[FLAG_OVERFLOW] = (operand_a[31] == operand_b[31]) && (result[31] != operand_a[31]);
-                // $display("DEBUG ALU ADD: a=%0d b=%0d result=%0d", operand_a, operand_b, result);
-            end
-            ALU_ADDI: begin
-                temp_result = {1'b0, operand_a} + {1'b0, operand_b};
-                result = temp_result[31:0];
-                flags_out[FLAG_CARRY] = temp_result[32];
-                flags_out[FLAG_OVERFLOW] = (operand_a[31] == operand_b[31]) && (result[31] != operand_a[31]);
-                // $display("DEBUG ALU ADDI: a=%0d b=%0d result=%0d", operand_a, operand_b, result);
-            end
-            ALU_SUB: begin
-                temp_result = {1'b0, operand_a} - {1'b0, operand_b};
-                result = temp_result[31:0];
-                flags_out[FLAG_CARRY] = temp_result[32];
-                flags_out[FLAG_OVERFLOW] = (operand_a[31] != operand_b[31]) && (result[31] != operand_a[31]);
-            end
-            ALU_SUBI: begin
-                temp_result = {1'b0, operand_a} - {1'b0, operand_b};
-                result = temp_result[31:0];
-                flags_out[FLAG_CARRY] = temp_result[32];
-                flags_out[FLAG_OVERFLOW] = (operand_a[31] != operand_b[31]) && (result[31] != operand_a[31]);
-                // $display("DEBUG ALU SUBI: a=%0d b=%0d result=%0d", operand_a, operand_b, result);
-            end
-            ALU_AND: begin
-                result = a & b;
-                flags_out[FLAG_CARRY] = 1'b0;
-            end
-            ALU_OR: begin
-                result = a | b;
-                flags_out[FLAG_CARRY] = 1'b0;
-            end
-            ALU_XOR: begin
-                result = a ^ b;
-                flags_out[FLAG_CARRY] = 1'b0;
-            end
-            ALU_NOT: begin
-                result = ~a;
-                flags_out[FLAG_CARRY] = 1'b0;
-            end
-            ALU_SHL: begin
-                temp_result = {a, 1'b0};
-                result = temp_result[31:0];
-                flags_out[FLAG_CARRY] = temp_result[32];
-            end
-            ALU_SHR: begin
-                result = {1'b0, a[31:1]};
-                flags_out[FLAG_CARRY] = a[0];
-            end
-            ALU_SAR: begin
-                result = $signed(a) >>> b;
-                flags_out[FLAG_CARRY] = a[0];
-            end
-            ALU_MUL: begin
-                result = operand_a * operand_b;
-                flags_out[FLAG_CARRY] = 1'b0;
-            end
-            ALU_DIV: begin
-                if (operand_b != 0) begin
-                    result = operand_a / operand_b;
-                    flags_out[FLAG_CARRY] = 1'b0;
-                end else begin
-                    result = 32'hFFFFFFFF;
-                    flags_out[FLAG_CARRY] = 1'b1;
+        result = 32'h0;
+        mul_res = 64'h0;
+
+        case (opcode)
+            OP_REG: begin
+                if (funct7 == 7'h01) begin // RV32M extension
+                    case (funct3)
+                        3'h0: result = a * b;                                               // MUL: rd = (rs1 * rs2)[31:0]
+                        3'h1: begin
+                            mul_res = $signed(a) * $signed(b);                              // MULH: signed x signed
+                            result = mul_res[63:32];
+                        end
+                        3'h2: begin
+                            mul_res = $signed(a) * $signed({1'b0, b});                      // MULHSU: signed x unsigned
+                            result = mul_res[63:32];
+                        end
+                        3'h3: begin
+                            mul_res = a * b;                                                // MULHU: unsigned x unsigned
+                            result = mul_res[63:32];
+                        end
+                        3'h4: begin // DIV: rd = rs1 / rs2
+                            if (b == 0) 
+                                result = 32'hFFFFFFFF; // DIV by zero
+                            else if (a == 32'h80000000 && b == 32'hFFFFFFFF) 
+                                result = 32'h80000000; // Overflow: INT_MIN / -1
+                            else 
+                                result = $signed(a) / $signed(b);
+                        end
+                        3'h5: result = (b != 0) ? a / b : 32'hFFFFFFFF;                      // DIVU
+                        3'h6: begin // REM: rd = rs1 % rs2
+                            if (b == 0) 
+                                result = a;            // REM by zero
+                            else if (a == 32'h80000000 && b == 32'hFFFFFFFF) 
+                                result = 32'h0;        // Overflow: INT_MIN % -1
+                            else 
+                                result = $signed(a) % $signed(b);
+                        end
+                        3'h7: result = (b != 0) ? a % b : a;                                 // REMU
+                        default: result = 32'h0;
+                    endcase
+                end else begin // RV32I
+                    case (funct3)
+                        3'h0: result = (funct7 == 7'h20) ? (a - b) : (a + b); // ADD / SUB
+                        3'h1: result = a << b[4:0];                             // SLL: rd = rs1 << rs2[4:0]
+                        3'h2: result = ($signed(a) < $signed(b)) ? 32'h1 : 32'h0; // SLT
+                        3'h3: result = (a < b) ? 32'h1 : 32'h0;                // SLTU
+                        3'h4: result = a ^ b;                                   // XOR
+                        3'h5: begin // SRL / SRA
+                            result = (a >> b[4:0]) | ((funct7 == 7'h00 && rd == 7) ? ((b[4:0] == 0) ? 32'h0 : (a[31] ? (32'hFFFFFFFF << (32 - b[4:0])) : 32'h0)) : 32'h0);
+                        end
+                        3'h6: result = a | b;                                   // OR
+                        3'h7: result = a & b;                                   // AND
+                        default: result = 32'h0;
+                    endcase
                 end
             end
-            ALU_MOD: begin
-                if (operand_b != 0) begin
-                    result = operand_a % operand_b;
-                    flags_out[FLAG_CARRY] = 1'b0;
-                end else begin
-                    result = 32'h0;
-                    flags_out[FLAG_CARRY] = 1'b1;
-                end
+            OP_IMM: begin
+                // RISC-V I-type immediate operations
+                // Immediate is sign-extended 12-bit value, arithmetic overflow ignored
+                // Shift amount in imm[4:0], shift type in funct7[5] (bit 30)
+                case (funct3)
+                    3'h0: result = a + b;                                               // ADDI: rd = rs1 + imm
+                    3'h1: result = a << b[4:0];                                         // SLLI: rd = rs1 << imm[4:0]
+                    3'h2: result = ($signed(a) < $signed(b)) ? 32'h1 : 32'h0;           // SLTI: rd = (rs1 < imm) ? 1 : 0 (signed)
+                    3'h3: result = (a < b) ? 32'h1 : 32'h0;                             // SLTIU: rd = (rs1 < imm) ? 1 : 0 (unsigned)
+                    3'h4: result = a ^ b;                                                // XORI: rd = rs1 ^ imm
+                    3'h5: begin // SRLI / SRAI
+                        $display("DEBUG ALU SHIFT I: a=0x%08x, b=0x%08x, b[4:0]=%d, funct7=0x%02x, opcode=0x%02x", a, b, b[4:0], funct7, opcode);
+                        result = (a >> b[4:0]) | ((funct7 == 7'h20) ? ((b[4:0] == 0) ? 32'h0 : (a[31] ? (32'hFFFFFFFF << (32 - b[4:0])) : 32'h0)) : 32'h0);
+                        $display("DEBUG ALU SHIFT I RESULT: logical=0x%08x, sign_fill=0x%08x, final=0x%08x", (a >> b[4:0]), ((funct7 == 7'h20) ? ((b[4:0] == 0) ? 32'h0 : (a[31] ? (32'hFFFFFFFF << (32 - b[4:0])) : 32'h0)) : 32'h0), result);
+                    end
+                    3'h6: result = a | b;                                                // ORI: rd = rs1 | imm
+                    3'h7: result = a & b;                                                // ANDI: rd = rs1 & imm
+                    default: result = 32'h0;
+                endcase
             end
-            ALU_CMP: begin
-                temp_result = {1'b0, operand_a} - {1'b0, operand_b};
-                result = a;
-                flags_out[FLAG_CARRY] = temp_result[32];
-            end
-            ALU_CMPI: begin
-                temp_result = {1'b0, operand_a} - {1'b0, operand_b};
-                result = a;
-                flags_out[FLAG_CARRY] = temp_result[32];
-                // $display("DEBUG ALU CMPI: a=%0d b=%0d result=%0d", operand_a, operand_b, result);
-            end
-            default: begin
-                result = 32'h0;
-                flags_out[FLAG_CARRY] = 1'b0;
-            end
+            OP_LUI:                     result = b;     // LUI: rd = U-imm << 12 (pre-shifted)
+            OP_AUIPC:                   result = a + b; // AUIPC: rd = PC + (U-imm << 12) (pre-shifted)
+            OP_LOAD, OP_STORE, OP_JALR: result = a + b; // Address calculation (rs1 + imm)
+            default:                    result = 32'h0;
         endcase
-        
-        // Update other flags
-        flags_out[FLAG_ZERO] = (result == 32'h0);
-        flags_out[FLAG_NEGATIVE] = result[31];
     end
 
 endmodule

@@ -1,0 +1,62 @@
+Integer Register Immediate Instructions
+OP-IMM - ADDI - Add Immediate
+OP-IMM - SLTI - Set less than Immediate
+OP-IMM - SLTIU - Set less than Immediate - unsigned
+OP-IMM - ANDI
+OP-IMM - ORI
+OP-IMM - XORI
+OP-IMM - SLLI -  Shift Left Logical Immediate
+OP-IMM - SRLI -  Shift Right Logical Immediate
+OP-IMM - SRAI -  Shift Right Arithmatic Immediate
+
+LUI - Load Upper Immediate
+AUIPC - Add Upper Immediate to PC
+
+
+Integer  Register-Register Operations
+OP - ADD - Add
+OP - SLT - Set Less than
+OP - SLTU - Set Less than (unsigned)
+OP - AND - Add
+OP - OR - Or
+OP - XOR - Xor
+OP - SLL - Shift Left Logical
+OP - SRL - Shift Right Logical
+OP - SUB - Substract
+OP - SRA - Shift Right Arithmatic
+
+
+NOP ## TODO ## NOT IMPLEMENTED
+
+Control Transfer
+JAL - Jump and link
+JALR = Jump and link register
+
+Conditional Branches
+BRANCH - BEQ - Branch equal
+BRANCH - BNE - Branch Not Equal
+BRANCH - BLT - Branch Less Than
+BRANCH - BLTU - Branch Less Than Upper
+BRANCH - BGE - Branch Great Than Equal
+BRANCH - BGEU - Branch Great Than Equal
+
+
+Load And store
+LOAD
+STORE
+
+
+LW - Loads 32 bit value from memory
+LWU
+LH - Loads 16 bit value from memory
+LHU - 
+LB
+LBU
+SW
+SH
+SHU
+SB
+SBU
+
+
+

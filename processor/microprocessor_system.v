@@ -40,7 +40,6 @@ module microprocessor_system (
     // Status outputs
     output wire system_halted,
     output wire [31:0] pc_out,
-    output wire [7:0] cpu_flags,
     
     // Debug outputs for testing
     output wire [31:0] debug_pc,
@@ -62,7 +61,7 @@ module microprocessor_system (
     wire cpu_user_mode;
     wire [7:0] cpu_interrupt_req;
     wire cpu_interrupt_ack;
-    wire [7:0] cpu_flags_out;
+    wire [2:0] mem_op_width;
     
     // Memory controller signals
     wire [31:0] mem_addr;
@@ -83,6 +82,39 @@ module microprocessor_system (
     wire accessing_internal_mem = (cpu_addr_bus < 32'h00100000); // First 1MB
     wire accessing_external_mem = (cpu_addr_bus >= 32'h00100000);
     wire accessing_status_reg = (cpu_addr_bus == 32'h00002000); // Status at 0x2000
+
+    // Store Logic for Byte/Halfword
+    wire [1:0] byte_offset = cpu_addr_bus[1:0];
+    reg [31:0] write_mask;
+    reg [31:0] shifted_data;
+
+    always @(*) begin
+        shifted_data = cpu_data_bus;
+        write_mask = 32'hFFFFFFFF;
+
+        case (mem_op_width)
+            3'b000: begin // SB
+                shifted_data = {4{cpu_data_bus[7:0]}};
+                case (byte_offset)
+                    2'b00: write_mask = 32'h000000FF;
+                    2'b01: write_mask = 32'h0000FF00;
+                    2'b10: write_mask = 32'h00FF0000;
+                    2'b11: write_mask = 32'hFF000000;
+                endcase
+            end
+            3'b001: begin // SH
+                shifted_data = {2{cpu_data_bus[15:0]}};
+                case (byte_offset[1])
+                    1'b0: write_mask = 32'h0000FFFF;
+                    1'b1: write_mask = 32'hFFFF0000;
+                endcase
+            end
+            default: begin // SW
+                shifted_data = cpu_data_bus;
+                write_mask = 32'hFFFFFFFF;
+            end
+        endcase
+    end
     
     // Instantiate CPU core
     cpu_core cpu_inst (
@@ -99,9 +131,10 @@ module microprocessor_system (
         .io_data(io_data),
         .io_read(io_read),
         .io_write(io_write),
+        .little_endian(1'b1),  // Configure as little-endian
         .halted(cpu_halted),
         .user_mode(cpu_user_mode),
-        .cpu_flags(cpu_flags_out)
+        .mem_op_width(mem_op_width)
     );
     
     // Internal memory controller
@@ -120,9 +153,9 @@ module microprocessor_system (
                 end
             end else if (accessing_internal_mem) begin
                 if (cpu_mem_write) begin
-                    internal_memory[cpu_addr_bus[19:2]] <= cpu_data_bus;
-                    $display("DEBUG: Memory write at addr=0x%08x, word_addr=%d, data=0x%08x", 
-                            cpu_addr_bus, cpu_addr_bus[19:2], cpu_data_bus);
+                    internal_memory[cpu_addr_bus[19:2]] <= (internal_memory[cpu_addr_bus[19:2]] & ~write_mask) | (shifted_data & write_mask);
+                    $display("DEBUG: Memory write at addr=0x%08x, word_addr=%d, data=0x%08x, mask=0x%08x", 
+                            cpu_addr_bus, cpu_addr_bus[19:2], shifted_data & write_mask, write_mask);
                 end
                 // Debug output for reads (data is provided combinationally)
                 if (cpu_mem_read && !cpu_mem_write) begin
@@ -162,7 +195,6 @@ module microprocessor_system (
     // Status outputs
     assign system_halted = cpu_halted;
     assign pc_out = cpu_addr_bus; // Simplified - should be actual PC
-    assign cpu_flags = cpu_flags_out; // Output actual CPU flags
     
     // Debug outputs
     assign debug_pc = cpu_addr_bus;

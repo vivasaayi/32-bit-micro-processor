@@ -188,7 +188,6 @@ module tb_bouncing_rectangle_fixed;
         .external_interrupts(8'b0),
         .system_halted(),
         .pc_out(),
-        .cpu_flags(),
         .debug_pc(debug_pc),
         .debug_instruction(debug_instruction),
         .debug_reg_data(debug_reg_data),

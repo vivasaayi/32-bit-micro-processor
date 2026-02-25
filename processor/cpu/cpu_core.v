@@ -26,10 +26,13 @@ module cpu_core (
     output wire io_read,
     output wire io_write,
     
+    // Configuration
+    input wire little_endian,  // 1=little-endian, 0=big-endian
+    
     // Status outputs
     output wire halted,
     output wire user_mode,
-    output wire [7:0] cpu_flags
+    output wire [2:0] mem_op_width // Output for memory controller (byte/half/word)
 );
 
     // CPU state machine states
@@ -46,17 +49,48 @@ module cpu_core (
     reg [31:0] instruction_reg;
     reg [31:0] alu_result_reg;
     reg [31:0] memory_data_reg;
-    reg [7:0] flags_reg;  // Store ALU flags
-    reg [31:0] stack_pointer; // Stack pointer (R30 equivalent)
-    reg [31:0] saved_pc; // For function calls and interrupts
+    reg [31:0] stack_pointer; // Stack pointer
     reg privilege_mode; // 0=user, 1=kernel
     reg halted_reg;
     reg user_mode_reg;
+
+    // Load data formatting registers
+    reg [7:0] byte_val;
+    reg [15:0] half_val;
+    reg [31:0] load_data_formatted;
+
+    // CSR Registers
+    reg [31:0] mepc;    // Machine Exception Program Counter
+    reg [31:0] mcause;  // Machine Cause
+    reg [31:0] mstatus; // Machine Status
+    reg [31:0] mtvec;   // Machine Trap Vector
+    reg [31:0] mscratch; // Machine Scratch
     
-    // ALU signals
-    wire [31:0] alu_a, alu_b, alu_result;
-    wire [4:0] alu_op;
-    wire [7:0] flags_in, flags_out;
+    // CSR Interface
+    reg [31:0] csr_wdata;
+    reg csr_write;
+    reg [31:0] csr_rdata;
+    wire [11:0] csr_addr = imm12_i;
+    wire [31:0] rs1_data = reg_data_a;
+    
+    // CSR Read Logic
+    always @(*) begin
+        case (csr_addr)
+            12'h341: csr_rdata = mepc;
+            12'h342: csr_rdata = mcause;
+            12'h300: csr_rdata = mstatus;
+            12'h305: csr_rdata = mtvec;
+            12'h340: csr_rdata = mscratch;
+            // Cycle counters
+            12'hC00: csr_rdata = 32'h0; // cycle (low) - TODO: implement counter
+            12'hC80: csr_rdata = 32'h0; // cycle (high)
+            default: csr_rdata = 32'h0;
+        endcase
+    end
+    
+    wire [31:0] operand_a, operand_b;
+    wire [31:0] alu_out_wire;
+    wire [31:0] alu_result;
     
     // Register file signals
     wire [4:0] reg_addr_a, reg_addr_b, reg_addr_w; 
@@ -64,12 +98,15 @@ module cpu_core (
     wire reg_write_en;
     
     // Control signals
-    wire [5:0] opcode; 
+    wire [6:0] opcode; 
     wire [4:0] rd, rs1, rs2; 
-    wire [19:0] imm20;
-    wire [11:0] imm12;
+    wire [2:0] funct3;
+    wire [6:0] funct7;
+    wire [11:0] imm12_i, imm12_s, imm12_b;
+    wire [31:0] imm31_20_u;
+    wire [19:0] imm20_j;
     wire [31:0] immediate;
-    wire is_immediate_inst, is_load_store, is_branch_jump;
+    wire is_load, is_store, is_branch, is_jal, is_jalr, is_op_imm, is_op_reg;
     
     // ----------------------------------------------------------------------
     // OPCODE ASSIGNMENTS (6-bit, fits within 0x00-0x3F range)
@@ -80,122 +117,39 @@ module cpu_core (
     // 0x30–0x3F: Set/Compare/System operations
 
     // ALU operation codes (0x00–0x0F)
-    localparam [5:0]
-        ALU_ADD  = 6'h00,
-        ALU_SUB  = 6'h01,
-        ALU_AND  = 6'h02,
-        ALU_OR   = 6'h03,
-        ALU_XOR  = 6'h04,
-        ALU_NOT  = 6'h05,
-        ALU_SHL  = 6'h06,
-        ALU_SHR  = 6'h07,
-        ALU_MUL  = 6'h08,
-        ALU_DIV  = 6'h09,
-        ALU_MOD  = 6'h0A,
-        ALU_CMP  = 6'h0B,
-        ALU_SAR  = 6'h0C, // Arithmetic shift right
-        ALU_ADDI = 6'h0D, // Add immediate
-        ALU_SUBI = 6'h0E, // Subtract immediate
-        ALU_CMPI = 6'h0F; // Compare immediate
+    // RISC-V Opcodes (7-bit)
+    localparam [6:0]
+        OP_LOAD   = 7'h03,
+        OP_STORE  = 7'h23,
+        OP_BRANCH = 7'h63,
+        OP_JAL    = 7'h6F,
+        OP_JALR   = 7'h67,
+        OP_IMM    = 7'h13,
+        OP_REG    = 7'h33,
+        OP_LUI    = 7'h37,
+        OP_AUIPC  = 7'h17,
+        OP_SYSTEM = 7'h73;
 
-    // Memory operation codes (0x10–0x1F)
-    localparam [5:0]
-        MEM_LOAD  = 6'h10,
-        MEM_STORE = 6'h11,
-        MEM_LOADI = 6'h12; // LOADI: Load immediate value into register
+    // funct3 for Branches
+    localparam [2:0]
+        F3_BEQ  = 3'h0,
+        F3_BNE  = 3'h1,
+        F3_BLT  = 3'h4,
+        F3_BGE  = 3'h5,
+        F3_BLTU = 3'h6,
+        F3_BGEU = 3'h7;
 
-    // Control/Branch opcodes (0x20–0x2F)
-    localparam [5:0]
-        OP_JMP   = 6'h20,
-        OP_JZ    = 6'h21,
-        OP_JNZ   = 6'h22,
-        OP_JC    = 6'h23,
-        OP_JNC   = 6'h24,
-        OP_JLT   = 6'h25,
-        OP_JGE   = 6'h26,
-        OP_JLE   = 6'h27,
-        OP_CALL  = 6'h28,
-        OP_RET   = 6'h29,
-        OP_PUSH  = 6'h2A,
-        OP_POP   = 6'h2B;
 
-    // Set/Compare/System opcodes (0x30–0x3F)
-    localparam [5:0]
-        OP_SETEQ = 6'h30,
-        OP_SETNE = 6'h31,
-        OP_SETLT = 6'h32,
-        OP_SETGE = 6'h33,
-        OP_SETLE = 6'h34,
-        OP_SETGT = 6'h35,
-        OP_HALT  = 6'h3E,
-        OP_INT   = 6'h3F;
-
-    // ----------------------------------------------------------------------
-    // ALU OPCODE TABLE (0x00–0x0F)
-    // ----------------------------------------------------------------------
-    // | Opcode | Mnemonic | Operation         |
-    // |--------|----------|------------------|
-    // | 0x00   | ADD      | a + b            |
-    // | 0x01   | SUB      | a - b            |
-    // | 0x02   | AND      | a & b            |
-    // | 0x03   | OR       | a | b            |
-    // | 0x04   | XOR      | a ^ b            |
-    // | 0x05   | NOT      | ~a               |
-    // | 0x06   | SHL      | a << b           |
-    // | 0x07   | SHR      | a >> b           |
-    // | 0x08   | MUL      | a * b            |
-    // | 0x09   | DIV      | a / b            |
-    // | 0x0A   | MOD      | a % b            |
-    // | 0x0B   | CMP      | compare a, b     |
-    // | 0x0C   | SAR      | a >>> b (arith)  |
-    // | 0x0D   | ADDI     | a + immediate    |
-    // | 0x0E   | SUBI     | a - immediate    |
-    // | 0x0F   | CMPI     | compare a, imm   |
-    // ----------------------------------------------------------------------
-    // Memory OPCODE TABLE (0x10–0x1F)
-    // | Opcode | Mnemonic | Operation         |
-    // |--------|----------|------------------|
-    // | 0x10   | LOAD     | R[rd] = MEM[imm] |
-    // | 0x11   | STORE    | MEM[imm] = R[rd] |
-    // | 0x12   | LOADI    | R[rd] = imm      |
-    // ----------------------------------------------------------------------
-    // Control/Branch OPCODE TABLE (0x20–0x2F)
-    // | Opcode | Mnemonic | Operation         |
-    // |--------|----------|------------------|
-    // | 0x20   | JMP      | Jump unconditional|
-    // | 0x21   | JZ       | Jump if zero      |
-    // | 0x22   | JNZ      | Jump if not zero  |
-    // | 0x23   | JC       | Jump if carry     |
-    // | 0x24   | JNC      | Jump if no carry  |
-    // | 0x25   | JLT      | Jump if less than |
-    // | 0x26   | JGE      | Jump if greater/eq|
-    // | 0x27   | JLE      | Jump if less/eq   |
-    // | 0x28   | CALL     | Call function     |
-    // | 0x29   | RET      | Return from call  |
-    // | 0x2A   | PUSH     | Push to stack     |
-    // | 0x2B   | POP      | Pop from stack    |
-    // ----------------------------------------------------------------------
-    // Set/Compare/System OPCODE TABLE (0x30–0x3F)
-    // | Opcode | Mnemonic | Operation         |
-    // |--------|----------|------------------|
-    // | 0x30   | SETEQ    | Set if equal      |
-    // | 0x31   | SETNE    | Set if not equal  |
-    // | 0x32   | SETLT    | Set if less than  |
-    // | 0x33   | SETGE    | Set if greater/eq |
-    // | 0x34   | SETLE    | Set if less/eq    |
-    // | 0x35   | SETGT    | Set if greater    |
-    // | 0x3E   | HALT     | Halt processor    |
-    // | 0x3F   | INT      | Software interrupt|
-    // ----------------------------------------------------------------------
     
-    // Instantiate ALU
-    alu alu_inst (
-        .a(alu_a),
-        .b(alu_b),
-        .op(alu_op),
-        .flags_in(flags_in),
-        .result(alu_result),
-        .flags_out(flags_out)
+    // Instantiate ALU (pure RISC-V — no flags)
+    alu u_alu (
+        .a(operand_a),
+        .b(operand_b),
+        .opcode(opcode),
+        .funct3(funct3),
+        .funct7(funct7),
+        .rd(rd),
+        .result(alu_out_wire)
     );
     
     // Instantiate register file
@@ -211,6 +165,18 @@ module cpu_core (
         .write_en(reg_write_en)
     );
     
+    // Next state logic (combinational)
+    always @(*) begin
+        case (state)
+            FETCH:    next_state = DECODE;
+            DECODE:   next_state = EXECUTE;
+            EXECUTE:  next_state = (is_load || is_store) ? MEMORY : WRITEBACK;
+            MEMORY:   next_state = WRITEBACK;
+            WRITEBACK: next_state = FETCH;
+            default:  next_state = FETCH;
+        endcase
+    end
+    
     // State machine
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
@@ -219,19 +185,26 @@ module cpu_core (
             instruction_reg <= 32'h00000000;
             alu_result_reg <= 32'h00000000;
             memory_data_reg <= 32'h00000000;
-            flags_reg <= 8'h00;
             stack_pointer <= 32'h000F0000; // Initialize stack to high memory
             halted_reg <= 1'b0;
             user_mode_reg <= 1'b0;
+            
+            // CSR Reset
+            mepc <= 32'h0;
+            mcause <= 32'h0;
+            mstatus <= 32'h00001800; // MPP=11 (Machine mode)
+            mtvec <= 32'h0;
+            mscratch <= 32'h0;
+            csr_write <= 1'b0;
         end else if (mem_ready && !halted_reg) begin
             state <= next_state;
+            
             case (state)
                 FETCH: begin
                     if (mem_ready) begin
                         instruction_reg <= data_bus;
                         $display("==== INSTR_START ==== PC=0x%08x IS=0x%08x ====", pc_reg, data_bus);
                         $display("FETCH_DONE: PC=0x%x, fetched instruction=0x%x", pc_reg, data_bus);
-                        pc_reg <= pc_reg + 32'h4;
                     end
                 end
                 
@@ -239,197 +212,174 @@ module cpu_core (
                     $display("DECODE_START: PC=0x%08x, IS=0x%08x", pc_reg, instruction_reg);
                     $display("DECODE_FIELDS: Opcode=0x%02x, rd=%d, rs1=%d, rs2=%d, imm=0x%08x", opcode, rd, rs1, rs2, immediate);
                     $display("DECODE_REGS_BEFORE: R%d=0x%08x, R%d=0x%08x", rs1, reg_data_a, rs2, reg_data_b);
-                    $display("DECODE_FLAGS_BEFORE: C=%b Z=%b N=%b V=%b", flags_reg[0], flags_reg[1], flags_reg[2], flags_reg[3]);
                     // Decode happens combinatorially
                 end
                 
                 EXECUTE: begin
                     $display("EXECUTE_START: PC=0x%08x, IS=0x%08x, Opcode=0x%02x", pc_reg, instruction_reg, opcode);
                     
-                    // ------ BEGIN: Handle the result of ALU operations-----
-                    alu_result_reg <= alu_result;
+                    // Default ALU result handling (overridden for jumps and CSRs)
+                    alu_result_reg <= alu_out_wire;
+
+                    // Handle CSR operations
+                    if (opcode == OP_SYSTEM) begin
+                        if (funct3 != 3'h0) begin // CSR Instructions
+                            // Calculate write value
+                            case (funct3)
+                                3'h1: csr_wdata = rs1_data; // CSRRW
+                                3'h2: csr_wdata = csr_rdata | rs1_data; // CSRRS
+                                3'h3: csr_wdata = csr_rdata & ~rs1_data; // CSRRC
+                            endcase
+                            
+                            // Perform Write
+                            case (csr_addr)
+                                12'h341: mepc <= csr_wdata;
+                                12'h342: mcause <= csr_wdata;
+                                12'h300: mstatus <= csr_wdata;
+                                12'h305: mtvec <= csr_wdata;
+                                12'h340: mscratch <= csr_wdata;
+                            endcase
+                            
+                            alu_result_reg <= csr_rdata; // Read old value into RD for Writeback
+                            $display("CSR_OP: addr=0x%03x, wdata=0x%08x, rdata=0x%08x", imm12_i, csr_wdata, csr_rdata);
+                        end else if (instruction_reg[31:20] == 12'h1) begin // EBREAK
+                            halted_reg <= 1'b1;
+                            mepc <= pc_reg;
+                            mcause <= 32'd3; // Breakpoint
+                            $display("EXCEPTION: EBREAK at PC=0x%08x", pc_reg - 4);
+                        end else if (instruction_reg[31:20] == 12'h302) begin // MRET
+                             pc_reg <= mepc;
+                             $display("MRET: Returning to PC=0x%08x", mepc);
+                        end
+                    end
                     
-                    // Update flags for ALU operations
-                    if (opcode == ALU_ADD || opcode == ALU_SUB || opcode == ALU_AND || opcode == ALU_OR || 
-                        opcode == ALU_XOR || opcode == ALU_NOT || opcode == ALU_SHL || opcode == ALU_SHR ||
-                        opcode == ALU_MUL || opcode == ALU_DIV || opcode == ALU_MOD || opcode == ALU_CMP || 
-                        opcode == ALU_SAR || opcode == ALU_ADDI || opcode == ALU_SUBI || opcode == ALU_CMPI) begin
-                        flags_reg <= flags_out;
-                        $display("EXECUTE_FLAGS_AFTER: C=%b Z=%b N=%b V=%b", 
-                                flags_out[0], flags_out[1], flags_out[2], flags_out[3]);
+                    // Handle Jumps/Branches
+                    if (is_jal || is_jalr) begin
+                        alu_result_reg <= pc_reg; // Save return address (already PC+4)
+                        pc_reg <= (is_jalr) ? (alu_out_wire & ~32'h1) : (pc_reg - 4 + immediate);
+                        $display("DEBUG CPU: Jump taken to PC=0x%x, RA set to 0x%x", 
+                                (is_jalr) ? (alu_out_wire & ~32'h1) : (pc_reg - 4 + immediate), pc_reg);
+                    end else if (is_branch && branch_taken) begin
+                        pc_reg <= (pc_reg - 4 + immediate);
                     end
-
-                    // ------ END: Handle the result of ALU operations-----
-
-                    // ------ BEGIN: Handle SET instructions -----
-                    if (opcode == OP_SETEQ || opcode == OP_SETNE || opcode == OP_SETLT ||
-                        opcode == OP_SETGE || opcode == OP_SETLE || opcode == OP_SETGT) begin
-                        $display("SET MATCHED..");
-                        $display("%h %h %h %h %h %h", opcode, OP_SETEQ, OP_SETNE, OP_SETLT, OP_SETGE, OP_SETLE, OP_SETGT);
-                        $display("OP_SETEQ: %h", opcode==OP_SETEQ);
-                        $display("OP_SETNE: %h", opcode==OP_SETNE);
-                        $display("OP_SETLT: %h", opcode==OP_SETLT);
-                        $display("OP_SETGE: %h", opcode==OP_SETGE);
-                        $display("OP_SETLE: %h", opcode==OP_SETLE);
-                        $display("OP_SETGT: %h", opcode==OP_SETGT);
-
-                        case (opcode)
-                            OP_SETEQ: alu_result_reg <= flags_reg[1] ? 32'h1 : 32'h0;  // Z flag
-                            OP_SETNE: alu_result_reg <= !flags_reg[1] ? 32'h1 : 32'h0; // !Z flag
-                            OP_SETLT: alu_result_reg <= flags_reg[2] ? 32'h1 : 32'h0;  // N flag
-                            OP_SETGE: alu_result_reg <= !flags_reg[2] ? 32'h1 : 32'h0; // !N flag
-                            OP_SETLE: alu_result_reg <= (flags_reg[2] || flags_reg[1]) ? 32'h1 : 32'h0; // N || Z
-                            OP_SETGT: alu_result_reg <= (!flags_reg[2] && !flags_reg[1]) ? 32'h1 : 32'h0; // !N && !Z
-                        endcase
-                        $display("EXECUTE_DEBUG_SET1: Checking SET condition: opcode=%h, OP_SETEQ=%h, condition=%b", 
-                            opcode, OP_SETEQ, (opcode == OP_SETEQ || opcode == OP_SETNE || opcode == OP_SETLT ||
-                            opcode == OP_SETGE || opcode == OP_SETLE || opcode == OP_SETGT));
-
-                        $display("EXECUTE_DEBUG_SET2: SET instruction - opcode=%h, flags=0x%h, result=%d", 
-                                opcode, flags_reg, alu_result_reg);
-                    end
-                    // ------ END: Handle SET instructions -----
-
-
-                    if (opcode == OP_HALT) begin // HALT
-                        halted_reg <= 1'b1;
-                    end
-                    // Branch/jump PC update
-                    if (is_branch_jump && branch_taken) begin
-                        pc_reg <= pc_reg + ({{23{imm12[8]}}, imm12} << 2);
-                        $display("DEBUG CPU: Branch taken from PC=0x%x to PC=0x%x, offset=%d", 
-                                pc_reg, pc_reg + ({{23{imm12[8]}}, imm12} << 2), {{23{imm12[8]}}, imm12});
-                    end else if (is_branch_jump && !branch_taken) begin
-                        $display("DEBUG CPU: Branch not taken at PC=0x%x, condition failed", pc_reg);
-                    end
-                    // Debug output for ALU operations
-                    if (opcode == ALU_ADD || opcode == ALU_ADDI) begin // ADD/ADDI
-                        $display("DEBUG ALU: %s - R%d = R%d + %s%d => %d", 
-                                (opcode == ALU_ADD) ? "ADD" : "ADDI",
-                                rd, rs1, 
-                                (opcode == ALU_ADD) ? "R" : "#",
-                                (opcode == ALU_ADD) ? rs2 : immediate,
-                                alu_result);
-                    end
-                    if (opcode == ALU_SUB || opcode == ALU_SUBI) begin // SUB/SUBI
-                        $display("DEBUG ALU: %s - R%d = R%d - %s%d => %d", 
-                                (opcode == ALU_SUB) ? "SUB" : "SUBI",
-                                rd, rs1, 
-                                (opcode == ALU_SUB) ? "R" : "#",
-                                (opcode == ALU_SUB) ? rs2 : immediate,
-                                alu_result);
-                    end
-                    // LOADI: Write immediate to register (no ALU)
-                    if (opcode == MEM_LOADI) begin
-                        alu_result_reg <= immediate;
-                        $display("DEBUG CPU: LOADI R%d = 0x%h", rd, immediate);
-                    end
-                    $display("EXECUTE_DONE: PC=0x%08x, IS=0x%08x Opcode=0x%02x, rd=%d, rs1=%d, rs2=%d, imm=0x%08x", pc_reg, instruction_reg, opcode, rd, rs1, rs2, immediate);
                 end
                 
                 MEMORY: begin
-                    $display("MEMORY_START: PC=0x%08x, IS=0x%08x", pc_reg, instruction_reg);
-                    if (is_load_store && opcode == MEM_LOAD) begin // LOAD
+                    $display("MEMORY_START: PC=0x%08x, IS=0x%08x, addr=0x%08x", pc_reg, instruction_reg, alu_result_reg);
+                    if (is_load) begin
                         memory_data_reg <= data_bus;
-                        $display("MEMORY_LOAD: addr=0x%08x, data=0x%08x", reg_data_a, data_bus);
-                    end
-                    if (opcode == MEM_STORE) begin // STORE
-                        $display("MEMORY_STORE: addr=0x%08x, data=0x%08x", reg_data_a, reg_data_b);
+                        $display("MEMORY_LOAD: Read 0x%08x from address 0x%08x", data_bus, alu_result_reg);
+                    end else if (is_store) begin
+                        $display("MEMORY_STORE: Writing 0x%08x to address 0x%08x", reg_data_b, alu_result_reg);
                     end
                 end
                 
                 WRITEBACK: begin
                     $display("WRITEBACK_START: PC=0x%08x, IS=0x%08x", pc_reg, instruction_reg);
-                    // Write back happens combinatorially
-                    if (reg_write_en) begin
-                        $display("WRITEBACK_REG: R%d <= 0x%08x", rd, reg_data_w);
+                    // Register write happens combinatorially
+                    if (!(is_jal || is_jalr || (is_branch && branch_taken))) begin
+                        pc_reg <= pc_reg + 32'h4; // Increment PC only for non-jump instructions
                     end
-                    $display("==== INSTR_END ==== PC=0x%08x ====", pc_reg);
+                end
+                
+                default: begin
+                    // Should not reach here
                 end
             endcase
         end
     end
+
+    // Instruction field decoding
+    assign opcode = instruction_reg[6:0];
+    assign rd     = instruction_reg[11:7];
+    assign rs1    = instruction_reg[19:15];
+    assign rs2    = instruction_reg[24:20];
+    assign funct3 = instruction_reg[14:12];
+    assign funct7_raw = instruction_reg[31:25];
     
-    // Next state logic
-    always @(*) begin
-        case (state)
-            FETCH:     next_state = DECODE;
-            DECODE:    next_state = EXECUTE;
-            EXECUTE:   next_state = is_load_store ? MEMORY : WRITEBACK;
-            MEMORY:    next_state = WRITEBACK;
-            WRITEBACK: next_state = FETCH;
-            default:   next_state = FETCH;
-        endcase
-    end
+    // For I-type shift instructions, funct7 is in imm[11:5], otherwise in instruction[31:25]
+    wire is_i_type_shift = (opcode == OP_IMM) && (funct3 == 3'h1 || funct3 == 3'h5);
+    assign funct7 = is_i_type_shift ? imm12_i[11:5] : funct7_raw;
     
-    // Instruction decode
-    // 6 bit opcodes
-    assign opcode = instruction_reg[31:26]; 
-    assign rd = instruction_reg[23:19];   // 5-bit register address
-    assign rs1 = instruction_reg[18:14];  // 5-bit register address
-    assign rs2 = instruction_reg[13:9];   // 5-bit register address
-    assign imm20 = instruction_reg[18:0]; // 19-bit immediate (reduced from 20)
-    assign imm12 = instruction_reg[11:0]; // 12-bit immediate for branch/jump instructions
-    
-    // For ADDI/SUBI, use 20-bit immediate and rs1 from [19:16]
-    wire [31:0] addi_subi_imm = {{12{instruction_reg[19]}}, instruction_reg[19:0]};
-    
+    // Immediate field decoding
+    assign imm12_i = instruction_reg[31:20];
+    assign imm12_s = {instruction_reg[31:25], instruction_reg[11:7]};
+    assign imm12_b = {instruction_reg[31], instruction_reg[7], instruction_reg[30:25], instruction_reg[11:8]};
+    assign imm31_20_u = {instruction_reg[31:12], 12'b0};
+    assign imm20_j = {instruction_reg[31], instruction_reg[19:12], instruction_reg[20], instruction_reg[30:21]};
+
+    assign immediate = (opcode == OP_IMM || opcode == OP_LOAD || opcode == OP_JALR) ? {{20{imm12_i[11]}}, imm12_i} :
+                       (opcode == OP_STORE)  ? {{20{imm12_s[11]}}, imm12_s} :
+                       (opcode == OP_BRANCH) ? {{19{imm12_b[11]}}, imm12_b, 1'b0} :
+                       (opcode == OP_LUI || opcode == OP_AUIPC) ? imm31_20_u :
+                       (opcode == OP_JAL)    ? {{11{imm20_j[19]}}, imm20_j, 1'b0} :
+                       32'h0;
+
     // Control signal generation
-    assign is_immediate_inst = (opcode == ALU_ADDI || opcode == ALU_SUBI || opcode == ALU_CMPI);
-    assign is_load_store = (opcode == MEM_LOAD) || (opcode == MEM_STORE);
-    assign is_branch_jump = (opcode >= OP_JMP && opcode <= OP_POP);
-    
-    // Branch condition logic
+    assign is_load   = (opcode == OP_LOAD);
+    assign is_store  = (opcode == OP_STORE);
+    assign is_branch = (opcode == OP_BRANCH);
+    assign is_jal    = (opcode == OP_JAL);
+    assign is_jalr   = (opcode == OP_JALR);
+    assign is_op_imm = (opcode == OP_IMM);
+    assign is_op_reg = (opcode == OP_REG);
+
+    // Branch condition logic — RISC-V compares registers directly (no flags)
     wire branch_taken =
-        (opcode == OP_JMP) ? 1'b1 :
-        (opcode == OP_JZ)  ? (flags_reg[1]) : // Z flag
-        (opcode == OP_JNZ) ? (~flags_reg[1]) :
-        (opcode == OP_JC)  ? (flags_reg[0]) : // C flag
-        (opcode == OP_JNC) ? (~flags_reg[0]) :
-        (opcode == OP_JLT) ? (flags_reg[2]) : // N flag  
-        (opcode == OP_JGE) ? (~flags_reg[2]) : // !N
-        (opcode == OP_JLE) ? (flags_reg[1] | flags_reg[2]) : // Z | N
+        (funct3 == F3_BEQ)  ? (reg_data_a == reg_data_b) :
+        (funct3 == F3_BNE)  ? (reg_data_a != reg_data_b) :
+        (funct3 == F3_BLT)  ? (reg_data_a < reg_data_b) :  // Simplified - should be signed
+        (funct3 == F3_BGE)  ? (reg_data_a >= reg_data_b) : // Simplified - should be signed
+        (funct3 == F3_BLTU) ? (reg_data_a < reg_data_b) :
+        (funct3 == F3_BGEU) ? (reg_data_a >= reg_data_b) :
         1'b0;
 
-    // Immediate value selection
-    assign immediate = (opcode == MEM_LOADI) ? instruction_reg[18:0] :                    // LOADI: 19-bit immediate
-                      (opcode == ALU_ADDI || opcode == ALU_SUBI || opcode == ALU_CMPI) ? {{20{instruction_reg[11]}}, instruction_reg[11:0]} : // ADDI/SUBI/CMPI: 12-bit signed immediate
-                      (is_branch_jump) ? {{20{instruction_reg[11]}}, instruction_reg[11:0]} :  // Branch/Jump: 12-bit signed immediate  
-                      {{20{instruction_reg[11]}}, instruction_reg[11:0]};                 // Default: 12-bit signed
-    
     // ALU connections
-    assign alu_a = reg_data_a;
-    assign alu_b = is_immediate_inst ? immediate : reg_data_b;
-    assign alu_op = (opcode == ALU_ADD) ? ALU_ADD :
-                   (opcode == ALU_SUB) ? ALU_SUB :
-                   (opcode == ALU_AND) ? ALU_AND :
-                   (opcode == ALU_OR)  ? ALU_OR  :
-                   (opcode == ALU_XOR) ? ALU_XOR :
-                   (opcode == ALU_NOT) ? ALU_NOT :
-                   (opcode == ALU_SHL) ? ALU_SHL :
-                   (opcode == ALU_SHR) ? ALU_SHR :
-                   (opcode == ALU_MUL) ? ALU_MUL :
-                   (opcode == ALU_DIV) ? ALU_DIV :
-                   (opcode == ALU_MOD) ? ALU_MOD :
-                   (opcode == ALU_CMP) ? ALU_CMP :
-                   (opcode == ALU_SAR) ? ALU_SAR :
-                   (opcode == ALU_ADDI) ? ALU_ADD : // ADDI uses ADD operation
-                   (opcode == ALU_SUBI) ? ALU_SUB : // SUBI uses SUB operation
-                   (opcode == ALU_CMPI) ? ALU_CMP : // CMPI uses CMP operation
-                   ALU_ADD; // Default ADD
-    
-    assign flags_in = flags_reg; // Use stored flags as input to ALU
+    assign operand_a = (opcode == OP_AUIPC) ? (pc_reg - 4) : reg_data_a;
+    // For branches, we compare rs1 and rs2. rs2 is on reg_data_b.
+    assign operand_b = (opcode == OP_REG || opcode == OP_BRANCH) ? reg_data_b : immediate;
     
     // Register file connections
-    assign reg_addr_a = (opcode == MEM_STORE) ? rs1 :  // STORE: rs1 contains address register
-                       (opcode == MEM_LOAD) ? rs1 :     // LOAD: rs1 contains address register
-                       rs1;  // Default: use rs1
-    assign reg_addr_b = (opcode == MEM_STORE) ? rd :    // STORE: rd contains source data register
-                       rs2;  // Default: use rs2
-    assign reg_addr_w = rd;   // Always use rd for write destination
+    assign reg_addr_a = rs1;
+    assign reg_addr_b = (opcode == OP_STORE || opcode == OP_BRANCH) ? rs2 : rs2; // Standard RS2
+    assign reg_addr_w = rd;   
+    // Load Data Formatting Logic (endianness-aware)
+    wire [1:0] byte_offset = alu_result_reg[1:0];
+    
+    always @(*) begin
+        // Calculate byte and halfword values based on endianness
+        // Temporarily simplified to little-endian only
+        case (byte_offset)
+            2'b00: byte_val = memory_data_reg[7:0];
+            2'b01: byte_val = memory_data_reg[15:8];
+            2'b10: byte_val = memory_data_reg[23:16];
+            2'b11: byte_val = memory_data_reg[31:24];
+        endcase
+        half_val = (byte_offset[1] == 1'b0) ? memory_data_reg[15:0] : memory_data_reg[31:16];
+    end
+
+    // Alignment checking
+    wire misaligned_access = (is_load || is_store) && 
+                            ((funct3 == 3'b001 && (alu_result_reg[0] != 1'b0)) ||  // Halfword not halfword-aligned
+                             (funct3 == 3'b010 && (alu_result_reg[1:0] != 2'b00))); // Word not word-aligned
+
+    always @(*) begin
+        if (state == WRITEBACK && is_load) begin
+            case (funct3)
+                3'b000: load_data_formatted = {{24{byte_val[7]}}, byte_val}; // LB
+                3'b001: load_data_formatted = {{16{half_val[15]}}, half_val}; // LH
+                3'b010: load_data_formatted = memory_data_reg; // LW
+                3'b100: load_data_formatted = {24'b0, byte_val}; // LBU
+                3'b101: load_data_formatted = {16'b0, half_val}; // LHU
+                default: load_data_formatted = memory_data_reg;
+            endcase
+        end else begin
+            load_data_formatted = memory_data_reg;
+        end
+    end
+
     assign reg_data_w = (state == WRITEBACK) ? 
-                       ((opcode == MEM_LOAD) ? memory_data_reg :
-                        (opcode == MEM_LOADI) ? immediate :
+                       ((is_load) ? load_data_formatted :
                         alu_result_reg) : 32'h0;
     // DEBUG: Show what is being written to the register file
     always @(*) begin
@@ -439,26 +389,22 @@ module cpu_core (
     end
     
     assign reg_write_en = (state == WRITEBACK) && 
-                         !(opcode == MEM_STORE) && !(opcode == OP_HALT) && !is_branch_jump && 
-                         !(opcode == ALU_CMP) && !(opcode == ALU_CMPI) ||  // CMP and CMPI should not write to registers
-                         (state == WRITEBACK) && (opcode == OP_SETEQ || opcode == OP_SETNE || 
-                          opcode == OP_SETLT || opcode == OP_SETGE || opcode == OP_SETLE || opcode == OP_SETGT) ||
-                         (state == WRITEBACK) && (opcode == MEM_LOADI);
+                          (rd != 5'h0) && // x0 is always zero
+                          (is_load || is_jal || is_jalr || is_op_imm || is_op_reg || opcode == OP_LUI || opcode == OP_AUIPC || opcode == OP_SYSTEM);
 
                          
 
     // Memory interface with intelligent addressing
+    // Memory interface
     assign addr_bus = (state == FETCH) ? pc_reg : 
-                     (state == MEMORY && opcode == MEM_STORE) ? reg_data_a :                         // STORE: use rs1 register as address
-                     (state == MEMORY && opcode == MEM_LOAD) ? reg_data_a :                          // LOAD: use rs1 register as address  
-                     pc_reg;
+                     (state == MEMORY) ? alu_result : pc_reg;
     
-    assign data_bus = (state == MEMORY && opcode == MEM_STORE && mem_write) ? reg_data_b : 32'hZZZZZZZZ;
+    assign data_bus = (state == MEMORY && is_store && mem_write) ? reg_data_b : 32'hZZZZZZZZ;
     
     assign mem_read = (state == FETCH) ? 1'b1 : 
-                     (state == MEMORY && opcode == MEM_LOAD) ? 1'b1 : 1'b0;
+                     (state == MEMORY && is_load) ? 1'b1 : 1'b0;
     
-    assign mem_write = (state == MEMORY && opcode == MEM_STORE) ? 1'b1 : 1'b0;
+    assign mem_write = (state == MEMORY && is_store) ? 1'b1 : 1'b0;
     
     // Debug outputs
     always @(posedge clk) begin
@@ -485,7 +431,8 @@ module cpu_core (
     
     // Status outputs
     assign halted = halted_reg;
+    assign alu_result = alu_result_reg;
     assign user_mode = user_mode_reg;
-    assign cpu_flags = flags_reg;
+    assign mem_op_width = funct3; // Expose funct3 for memory controller
 
 endmodule

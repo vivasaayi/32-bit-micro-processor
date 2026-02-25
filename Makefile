@@ -56,6 +56,11 @@ test-alu:
 	$(IVERILOG) -o alu_test.vvp $(CPU_DIR)/alu.v testbench/tb_alu.v 2>/dev/null || echo "ALU testbench not found"
 	$(VVP) alu_test.vvp 2>/dev/null || echo "ALU test skipped"
 
+# Test Register File
+test-reg:
+	$(IVERILOG) -o tb_register_file $(TB_DIR)/tb_register_file.v $(CPU_DIR)/register_file.v
+	$(VVP) tb_register_file
+
 # Run all test cases
 test-all:
 	./run_all_tests.sh
@@ -84,5 +89,30 @@ docs:
 install-deps:
 	brew install icarus-verilog
 	brew install gtkwave
+	brew install qemu
 
-.PHONY: all sim wave clean test-alu test-all test-comprehensive assemble synth lint docs install-deps
+# --- QEMU Integration ---
+QEMU_RISCV32 = qemu-system-riscv32
+ASSEMBLER = ./tools/assembler
+
+# Compile the assembler if not exists
+$(ASSEMBLER): tools/assembler.c
+	$(MAKE) -C tools assembler
+
+# Run assembly in QEMU
+# Usage: make qemu-asm ASM=verification/asm/test_alu.asm
+# Note: We use -bios none and load at 0x80000000 (RAM base for 'virt' machine)
+# We use -serial mon:stdio to multiplex serial and monitor (use Ctrl-a c to switch)
+qemu-asm: $(ASSEMBLER)
+	@if [ -z "$(ASM)" ]; then echo "Usage: make qemu-asm ASM=path/to/test.asm"; exit 1; fi
+	$(ASSEMBLER) $(ASM) -o output.bin
+	$(QEMU_RISCV32) -M virt -cpu rv32 -bios none -device loader,file=output.bin,addr=0x80000000 -nographic -serial mon:stdio || echo "QEMU failed"
+
+# Run C program in QEMU
+qemu-c:
+	@if [ -z "$(C_SRC)" ]; then echo "Usage: make qemu-c C_SRC=path/to/test.c"; exit 1; fi
+	$(MAKE) -C compiler compile_c C_SRC=$(C_SRC)
+	$(ASSEMBLER) compiler/output.s -o output.bin
+	$(QEMU_RISCV32) -M virt -cpu rv32 -bios none -device loader,file=output.bin,addr=0x80000000 -nographic -serial mon:stdio
+
+.PHONY: all sim wave clean test-alu test-reg test-all test-comprehensive assemble synth lint docs install-deps qemu-asm qemu-c
