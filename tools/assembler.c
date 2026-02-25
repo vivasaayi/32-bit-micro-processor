@@ -21,6 +21,7 @@
 // imm[20]
 
 typedef enum {
+  OP_MISC_MEM = 0x0F,
   OP_LUI = 0x37,
   OP_AUIPC = 0x17,
   OP_JAL = 0x6F,
@@ -156,10 +157,10 @@ static const instruction_def_t instructions[] = {
     {"sltu", OP_REG, 3, 0x00, RV_TYPE_R},
     {"XOR", OP_REG, 4, 0x00, RV_TYPE_R},
     {"xor", OP_REG, 4, 0x00, RV_TYPE_R},
-    {"SRL", OP_REG, 5, 0x20, RV_TYPE_R},
-    {"srl", OP_REG, 5, 0x20, RV_TYPE_R},
-    {"SRA", OP_REG, 5, 0x00, RV_TYPE_R},
-    {"sra", OP_REG, 5, 0x00, RV_TYPE_R},
+    {"SRL", OP_REG, 5, 0x00, RV_TYPE_R},
+    {"srl", OP_REG, 5, 0x00, RV_TYPE_R},
+    {"SRA", OP_REG, 5, 0x20, RV_TYPE_R},
+    {"sra", OP_REG, 5, 0x20, RV_TYPE_R},
     {"OR", OP_REG, 6, 0x00, RV_TYPE_R},
     {"or", OP_REG, 6, 0x00, RV_TYPE_R},
     {"AND", OP_REG, 7, 0x00, RV_TYPE_R},
@@ -194,6 +195,16 @@ static const instruction_def_t instructions[] = {
     {"csrrs", OP_SYSTEM, 0x2, 0, RV_TYPE_I},
     {"CSRRC", OP_SYSTEM, 0x3, 0, RV_TYPE_I},
     {"csrrc", OP_SYSTEM, 0x3, 0, RV_TYPE_I},
+    {"CSRRWI", OP_SYSTEM, 0x5, 0, RV_TYPE_I},
+    {"csrrwi", OP_SYSTEM, 0x5, 0, RV_TYPE_I},
+    {"CSRRSI", OP_SYSTEM, 0x6, 0, RV_TYPE_I},
+    {"csrrsi", OP_SYSTEM, 0x6, 0, RV_TYPE_I},
+    {"CSRRCI", OP_SYSTEM, 0x7, 0, RV_TYPE_I},
+    {"csrrci", OP_SYSTEM, 0x7, 0, RV_TYPE_I},
+    {"FENCE", OP_MISC_MEM, 0x0, 0, RV_TYPE_I},
+    {"fence", OP_MISC_MEM, 0x0, 0, RV_TYPE_I},
+    {"FENCE.I", OP_MISC_MEM, 0x1, 0, RV_TYPE_I},
+    {"fence.i", OP_MISC_MEM, 0x1, 0, RV_TYPE_I},
     {"MRET", OP_SYSTEM, 0x0, 0x30, RV_TYPE_I},
     {"mret", OP_SYSTEM, 0x0, 0x30, RV_TYPE_I},
 
@@ -424,13 +435,13 @@ static bool parse_memory_ref(const char *str, int *reg, int *offset,
   content[len] = '\0';
 
   // Check if it's a register reference
-  if (content[0] == 'r' || content[0] == 'R') {
-    *reg = parse_register(content);
-    if (*reg < 0)
-      return false;
+  char *plus = strchr(content, '+');
+  if (plus)
+    *plus = '\0';
 
+  *reg = parse_register(content);
+  if (*reg >= 0) {
     // Check for offset
-    char *plus = strchr(content, '+');
     if (plus) {
       *offset = parse_immediate(plus + 1);
     }
@@ -1079,15 +1090,36 @@ static void assemble_instruction(const char *line, int line_num) {
         }
       }
     } else if (work_inst.opcode == OP_JALR) {
-      // JALR rd, rs1, offset OR RET (handled in pseudo)
-      // Or JALR rd, offset(rs1)
+      // JALR rd, rs1, offset OR JALR rd, offset(rs1) OR RET pseudo
       if (inst->type == RV_PSEUDO && (strcasecmp(work_inst.name, "RET") == 0 ||
                                       strcasecmp(work_inst.name, "ret") == 0)) {
-        rd = 0;  // x0 plays no role in return, usually ignored
+        rd = 0;
         rs1 = 1; // ra
         immediate = 0;
-      } else if (num_tokens >= 2) {
-        // Logic for explicit JALR if needed
+      } else {
+        if (num_tokens < 3)
+          error("Missing operands for JALR", line_num);
+
+        rd = parse_register(tokens[1]);
+        char *mem_op = tokens[2];
+        char *paren = strchr(mem_op, '(');
+
+        if (paren) {
+          char off_str[64];
+          char reg_str[64];
+          *paren = '\0';
+          strcpy(off_str, mem_op);
+          strcpy(reg_str, paren + 1);
+          char *close_paren = strchr(reg_str, ')');
+          if (close_paren)
+            *close_paren = '\0';
+
+          immediate = parse_immediate(off_str);
+          rs1 = parse_register(reg_str);
+        } else {
+          rs1 = parse_register(tokens[2]);
+          immediate = (num_tokens >= 4) ? parse_immediate(tokens[3]) : 0;
+        }
       }
     } else if (strcasecmp(work_inst.name, "NOT") == 0 ||
                strcasecmp(work_inst.name, "not") == 0) {
@@ -1097,8 +1129,13 @@ static void assemble_instruction(const char *line, int line_num) {
       immediate = -1;
       encoded = encode_instruction(&work_inst, rd, rs1, 0, immediate);
     } else {
-      // Check for CSR instructions (I-type) or System instructions
-      if (inst->opcode == OP_SYSTEM) {
+      // Check for MISC-MEM and SYSTEM instructions
+      if (inst->opcode == OP_MISC_MEM) {
+        // FENCE/FENCE.I currently encoded in minimal form accepted by this core
+        rd = 0;
+        rs1 = 0;
+        immediate = 0;
+      } else if (inst->opcode == OP_SYSTEM) {
         if (strcasecmp(inst->name, "CSRRW") == 0 ||
             strcasecmp(inst->name, "csrrw") == 0 ||
             strcasecmp(inst->name, "CSRRS") == 0 ||
@@ -1111,6 +1148,18 @@ static void assemble_instruction(const char *line, int line_num) {
           rd = parse_register(tokens[1]);
           immediate = parse_immediate(tokens[2]); // CSR address
           rs1 = parse_register(tokens[3]);
+        } else if (strcasecmp(inst->name, "CSRRWI") == 0 ||
+                   strcasecmp(inst->name, "csrrwi") == 0 ||
+                   strcasecmp(inst->name, "CSRRSI") == 0 ||
+                   strcasecmp(inst->name, "csrrsi") == 0 ||
+                   strcasecmp(inst->name, "CSRRCI") == 0 ||
+                   strcasecmp(inst->name, "csrrci") == 0) {
+
+          if (num_tokens < 4)
+            error("Missing operands for CSRI", line_num);
+          rd = parse_register(tokens[1]);
+          immediate = parse_immediate(tokens[2]); // CSR address
+          rs1 = parse_immediate(tokens[3]) & 0x1F; // zimm[4:0]
         } else if (strcasecmp(inst->name, "EBREAK") == 0 ||
                    strcasecmp(inst->name, "ebreak") == 0 ||
                    strcasecmp(inst->name, "HALT") == 0 ||
