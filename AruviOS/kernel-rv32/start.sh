@@ -45,18 +45,25 @@ echo "  mem      - read memory/MMIO"
 echo "  memw     - write memory"
 echo "  clear    - clear screen"
 echo ""
-echo "Exit QEMU: Ctrl-A then X"
-echo ""
 echo "=========================================="
 echo ""
 
-# Launch QEMU interactively
+# Launch QEMU with pipe serial
 PIPE="/tmp/aruvios_serial_$$"
-
-# Create named pipe
 mkfifo "$PIPE"
 
-# Launch QEMU with pipe serial
+echo "Starting AruviOS RV32..."
+echo "Serial pipe: $PIPE"
+echo ""
+echo "To send commands from another terminal:"
+echo "  echo 'help' > $PIPE"
+echo "  ./send_command.sh $PIPE help"
+echo "  ./send_command.sh $PIPE 'echo hello world'"
+echo ""
+echo "Available commands: help, echo, sum, mem, memw, clear"
+echo "Exit QEMU: Ctrl-C"
+echo ""
+
 qemu-system-riscv32 \
     -machine virt \
     -cpu rv32 \
@@ -68,30 +75,12 @@ qemu-system-riscv32 \
 
 QEMU_PID=$!
 
-# Function to cleanup on exit
-cleanup() {
-    kill $QEMU_PID 2>/dev/null
-    rm -f "$PIPE"
-    exit
-}
+# Cleanup on exit
+trap "kill $QEMU_PID 2>/dev/null; rm -f $PIPE" EXIT
 
-trap cleanup INT TERM EXIT
-
-# Display output from pipe
+# Show output from pipe
 cat "$PIPE" &
 CAT_PID=$!
 
-# Wait for QEMU to start
-sleep 2
-
-echo "AruviOS RV32 interactive session started."
-echo "Type commands at the '$ ' prompt."
-echo "Available commands: help, echo, sum, mem, memw, clear"
-echo "Exit with Ctrl-C"
-echo ""
-
-# Interactive input loop
-while true; do
-    read -r input
-    echo "$input" > "$PIPE"
-done
+# Wait for QEMU
+wait $QEMU_PID
