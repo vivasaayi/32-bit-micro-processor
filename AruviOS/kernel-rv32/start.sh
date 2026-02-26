@@ -51,10 +51,47 @@ echo "=========================================="
 echo ""
 
 # Launch QEMU interactively
-exec qemu-system-riscv32 \
+PIPE="/tmp/aruvios_serial_$$"
+
+# Create named pipe
+mkfifo "$PIPE"
+
+# Launch QEMU with pipe serial
+qemu-system-riscv32 \
     -machine virt \
     -cpu rv32 \
     -m 128M \
     -bios none \
     -nographic \
-    -kernel "$KERNEL_ELF"
+    -serial pipe:"$PIPE" \
+    -kernel "$KERNEL_ELF" &
+
+QEMU_PID=$!
+
+# Function to cleanup on exit
+cleanup() {
+    kill $QEMU_PID 2>/dev/null
+    rm -f "$PIPE"
+    exit
+}
+
+trap cleanup INT TERM EXIT
+
+# Display output from pipe
+cat "$PIPE" &
+CAT_PID=$!
+
+# Wait for QEMU to start
+sleep 2
+
+echo "AruviOS RV32 interactive session started."
+echo "Type commands at the '$ ' prompt."
+echo "Available commands: help, echo, sum, mem, memw, clear"
+echo "Exit with Ctrl-C"
+echo ""
+
+# Interactive input loop
+while true; do
+    read -r input
+    echo "$input" > "$PIPE"
+done
