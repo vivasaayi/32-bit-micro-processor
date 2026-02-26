@@ -26,8 +26,8 @@ This folder now contains a **Rust implementation** of a lightweight educational 
 ## Build and run
 
 ```bash
-cd tools/custom_qemu_emulator
-cargo run -- ../../test_programs/assembly/0_9_0_simple_store_test.asm --dump-addr 0x100
+cd AruviEmulator
+cargo run -- ../test_programs/assembly/0_9_0_simple_store_test.asm --dump-addr 0x100
 ```
 
 Optional flags:
@@ -39,7 +39,7 @@ cargo run -- <program.asm> --trace --max-steps 200000 --dump-addr 0x2000
 ## Tests
 
 ```bash
-cd tools/custom_qemu_emulator
+cd AruviEmulator
 cargo test
 ```
 
@@ -89,7 +89,7 @@ HALT
 You can run these any time, even after reloading the environment:
 
 ```bash
-cd tools/custom_qemu_emulator
+cd AruviEmulator
 cargo test instruction_tests -- --nocapture
 cargo test
 ```

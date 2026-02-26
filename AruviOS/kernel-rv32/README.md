@@ -91,7 +91,7 @@ The kernel is compiled with `+m` feature only, matching exactly what the hardwar
 1. ✅ Boot on QEMU virt with serial shell
 2. ⬜ Add interrupt handling (timer, external)
 3. ⬜ Add trap dispatch (ecall for syscalls)
-4. ⬜ Port to AruviX custom QEMU machine (add UART to aruvix_machine.c)
+4. ⬜ Port to AruviX custom QEMU machine (add UART to AruviEmulator/qemu/aruvix_machine.c)
 5. ⬜ Boot on AruviX Verilog simulation (iverilog)
 6. ⬜ Boot on FPGA (PYNQ-Z2)
 7. ⬜ Add process loading (load programs compiled by AruviX C compiler)

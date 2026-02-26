@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use custom_qemu_emulator::Custom32Emulator;
+use aruvi_emulator::Custom32Emulator;
 
 fn parse_u32(s: &str) -> Result<u32, String> {
     let trimmed = s.trim();

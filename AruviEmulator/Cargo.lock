@@ -3,5 +3,5 @@
 version = 4
 
 [[package]]
-name = "custom_qemu_emulator"
+name = "aruvi_emulator"
 version = "0.1.0"

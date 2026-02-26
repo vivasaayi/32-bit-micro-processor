@@ -1,14 +1,14 @@
 [package]
-name = "custom_qemu_emulator"
+name = "aruvi_emulator"
 version = "0.1.0"
 edition = "2021"
 
 [lib]
-name = "custom_qemu_emulator"
+name = "aruvi_emulator"
 path = "src/lib.rs"
 
 [[bin]]
-name = "custom_qemu_emulator"
+name = "aruvi_emulator"
 path = "src/main.rs"
 
 [dependencies]
