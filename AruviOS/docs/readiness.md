@@ -1,23 +1,55 @@
-# DOS-like Readiness Review (Current State)
+# AruviOS Readiness Review (RV32 Status)
 
-## Short answer
-Not yet fully ready for external program loading/execution. The current shell executes **built-in Rust functions**, not packaged user binaries.
+## Current Status ✅
 
-## Requirement-by-requirement status
+**RV32 Interactive OS**: Fully functional with UART-based shell on QEMU virt machine.
 
-1. **Build OS and open in VirtualBox**
-   - Status: **Partially ready**
-   - We can build a raw boot image and convert it to VDI using `make vdi` (requires `VBoxManage`).
+### What's Working
+- ✅ **Bootable RV32 Kernel**: Rust no_std kernel for RV32IM ISA
+- ✅ **UART Serial I/O**: Bidirectional communication via NS16550A
+- ✅ **Interactive Shell**: Command processing with built-in utilities
+- ✅ **QEMU virt Testing**: Cross-platform development environment
+- ✅ **AruviX Ready**: Prepared for custom RISC processor deployment
 
-2. **DOS-like operating system**
-   - Status: **Early prototype**
-   - Command prompt and basic command dispatch exist.
+### Available Commands
+- `help` - Show available commands
+- `echo <text>` - Print text to console
+- `sum <numbers>` - Add numbers and display result
+- `mem <address>` - Read memory/MMIO register
+- `memw <address> <value>` - Write to memory
+- `clear` - Clear screen
 
-3. **CLI when OS starts**
-   - Status: **Ready**
-   - Boot shows prompt and accepts keyboard/serial input.
+## Usage
 
-4. **Ship simple programs**
+```bash
+# Build and run
+cd kernel-rv32
+./build_rv32.sh build
+./start.sh
+
+# Send commands from another terminal
+./send_command.sh /tmp/aruvios_serial_XXXXX help
+./send_command.sh /tmp/aruvios_serial_XXXXX "sum 10 20 30"
+```
+
+## Next Milestones
+
+### AruviX Hardware Port
+- Switch to `aruvix-hw` feature
+- Test on FPGA with custom UART @ 0xF0000000
+- Validate processor-specific peripherals
+
+### Vertical Stack Integration
+- JVM bytecode execution
+- Assembler program running
+- Compiler output integration
+- Source code file I/O
+
+### Advanced OS Features
+- Memory management
+- System calls
+- Process model
+- Filesystem support
    - Status: **Partially ready**
    - Host-side samples are built and bundled (`make bundle-programs`), but the kernel does not load this bundle yet.
 
