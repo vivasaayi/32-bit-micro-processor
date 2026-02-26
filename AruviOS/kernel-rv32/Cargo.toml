@@ -1,0 +1,24 @@
+[workspace]
+
+[package]
+name = "aruvios-rv32"
+version = "0.1.0"
+edition = "2021"
+authors = ["AruviX Platform"]
+description = "AruviOS kernel for RV32IM - targets both QEMU virt and AruviX custom RISC processor"
+
+[features]
+default = ["qemu-virt"]
+qemu-virt = []      # QEMU virt machine: UART NS16550A at 0x10000000, RAM at 0x80000000
+aruvix-hw = []      # AruviX custom processor: UART at 0xF0000000, RAM at 0x00000000
+
+[dependencies]
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"
+opt-level = "s"       # Optimize for size — important for FPGA with limited memory
+lto = true
+codegen-units = 1
