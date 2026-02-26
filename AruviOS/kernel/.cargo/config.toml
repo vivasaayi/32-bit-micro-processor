@@ -1,5 +1,5 @@
 [build]
-target = "x86_64-unknown-none"
+target = "x86_64-aruvios.json"
 
-[target.'cfg(target_os = "none")']
-runner = "bootimage runner"
+[target.x86_64-aruvios-none-elf]
+rustflags = []

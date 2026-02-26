@@ -21,10 +21,9 @@ fn panic(info: &PanicInfo) -> ! {
     vga::clear_screen();
     vga::print_line("Kernel panic");
 
-    if let Some(msg) = info.message() {
-        vga::print_line("Reason:");
-        vga::print_fmt(*msg);
-    }
+    let msg = info.message();
+    vga::print_line("Reason:");
+    vga::print_fmt(format_args!("{}", msg));
 
     loop {
         x86_64::instructions::hlt();

@@ -192,3 +192,5 @@ tools/assembler.dSYM
 *.class
 java_ui/target
 AruviXIDE/target
+AruviOS/kernel/target
+AruviOS/target

@@ -1,0 +1,12 @@
+[workspace]
+members = ["kernel"]
+
+[package]
+name = "aruvix_os"
+version = "0.1.0"
+edition = "2021"
+
+[build-dependencies]
+bootloader = "0.10"
+
+[dependencies]
