@@ -1,0 +1,9 @@
+[build]
+target = "riscv32-aruvios.json"
+
+[target.riscv32-aruvios]
+rustflags = []
+
+[unstable]
+build-std = ["core"]
+build-std-features = ["compiler-builtins-mem"]
