@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -Wall -Wextra -std=c99 -g
+CFLAGS = -Wall -Wextra -std=c99 -g -D_POSIX_C_SOURCE=200809L
 TARGET = ccompiler
 SOURCES = main.c lexer.c ast.c parser.c type_checker.c codegen.c
 OBJECTS = $(SOURCES:.c=.o)
@@ -19,4 +19,8 @@ test: $(TARGET)
 	./$(TARGET) test_simple.c -o test_simple.s
 	cat test_simple.s
 
-.PHONY: all clean test
+.PHONY: all clean test riscv-check
+
+
+riscv-check: $(TARGET)
+	./check_riscv_compat.sh
