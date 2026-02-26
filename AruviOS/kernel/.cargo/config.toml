@@ -1,5 +1,0 @@
-[build]
-target = "x86_64-aruvios.json"
-
-[target.x86_64-aruvios-none-elf]
-rustflags = []

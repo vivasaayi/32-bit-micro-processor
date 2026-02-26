@@ -1,23 +1,56 @@
-# Hobby OS (VirtualBox-friendly, Rust kernel)
+# AruviOS - Hobby Operating System
 
-This folder is a self-contained starter operating system project with a **simple shell**, a **utility registry**, and a build path that can produce a bootable image.
+A self-contained operating system project with support for **RV32 RISC-V** architecture, featuring a **simple shell**, **utility registry**, and interactive command execution.
+
+## Current Status
+
+- ✅ **RV32 Kernel**: Fully functional on QEMU virt machine
+- ✅ **Interactive Shell**: UART-based command interface
+- ✅ **QEMU Testing**: Cross-platform development environment
+- 🔄 **AruviX Hardware**: Ready for FPGA deployment
+
+## Architecture
+
+Currently supports:
+- **RV32IM ISA** (RV32I + Integer Multiplication/Division)
+- **QEMU virt machine** for development/testing
+- **AruviX custom RISC processor** for hardware deployment
+- **UART serial I/O** for user interaction
+- **Simple shell** with built-in utilities
+
+## Quick Start (RV32)
+
+```bash
+cd kernel-rv32
+./build_rv32.sh build    # Build the kernel
+./start.sh               # Launch interactive session
+```
+
+From another terminal, send commands:
+```bash
+./send_command.sh /tmp/aruvios_serial_XXXXX help
+./send_command.sh /tmp/aruvios_serial_XXXXX "echo hello world"
+```
 
 ## Folder structure
 
 ```
-hobby_os/
-├── build/
-│   └── Makefile                 # Low-level image build helper
-├── Makefile                     # Top-level build/run/test orchestration
-├── docs/
-│   ├── roadmap.md               # Suggested evolution plan
-│   └── readiness.md             # Gap analysis vs DOS-like goals
-├── kernel/
-│   ├── .cargo/config.toml       # Bare-metal target
-│   ├── Cargo.toml               # Kernel crate dependencies
-│   ├── rust-toolchain.toml      # Toolchain components
+AruviOS/
+├── kernel-rv32/                 # RV32 RISC-V kernel
+│   ├── build_rv32.sh           # Build script
+│   ├── start.sh                # Interactive launcher
+│   ├── send_command.sh         # Command sender utility
+│   ├── riscv32-aruvios.json    # Custom Rust target
 │   └── src/
-│       ├── main.rs              # Kernel entrypoint + panic handler
+│       ├── main.rs             # Kernel entrypoint
+│       ├── uart.rs             # UART driver
+│       ├── shell.rs            # Interactive shell
+│       └── boot.S              # Assembly bootstrap
+├── programs/                   # Sample applications
+├── scripts/                    # Build utilities
+├── docs/                       # Documentation
+└── tests/                      # Test suites
+```
 │       ├── shell.rs             # Simple shell + command parsing
 │       ├── keyboard.rs          # PS/2 scancode input
 │       └── vga.rs               # VGA text output
