@@ -98,21 +98,6 @@ jobs:
         cd AruviIDE
         mvn clean package -DskipTests
 
-    - name: Sign JAR for Windows
-      run: |
-        # Check if JAR exists before signing
-        if (!(Test-Path "AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar")) {
-          Write-Host "❌ JAR file not found at AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar"
-          if (Test-Path "AruviIDE/target/") { Get-ChildItem AruviIDE/target/ } else { Write-Host "target directory not found" }
-          exit 1
-        }
-        Write-Host "✅ JAR file found, proceeding with signing..."
-        # Create a self-signed certificate for development
-        keytool -genkeypair -alias "AruviXPlatform" -keyalg RSA -keysize 2048 -validity 3650 -keystore keystore.jks -storepass password -keypass password -dname "CN=AruviXPlatform, OU=Development, O=AruviXPlatform, L=Unknown, ST=Unknown, C=US"
-        # Sign the JAR
-        jarsigner -keystore keystore.jks -storepass password -keypass password AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar "AruviXPlatform"
-      shell: pwsh
-
     - name: Debug JAR before upload
       if: github.event_name == 'release'
       run: |
@@ -184,11 +169,37 @@ jobs:
         cd AruviIDE
         mvn clean package -DskipTests
 
-    - name: Sign JAR for macOS
+    - name: Sign and Notarize JAR for macOS
+      if: github.event_name == 'release'
+      env:
+        MACOS_CERTIFICATE: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
+        MACOS_CERTIFICATE_PWD: ${{ secrets.P12_PASSWORD }}
+        APPLE_ID: ${{ secrets.APPLE_ID }}
+        APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
       run: |
-        echo "✅ Signing JAR..."
-        keytool -genkeypair -alias "AruviXPlatform" -keyalg RSA -keysize 2048 -validity 3650 -keystore keystore.jks -storepass password -keypass password -dname "CN=AruviXPlatform, OU=Development, O=AruviXPlatform, L=Unknown, ST=Unknown, C=US"
-        jarsigner -keystore keystore.jks -storepass password -keypass password AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar "AruviXPlatform"
+        # Import certificate into a temporary keychain
+        echo "$MACOS_CERTIFICATE" | base64 --decode > certificate.p12
+        security create-keychain -p "build_keychain_password" build.keychain
+        security default-keychain -s build.keychain
+        security unlock-keychain -p "build_keychain_password" build.keychain
+        security import certificate.p12 -k build.keychain -P "$MACOS_CERTIFICATE_PWD" -T /usr/bin/codesign
+        security set-key-partition-list -S apple-tool:,apple: -s -k "build_keychain_password" build.keychain
+
+        # Sign the JAR
+        codesign --force --sign "Developer ID Application" --timestamp --options runtime \
+          AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar
+
+        # Notarize: zip the JAR and submit to Apple
+        ditto -c -k --keepParent AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar notarize.zip
+        xcrun notarytool submit notarize.zip \
+          --apple-id "$APPLE_ID" \
+          --password "$APPLE_APP_PASSWORD" \
+          --team-id "$APPLE_TEAM_ID" \
+          --wait
+
+        # Clean up keychain
+        security delete-keychain build.keychain
 
     - name: Debug JAR before upload
       if: github.event_name == 'release'
