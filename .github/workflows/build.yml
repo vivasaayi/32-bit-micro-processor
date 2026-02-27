@@ -193,11 +193,31 @@ jobs:
 
         # Notarize: zip the JAR and submit to Apple
         ditto -c -k --keepParent AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar notarize.zip
-        xcrun notarytool submit notarize.zip \
+        SUBMISSION_ID=$(xcrun notarytool submit notarize.zip \
           --apple-id "$APPLE_ID" \
           --password "$APPLE_APP_PASSWORD" \
           --team-id "$APPLE_TEAM_ID" \
-          --wait
+          --wait | grep "id:" | awk '{print $2}')
+        
+        # Check status
+        STATUS=$(xcrun notarytool info "$SUBMISSION_ID" \
+          --apple-id "$APPLE_ID" \
+          --password "$APPLE_APP_PASSWORD" \
+          --team-id "$APPLE_TEAM_ID" | grep "status:" | awk '{print $2}')
+        
+        if [ "$STATUS" = "Accepted" ]; then
+          echo "✅ Notarization successful!"
+          # Staple the ticket
+          xcrun stapler staple AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar
+        else
+          echo "❌ Notarization failed with status: $STATUS"
+          echo "📋 Fetching notarization log..."
+          xcrun notarytool log "$SUBMISSION_ID" \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_APP_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID"
+          exit 1
+        fi
 
         # Clean up keychain
         security delete-keychain build.keychain
