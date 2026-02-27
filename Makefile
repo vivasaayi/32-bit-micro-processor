@@ -150,7 +150,8 @@ run_assembly_using_riscv_assembler_on_riscv_core:
 	mkdir -p temp
 	riscv64-elf-as sample_programs/arithmetic/assembly/handcrafted/0_0_add.s -o temp/test.o
 	riscv64-elf-ld -T temp/link.ld temp/test.o -o temp/test.elf
-	qemu-system-riscv32 -nographic -machine virt -bios none -kernel temp/test.elf
+	@echo "Running QEMU (will stop after 5 seconds)..."
+	@((qemu-system-riscv32 -nographic -machine virt -bios none -kernel temp/test.elf &) ; sleep 5 ; kill $! 2>/dev/null) || true
 
 run_assembly_using_riscv_assembler_on_aruvi_core:
 	@echo "🔍 Cross-check: RISC-V assembler on Aruvi core"
