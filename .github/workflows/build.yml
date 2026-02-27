@@ -50,8 +50,7 @@ jobs:
       uses: softprops/action-gh-release@v1
       with:
         tag_name: ${{ github.event.release.tag_name }}
-        files: AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar
-        name: AruviXPlatform-JAR-Linux.jar
+        files: AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar#AruviXPlatform-JAR-Linux.jar
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -95,13 +94,44 @@ jobs:
         cd AruviIDE
         mvn clean package -DskipTests
 
+    - name: Sign JAR for Windows
+      run: |
+        # Check if JAR exists before signing
+        if (!(Test-Path "AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar")) {
+          Write-Host "❌ JAR file not found at AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar"
+          if (Test-Path "AruviIDE/target/") { Get-ChildItem AruviIDE/target/ } else { Write-Host "target directory not found" }
+          exit 1
+        }
+        Write-Host "✅ JAR file found, proceeding with signing..."
+        # Create a self-signed certificate for development
+        keytool -genkeypair -alias "AruviXPlatform" -keyalg RSA -keysize 2048 -validity 3650 -keystore keystore.jks -storepass password -keypass password -dname "CN=AruviXPlatform, OU=Development, O=AruviXPlatform, L=Unknown, ST=Unknown, C=US"
+        # Sign the JAR
+        jarsigner -keystore keystore.jks -storepass password -keypass password AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar "AruviXPlatform"
+      shell: pwsh
+
+    - name: Debug JAR before upload
+      if: github.event_name == 'release'
+      run: |
+        Write-Host "🔍 Debug: Checking JAR file before upload..."
+        Get-Location
+        if (Test-Path "AruviIDE/target/") { Get-ChildItem AruviIDE/target/ } else { Write-Host "❌ target directory not found" }
+        if (Test-Path "AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar") {
+          $jar = Get-Item "AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar"
+          Write-Host "✅ JAR exists: $($jar.Name) ($([math]::Round($jar.Length/1KB, 1))KB)"
+          Write-Host "📁 Current directory contents:"
+          Get-ChildItem -Recurse -Filter "*.jar" | Select-Object -First 10 | ForEach-Object { Write-Host $_.FullName }
+        } else {
+          Write-Host "❌ JAR file missing at upload time!"
+          exit 1
+        }
+      shell: pwsh
+
     - name: Upload JAR to Release (Windows)
       if: github.event_name == 'release'
       uses: softprops/action-gh-release@v1
       with:
         tag_name: ${{ github.event.release.tag_name }}
-        files: AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar
-        name: AruviXPlatform-JAR-Windows.jar
+        files: AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar#AruviXPlatform-JAR-Windows.jar
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -148,16 +178,17 @@ jobs:
     - name: Sign JAR for macOS
       run: |
         # Check if JAR exists before signing
-        if [ ! -f "AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar" ]; then
-          echo "❌ JAR file not found at AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar"
-          ls -la AruviIDE/target/ || echo "target directory not found"
+        if (!(Test-Path "AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar")) {
+          Write-Host "❌ JAR file not found at AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar"
+          if (Test-Path "AruviIDE/target/") { Get-ChildItem AruviIDE/target/ } else { Write-Host "target directory not found" }
           exit 1
-        fi
-        echo "✅ JAR file found, proceeding with signing..."
+        }
+        Write-Host "✅ JAR file found, proceeding with signing..."
         # Create a self-signed certificate for development
         keytool -genkeypair -alias "AruviXPlatform" -keyalg RSA -keysize 2048 -validity 3650 -keystore keystore.jks -storepass password -keypass password -dname "CN=AruviXPlatform, OU=Development, O=AruviXPlatform, L=Unknown, ST=Unknown, C=US"
         # Sign the JAR
         jarsigner -keystore keystore.jks -storepass password -keypass password AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar "AruviXPlatform"
+      shell: pwsh
 
     - name: Debug JAR before upload
       if: github.event_name == 'release'
@@ -179,8 +210,7 @@ jobs:
       uses: softprops/action-gh-release@v1
       with:
         tag_name: ${{ github.event.release.tag_name }}
-        files: AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar
-        name: AruviXPlatform-JAR-macOS.jar
+        files: AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar#AruviXPlatform-JAR-macOS.jar
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
