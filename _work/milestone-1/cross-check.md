@@ -27,3 +27,13 @@ What I will benefit:
 1. No more tool hunting for FPGA Development
 2. I will simply use AruviX platform to program an RISCV FPGA (third party core) - till I mature my AruviCore
 3. I will be able to develop Hardware chain and the software toolset independantly, but together, without any block.
+
+# ASM
+
+```
+make run_assembly_using_riscv_assembler_on_riscv_core
+make run_assembly_using_riscv_assembler_on_aruvi_core
+make run_assembly_using_aruvi_assembler_on_riscv_core
+make run_assembly_using_aruvi_assembler_on_aruvi_core
+
+

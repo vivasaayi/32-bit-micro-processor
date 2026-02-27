@@ -50,7 +50,7 @@ jobs:
     - name: Upload JAR to Release (Linux)
       if: github.event_name == 'release'
       run: |
-        gh release upload ${{ github.event.release.tag_name }} AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar#AruviXPlatform-JAR-Linux.jar
+        gh release upload ${{ github.event.release.tag_name }} AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar --name AruviXPlatform-JAR-Linux.jar
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -97,7 +97,7 @@ jobs:
     - name: Upload JAR to Release (Windows)
       if: github.event_name == 'release'
       run: |
-        gh release upload ${{ github.event.release.tag_name }} AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar#AruviXPlatform-JAR-Windows.jar
+        gh release upload ${{ github.event.release.tag_name }} AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar --name AruviXPlatform-JAR-Windows.jar
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -135,7 +135,7 @@ jobs:
     - name: Upload JAR to Release (macOS)
       if: github.event_name == 'release'
       run: |
-        gh release upload ${{ github.event.release.tag_name }} AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar#AruviXPlatform-JAR-macOS.jar
+        gh release upload ${{ github.event.release.tag_name }} AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar --name AruviXPlatform-JAR-macOS.jar
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
