@@ -159,6 +159,21 @@ jobs:
         # Sign the JAR
         jarsigner -keystore keystore.jks -storepass password -keypass password AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar "AruviXPlatform"
 
+    - name: Debug JAR before upload
+      if: github.event_name == 'release'
+      run: |
+        echo "🔍 Debug: Checking JAR file before upload..."
+        pwd
+        ls -la AruviIDE/target/ || echo "❌ target directory not found"
+        if [ -f "AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar" ]; then
+          echo "✅ JAR exists: $(ls -lh AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar)"
+          echo "📁 Current directory contents:"
+          find . -name "*.jar" -type f 2>/dev/null | head -10
+        else
+          echo "❌ JAR file missing at upload time!"
+          exit 1
+        fi
+
     - name: Upload JAR to Release (macOS)
       if: github.event_name == 'release'
       uses: softprops/action-gh-release@v1
