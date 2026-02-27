@@ -1,0 +1,137 @@
+# AruviJVM .gitignore
+# Ignore build artifacts, temporary files, and platform-specific files
+
+# Build directories
+obj/
+bin/
+build/
+dist/
+
+# Compiled object files
+*.o
+*.obj
+*.a
+*.so
+*.dylib
+*.dll
+
+# Executables
+aruvijvm
+aruvijvm-riscv
+*.exe
+*.out
+
+# Debug information
+*.dSYM/
+*.pdb
+
+# Temporary files
+*.tmp
+*.temp
+*~
+.#*
+#*#
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# macOS specific
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Java compiled files (from examples)
+*.class
+*.jar
+
+# Python bytecode (from tools)
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+
+# Logs and runtime files
+*.log
+core
+core.*
+*.core
+
+# Test outputs
+test_output/
+*.test
+
+# Backup files
+*.bak
+*.backup
+*.orig
+
+# Archive files
+*.tar
+*.tar.gz
+*.zip
+*.rar
+
+# Documentation generated files
+docs/html/
+docs/latex/
+
+# Coverage reports
+*.gcov
+*.gcda
+*.gcno
+coverage/
+
+# Valgrind output
+valgrind-*.xml
+
+# Address sanitizer output
+*.asan
+
+# Custom bytecode files (future feature)
+*.avm
+*.bytecode
+
+# Cross-compilation artifacts
+*-riscv
+*-arm
+*-x86_64
+
+# IDE project files
+*.pro.user
+*.pro.user.*
+*.vcxproj.user
+
+# CMake (if added later)
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile.cmake
+
+# Autotools (if added later)
+autom4te.cache/
+config.log
+config.status
+configure
+Makefile.in
+aclocal.m4
+
+# Package manager files
+*.deb
+*.rpm
+*.pkg
+
+# Performance profiling
+gmon.out
+perf.data*
+
+# Static analysis
+cppcheck-*.xml
+scan-build-*/
