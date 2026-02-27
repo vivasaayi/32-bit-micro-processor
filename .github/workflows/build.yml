@@ -5,6 +5,8 @@ on:
     branches: [ main, master ]
   pull_request:
     branches: [ main, master ]
+  release:
+    types: [published]
 
 jobs:
   build-linux:
@@ -40,6 +42,15 @@ jobs:
       run: |
         cd AruviIDE
         mvn clean package -DskipTests
+
+    - name: Upload JAR to Release (Linux)
+      if: github.event_name == 'release'
+      uses: softprops/action-gh-release@v1
+      with:
+        files: AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar
+        name: AruviXPlatform-JAR-Linux.jar
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Upload JAR artifact
       uses: actions/upload-artifact@v4
@@ -81,6 +92,15 @@ jobs:
         cd AruviIDE
         mvn clean package -DskipTests
 
+    - name: Upload JAR to Release (Windows)
+      if: github.event_name == 'release'
+      uses: softprops/action-gh-release@v1
+      with:
+        files: AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar
+        name: AruviXPlatform-JAR-Windows.jar
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
     - name: Upload JAR artifact
       uses: actions/upload-artifact@v4
       with:
@@ -111,6 +131,15 @@ jobs:
       run: |
         cd AruviIDE
         mvn clean package -DskipTests
+
+    - name: Upload JAR to Release (macOS)
+      if: github.event_name == 'release'
+      uses: softprops/action-gh-release@v1
+      with:
+        files: AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar
+        name: AruviXPlatform-JAR-macOS.jar
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Upload JAR artifact
       uses: actions/upload-artifact@v4
