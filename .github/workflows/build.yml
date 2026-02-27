@@ -166,6 +166,9 @@ jobs:
         restore-keys: ${{ runner.os }}-m2
 
     - name: Import certificate for signing
+      env:
+        BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
+        P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
       run: |
         # Import certificate into a temporary keychain
         echo "$BUILD_CERTIFICATE_BASE64" | base64 --decode > certificate.p12
