@@ -4,31 +4,30 @@
 # Runtime support functions
 malloc:
 # Simple malloc - returns fixed heap addresses
-load x1, heap_ptr
-add x2, x1, x0
-store x2, heap_ptr
-mov x0, x1
-ret
+LOAD R1, heap_ptr
+ADD R2, R1, R0
+STORE R2, heap_ptr
+MOVE R0, R1
+RET
 
 putchar:
-# Output character in x0
-li a7, 11
-ecall  # print char from x0
-ret
+# Output character in r0
+OUT R0
+RET
 
 strlen:
-# String length - string pointer in x0
-mov x1, x0
-addi x0, zero, 0
+# String length - string pointer in r0
+MOVE R1, R0
+MOVE R0, #0
 strlen_loop:
-lw x2, 0(x1)
-#cmp x2, #0
-je strlen_end
-add x0, x0, #1
-add x1, x1, #1
-j strlen_loop
+LOAD R2, [R1]
+CMP R2, #0
+JZ strlen_end
+ADD R0, R0, #1
+ADD R1, R1, #1
+JMP strlen_loop
 strlen_end:
-ret
+RET
 
 # Data section
 heap_ptr: .word 0x10000
@@ -36,206 +35,209 @@ heap_ptr: .word 0x10000
 # Compound statement
 # Function declaration
 main:
+# WARNING: Unknown instruction: push
 addi sp, sp, -4
-sw fp, 0(sp)
-mov fp, sp
-sub sp, sp, #64
+    sw fp, 0(sp)
+MOVE R29, R30
+SUB R30, R30, #64
 # Compound statement
 # Variable declaration
 # Array stack[10] allocated (40 bytes)
 # Array base address for stack
 # Variable declaration
 # Variable sp allocated
-addi x1, zero, 0
+MOVE R1, #0
 # Store initializer value for sp
-addi x1, zero, 5
+MOVE R1, #5
 # Store to array element
 # Undefined symbol
-addi x2, zero, 0
+MOVE R2, #0
 # Undefined symbol
-addi x3, zero, 0
-mul x3, x3, #4
-add x2, x2, x3
-sw x1, 0(x2)
-mov x0, x1
+MOVE R3, #0
+MUL R3, R3, #4
+ADD R2, R2, R3
+STORE R1, [R2]
+MOVE R0, R1
 # Undefined symbol
-addi x1, zero, 0
-addi x2, zero, 1
-add x1, x1, x2
+MOVE R1, #0
+MOVE R2, #1
+ADD R1, R1, R2
 # Store to variable sp
-sw x1, 0(sp)
-mov x0, x1
-addi x1, zero, 3
+STORE R1, [R30]
+MOVE R0, R1
+MOVE R1, #3
 # Store to array element
 # Undefined symbol
-addi x2, zero, 0
+MOVE R2, #0
 # Undefined symbol
-addi x3, zero, 0
-mul x3, x3, #4
-add x2, x2, x3
-sw x1, 0(x2)
-mov x0, x1
+MOVE R3, #0
+MUL R3, R3, #4
+ADD R2, R2, R3
+STORE R1, [R2]
+MOVE R0, R1
 # Undefined symbol
-addi x1, zero, 0
-addi x2, zero, 1
-add x1, x1, x2
+MOVE R1, #0
+MOVE R2, #1
+ADD R1, R1, R2
 # Store to variable sp
-sw x1, 0(sp)
-mov x0, x1
-addi x1, zero, 2
+STORE R1, [R30]
+MOVE R0, R1
+MOVE R1, #2
 # Store to array element
 # Undefined symbol
-addi x2, zero, 0
+MOVE R2, #0
 # Undefined symbol
-addi x3, zero, 0
-mul x3, x3, #4
-add x2, x2, x3
-sw x1, 0(x2)
-mov x0, x1
+MOVE R3, #0
+MUL R3, R3, #4
+ADD R2, R2, R3
+STORE R1, [R2]
+MOVE R0, R1
 # Undefined symbol
-addi x1, zero, 0
-addi x2, zero, 1
-add x1, x1, x2
+MOVE R1, #0
+MOVE R2, #1
+ADD R1, R1, R2
 # Store to variable sp
-sw x1, 0(sp)
-mov x0, x1
+STORE R1, [R30]
+MOVE R0, R1
 # Undefined symbol
-addi x1, zero, 0
-addi x2, zero, 1
-sub x1, x1, x2
+MOVE R1, #0
+MOVE R2, #1
+SUB R1, R1, R2
 # Store to variable sp
-sw x1, 0(sp)
-mov x0, x1
+STORE R1, [R30]
+MOVE R0, R1
 # Variable declaration
 # Variable b allocated
 # Undefined symbol
-addi x1, zero, 0
+MOVE R1, #0
 # Undefined symbol
-addi x2, zero, 0
-mul x2, x2, #4
-add x1, x1, x2
-lw x1, 0(x1)
+MOVE R2, #0
+MUL R2, R2, #4
+ADD R1, R1, R2
+LOAD R1, [R1]
 # Store initializer value for b
 # Undefined symbol
-addi x1, zero, 0
-addi x2, zero, 1
-sub x1, x1, x2
+MOVE R1, #0
+MOVE R2, #1
+SUB R1, R1, R2
 # Store to variable sp
-sw x1, 0(sp)
-mov x0, x1
+STORE R1, [R30]
+MOVE R0, R1
 # Variable declaration
 # Variable a allocated
 # Undefined symbol
-addi x1, zero, 0
+MOVE R1, #0
 # Undefined symbol
-addi x2, zero, 0
-mul x2, x2, #4
-add x1, x1, x2
-lw x1, 0(x1)
+MOVE R2, #0
+MUL R2, R2, #4
+ADD R1, R1, R2
+LOAD R1, [R1]
 # Store initializer value for a
 # Undefined symbol
-addi x1, zero, 0
+MOVE R1, #0
 # Undefined symbol
-addi x2, zero, 0
-mul x1, x1, x2
+MOVE R2, #0
+MUL R1, R1, R2
 # Store to array element
 # Undefined symbol
-addi x2, zero, 0
+MOVE R2, #0
 # Undefined symbol
-addi x3, zero, 0
-mul x3, x3, #4
-add x2, x2, x3
-sw x1, 0(x2)
-mov x0, x1
+MOVE R3, #0
+MUL R3, R3, #4
+ADD R2, R2, R3
+STORE R1, [R2]
+MOVE R0, R1
 # Undefined symbol
-addi x1, zero, 0
-addi x2, zero, 1
-add x1, x1, x2
+MOVE R1, #0
+MOVE R2, #1
+ADD R1, R1, R2
 # Store to variable sp
-sw x1, 0(sp)
-mov x0, x1
+STORE R1, [R30]
+MOVE R0, R1
 # Undefined symbol
-addi x1, zero, 0
-addi x2, zero, 1
-sub x1, x1, x2
+MOVE R1, #0
+MOVE R2, #1
+SUB R1, R1, R2
 # Store to variable sp
-sw x1, 0(sp)
-mov x0, x1
+STORE R1, [R30]
+MOVE R0, R1
 # Undefined symbol
-addi x1, zero, 0
+MOVE R1, #0
 # Undefined symbol
-addi x2, zero, 0
-mul x2, x2, #4
-add x1, x1, x2
-lw x1, 0(x1)
+MOVE R2, #0
+MUL R2, R2, #4
+ADD R1, R1, R2
+LOAD R1, [R1]
 # Store to variable b
-sw x1, 0(b)
-mov x0, x1
+STORE R1, [b]
+MOVE R0, R1
 # Undefined symbol
-addi x1, zero, 0
-addi x2, zero, 1
-sub x1, x1, x2
+MOVE R1, #0
+MOVE R2, #1
+SUB R1, R1, R2
 # Store to variable sp
-sw x1, 0(sp)
-mov x0, x1
+STORE R1, [R30]
+MOVE R0, R1
 # Undefined symbol
-addi x1, zero, 0
+MOVE R1, #0
 # Undefined symbol
-addi x2, zero, 0
-mul x2, x2, #4
-add x1, x1, x2
-lw x1, 0(x1)
+MOVE R2, #0
+MUL R2, R2, #4
+ADD R1, R1, R2
+LOAD R1, [R1]
 # Store to variable a
-sw x1, 0(a)
-mov x0, x1
+STORE R1, [a]
+MOVE R0, R1
 # Undefined symbol
-addi x1, zero, 0
+MOVE R1, #0
 # Undefined symbol
-addi x2, zero, 0
-add x1, x1, x2
+MOVE R2, #0
+ADD R1, R1, R2
 # Store to array element
 # Undefined symbol
-addi x2, zero, 0
+MOVE R2, #0
 # Undefined symbol
-addi x3, zero, 0
-mul x3, x3, #4
-add x2, x2, x3
-sw x1, 0(x2)
-mov x0, x1
+MOVE R3, #0
+MUL R3, R3, #4
+ADD R2, R2, R3
+STORE R1, [R2]
+MOVE R0, R1
 # Undefined symbol
-addi x1, zero, 0
-addi x2, zero, 1
-add x1, x1, x2
+MOVE R1, #0
+MOVE R2, #1
+ADD R1, R1, R2
 # Store to variable sp
-sw x1, 0(sp)
-mov x0, x1
+STORE R1, [R30]
+MOVE R0, R1
 # Undefined symbol
-addi x1, zero, 0
-addi x2, zero, 1
-sub x1, x1, x2
+MOVE R1, #0
+MOVE R2, #1
+SUB R1, R1, R2
 # Store to variable sp
-sw x1, 0(sp)
-mov x0, x1
+STORE R1, [R30]
+MOVE R0, R1
 # Return statement
 # Undefined symbol
-addi x1, zero, 0
+MOVE R1, #0
 # Undefined symbol
-addi x2, zero, 0
-mul x2, x2, #4
-add x1, x1, x2
-lw x0, 0(x1)
-add sp, sp, #64
+MOVE R2, #0
+MUL R2, R2, #4
+ADD R1, R1, R2
+LOAD R0, [R1]
+ADD R30, R30, #64
+# WARNING: Unknown instruction: pop
 lw fp, 0(sp)
-addi sp, sp, 4
-ret
+    addi sp, sp, 4
+RET
 main_end:
-add sp, sp, #64
+ADD R30, R30, #64
+# WARNING: Unknown instruction: pop
 lw fp, 0(sp)
-addi sp, sp, 4
-ret
+    addi sp, sp, 4
+RET
 
 
 # Program entry point
 _start:
-call main
-ebreak
+CALL main
+HALT

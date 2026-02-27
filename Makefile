@@ -143,4 +143,28 @@ clean-toolchain:
 	cd AruviEmulator && cargo clean
 	rm -rf binaries/macos-arm64/
 
-.PHONY: all sim wave clean test-alu test-reg test-all test-comprehensive assemble synth lint docs install-deps qemu-asm qemu-c toolchain clean-toolchain
+# Cross-check targets for RISC-V compatibility
+run_assembly_using_riscv_assembler_on_riscv_core:
+	@echo "🔍 Cross-check: RISC-V assembler on RISC-V core (QEMU)"
+	@echo "Assembling RISC-V assembly with standard RISC-V assembler and running on QEMU"
+	mkdir -p temp
+	riscv64-elf-as sample_programs/arithmetic/assembly/handcrafted/0_0_add.s -o temp/test.o
+	riscv64-elf-ld -T temp/link.ld temp/test.o -o temp/test.elf
+	qemu-system-riscv32 -nographic -machine virt -bios none -kernel temp/test.elf
+
+run_assembly_using_riscv_assembler_on_aruvi_core:
+	@echo "🔍 Cross-check: RISC-V assembler on Aruvi core"
+	@echo "Assembling RISC-V assembly with standard RISC-V assembler and running on Aruvi HDL simulation"
+	# TODO: Implement - assemble to hex format compatible with Aruvi core
+
+run_assembly_using_aruvi_assembler_on_riscv_core:
+	@echo "🔍 Cross-check: Aruvi assembler on RISC-V core (QEMU)"
+	@echo "Assembling RISC-V assembly with Aruvi assembler and running on QEMU"
+	# TODO: Implement - convert Aruvi hex output to ELF for QEMU
+
+run_assembly_using_aruvi_assembler_on_aruvi_core:
+	@echo "🔍 Cross-check: Aruvi assembler on Aruvi core"
+	@echo "Assembling RISC-V assembly with Aruvi assembler and running on Aruvi HDL simulation"
+	$(MAKE) sim  # Current simulation uses Aruvi toolchain
+
+.PHONY: all sim wave clean test-alu test-reg test-all test-comprehensive assemble synth lint docs install-deps qemu-asm qemu-c toolchain clean-toolchain run_assembly_using_riscv_assembler_on_riscv_core run_assembly_using_riscv_assembler_on_aruvi_core run_assembly_using_aruvi_assembler_on_riscv_core run_assembly_using_aruvi_assembler_on_aruvi_core

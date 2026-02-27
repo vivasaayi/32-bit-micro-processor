@@ -1,13 +1,12 @@
-.global _start
+# Simple test for STORE immediate addressing
 
 .org 0x8000
 
-_start:
-addi x1, x0, 42
-sw x1, 0x0100(x0)
-addi x2, x0, 99
-sw x2, 0x0104(x0)
+LOADI R1, #42
+STORE R1, #0x0100
+LOADI R2, #99
+STORE R2, #0x0104
 
-lw x4, 0x0100(x0)
-lw x5, 0x0104(x0)
-ebreak
+LOAD R4, #0x0100
+LOAD R5, #0x0104
+HALT
