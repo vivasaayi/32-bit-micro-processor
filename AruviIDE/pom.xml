@@ -129,6 +129,56 @@
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>exec-maven-plugin</artifactId>
                 <version>3.1.0</version>
+                <executions>
+                    <execution>
+                        <id>build-assembler</id>
+                        <phase>generate-resources</phase>
+                        <goals>
+                            <goal>exec</goal>
+                        </goals>
+                        <configuration>
+                            <executable>make</executable>
+                            <workingDirectory>../AruviAsm</workingDirectory>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>build-compiler</id>
+                        <phase>generate-resources</phase>
+                        <goals>
+                            <goal>exec</goal>
+                        </goals>
+                        <configuration>
+                            <executable>make</executable>
+                            <workingDirectory>../AruviCompiler</workingDirectory>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>build-jvm</id>
+                        <phase>generate-resources</phase>
+                        <goals>
+                            <goal>exec</goal>
+                        </goals>
+                        <configuration>
+                            <executable>make</executable>
+                            <workingDirectory>../AruviJVM</workingDirectory>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>build-emulator</id>
+                        <phase>generate-resources</phase>
+                        <goals>
+                            <goal>exec</goal>
+                        </goals>
+                        <configuration>
+                            <executable>cargo</executable>
+                            <arguments>
+                                <argument>build</argument>
+                                <argument>--release</argument>
+                            </arguments>
+                            <workingDirectory>../AruviEmulator</workingDirectory>
+                        </configuration>
+                    </execution>
+                </executions>
                 <configuration>
                     <mainClass>org.poriyiyal.CpuIDE</mainClass>
                 </configuration>

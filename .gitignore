@@ -13,10 +13,9 @@
 *.ghw
 
 # =============================================================================
-# Assembled/Compiled Programs
+# Platform Binaries (all excluded - built during JAR creation)
 # =============================================================================
-# Assembled machine code files (can be regenerated from .asm sources)
-*.hex
+binaries/
 
 # Exception: Keep important reference hex files if needed
 # !important_reference.hex

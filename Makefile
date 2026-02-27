@@ -115,4 +115,32 @@ qemu-c:
 	$(ASSEMBLER) AruviCompiler/output.s -o output.bin
 	$(QEMU_RISCV32) -M virt -cpu rv32 -bios none -device loader,file=output.bin,addr=0x80000000 -nographic -serial mon:stdio
 
-.PHONY: all sim wave clean test-alu test-reg test-all test-comprehensive assemble synth lint docs install-deps qemu-asm qemu-c
+# Build all toolchain binaries for macOS
+toolchain:
+	@echo "Building AruviXPlatform toolchain..."
+	@echo "Building assembler..."
+	$(MAKE) -C AruviAsm
+	@echo "Building compiler..."
+	$(MAKE) -C AruviCompiler
+	@echo "Building JVM..."
+	$(MAKE) -C AruviJVM
+	@echo "Building emulator..."
+	cd AruviEmulator && cargo build --release
+	@echo "Copying binaries to binaries/macos-arm64/"
+	mkdir -p binaries/macos-arm64
+	cp AruviAsm/assembler binaries/macos-arm64/
+	cp AruviCompiler/ccompiler binaries/macos-arm64/
+	cp AruviJVM/bin/aruvijvm binaries/macos-arm64/
+	cp AruviEmulator/target/release/aruvi_emulator binaries/macos-arm64/
+	@echo "✅ Toolchain built successfully!"
+	@echo "Binaries ready for commit: binaries/macos-arm64/"
+
+# Clean toolchain binaries
+clean-toolchain:
+	$(MAKE) -C AruviAsm clean
+	$(MAKE) -C AruviCompiler clean
+	$(MAKE) -C AruviJVM clean
+	cd AruviEmulator && cargo clean
+	rm -rf binaries/macos-arm64/
+
+.PHONY: all sim wave clean test-alu test-reg test-all test-comprehensive assemble synth lint docs install-deps qemu-asm qemu-c toolchain clean-toolchain

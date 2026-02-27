@@ -7,9 +7,8 @@ on:
     branches: [ main, master ]
 
 jobs:
-  build:
+  build-linux:
     runs-on: ubuntu-latest
-
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -23,34 +22,6 @@ jobs:
       run: |
         curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
         echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-
-    - name: Build Assembler
-      run: |
-        cd AruviAsm
-        make clean
-        make
-
-    - name: Build Compiler
-      run: |
-        cd AruviCompiler
-        make clean
-        make
-
-    - name: Build JVM
-      run: |
-        cd AruviJVM
-        make clean
-        make
-
-    - name: Build Emulator
-      run: |
-        cd AruviEmulator
-        cargo build --release
-
-    - name: Build OS Kernel (optional)
-      run: |
-        cd AruviOS/kernel-rv32
-        cargo build --release || echo "OS kernel build failed, continuing..."
 
     - name: Set up JDK 23
       uses: actions/setup-java@v4
@@ -73,11 +44,77 @@ jobs:
     - name: Upload JAR artifact
       uses: actions/upload-artifact@v4
       with:
-        name: AruviXPlatform-JAR
+        name: AruviXPlatform-JAR-Linux
         path: AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar
         retention-days: 30
 
-    - name: Verify JAR
+  build-windows:
+    runs-on: windows-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install build tools
+      run: |
+        choco install mingw -y
+
+    - name: Install Rust
+      run: |
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+        echo "$USERPROFILE/.cargo/bin" >> $GITHUB_PATH
+
+    - name: Set up JDK 23
+      uses: actions/setup-java@v4
+      with:
+        java-version: '23'
+        distribution: 'temurin'
+
+    - name: Cache Maven packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.m2
+        key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+        restore-keys: ${{ runner.os }}-m2
+
+    - name: Build JAR
       run: |
         cd AruviIDE
-        java -jar target/AruviIDE-1.0-SNAPSHOT.jar --version || echo "JAR built successfully (version check may not be implemented)"
+        mvn clean package -DskipTests
+
+    - name: Upload JAR artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: AruviXPlatform-JAR-Windows
+        path: AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar
+        retention-days: 30
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up JDK 23
+      uses: actions/setup-java@v4
+      with:
+        java-version: '23'
+        distribution: 'temurin'
+
+    - name: Cache Maven packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.m2
+        key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+        restore-keys: ${{ runner.os }}-m2
+
+    - name: Build JAR
+      run: |
+        cd AruviIDE
+        mvn clean package -DskipTests
+
+    - name: Upload JAR artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: AruviXPlatform-JAR-macOS
+        path: AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar
+        retention-days: 30

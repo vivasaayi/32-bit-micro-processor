@@ -23,17 +23,18 @@ java -jar target/AruviIDE-1.0-SNAPSHOT.jar
 ```
 
 #### GitHub Actions Build
-The JAR is automatically built on every push to main/master via GitHub Actions. The workflow builds the complete toolchain (C, Rust, Java) and bundles everything into a single executable JAR. Download the artifact from the Actions tab.
+The JAR is automatically built for multiple platforms via GitHub Actions:
 
-The JAR contains the full AruviXPlatform ecosystem:
-- Java IDE with GUI
-- C compiler and assembler
-- Rust emulator
-- JVM interpreter
-- HDL processor files
-- Documentation and examples
-- Test programs and benches
-- OS components
+- **Linux x86_64**: Built on Ubuntu with native Linux binaries
+- **macOS x64/arm64**: Built on macOS using committed macOS binaries
+- **Windows x86_64**: Built on Windows with native Windows binaries
+
+Each platform produces a JAR with platform-specific binaries. Download the appropriate JAR for your platform from the Actions artifacts.
+
+**Binary Management**:
+- macOS binaries are built locally and committed to `binaries/macos-arm64/`
+- Linux/Windows binaries are built in CI and stored in respective directories
+- JAR building uses the appropriate binaries for each platform
 
 ## Quick Start
 
