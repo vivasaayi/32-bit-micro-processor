@@ -165,10 +165,20 @@ jobs:
         key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
         restore-keys: ${{ runner.os }}-m2
 
+    - name: Import certificate for signing
+      run: |
+        # Import certificate into a temporary keychain
+        echo "$BUILD_CERTIFICATE_BASE64" | base64 --decode > certificate.p12
+        security create-keychain -p "build_keychain_password" build.keychain
+        security default-keychain -s build.keychain
+        security unlock-keychain -p "build_keychain_password" build.keychain
+        security import certificate.p12 -k build.keychain -P "$P12_PASSWORD" -T /usr/bin/codesign
+        security set-key-partition-list -S apple-tool:,apple: -s -k "build_keychain_password" build.keychain
+
     - name: Build JAR
       run: |
         cd AruviIDE
-        mvn clean package -DskipTests
+        mvn clean package -DskipTests -Pmac-sign
 
     - name: Sign and Notarize JAR for macOS
       if: github.event_name == 'release'
@@ -179,14 +189,6 @@ jobs:
         APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
         APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
       run: |
-        # Import certificate into a temporary keychain
-        echo "$BUILD_CERTIFICATE_BASE64" | base64 --decode > certificate.p12
-        security create-keychain -p "build_keychain_password" build.keychain
-        security default-keychain -s build.keychain
-        security unlock-keychain -p "build_keychain_password" build.keychain
-        security import certificate.p12 -k build.keychain -P "$P12_PASSWORD" -T /usr/bin/codesign
-        security set-key-partition-list -S apple-tool:,apple: -s -k "build_keychain_password" build.keychain
-
         # Sign the JAR
         codesign --force --sign "Developer ID Application" --timestamp --options runtime \
           AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar
