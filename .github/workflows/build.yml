@@ -9,8 +9,8 @@ on:
     types: [published]
 
 permissions:
-  contents: read
-  releases: write
+  contents: write
+  actions: read
 
 jobs:
   build-linux:
