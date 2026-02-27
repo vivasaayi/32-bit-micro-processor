@@ -21,8 +21,64 @@
             <resource>
                 <directory>src/resources</directory>
             </resource>
+            <resource>
+                <directory>../AruviAsm</directory>
+                <includes>
+                    <include>assembler</include>
+                </includes>
+                <targetPath>bin</targetPath>
+            </resource>
+            <resource>
+                <directory>../AruviCompiler</directory>
+                <includes>
+                    <include>ccompiler</include>
+                </includes>
+                <targetPath>bin</targetPath>
+            </resource>
+            <resource>
+                <directory>../AruviCore</directory>
+                <includes>
+                    <include>**/*.v</include>
+                    <include>**/*.sv</include>
+                </includes>
+                <targetPath>hdl</targetPath>
+            </resource>
+            <resource>
+                <directory>../test_programs</directory>
+                <targetPath>test_programs</targetPath>
+            </resource>
         </resources>
         <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>3.5.1</version>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+                        <configuration>
+                            <transformers>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                                    <mainClass>org.poriyiyal.CpuIDE</mainClass>
+                                </transformer>
+                            </transformers>
+                            <filters>
+                                <filter>
+                                    <artifact>*:*</artifact>
+                                    <excludes>
+                                        <exclude>META-INF/*.SF</exclude>
+                                        <exclude>META-INF/*.DSA</exclude>
+                                        <exclude>META-INF/*.RSA</exclude>
+                                    </excludes>
+                                </filter>
+                            </filters>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>exec-maven-plugin</artifactId>
