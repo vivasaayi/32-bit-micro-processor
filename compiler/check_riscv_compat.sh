@@ -9,6 +9,9 @@ TESTS=(
   "test_simple.c"
   "test_bool.c"
   "test_switch.c"
+  "test_rv32i_control_flow.c"
+  "test_rv32m_arithmetic.c"
+  "test_rv32_calls_arrays.c"
 )
 
 for test_file in "${TESTS[@]}"; do
