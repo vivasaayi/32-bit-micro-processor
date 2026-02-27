@@ -25,7 +25,7 @@ public class EnvLoader {
             File envFile = new File(ENV_FILE_PATH);
             if (!envFile.exists()) {
                 // Try in the IDE source directory
-                envFile = new File("AruviXIDE/.env");
+                envFile = new File("AruviIDE/.env");
             }
             if (!envFile.exists()) {
                 // Try relative to current directory
@@ -115,12 +115,12 @@ public class EnvLoader {
             }
             // Check for AruviXPlatform directory structure
             if (current.getName().equals("AruviXPlatform") || 
-                new File(current, "AruviXIDE").exists()) {
+                new File(current, "AruviIDE").exists()) {
                 return current;
             }
             // Check for processor directory
             if (new File(current, "processor").exists() && 
-                new File(current, "AruviXIDE").exists()) {
+                new File(current, "AruviIDE").exists()) {
                 return current;
             }
             current = current.getParentFile();
@@ -189,7 +189,7 @@ public class EnvLoader {
      */
     public static void printEnvironmentSettings() {
         loadEnvFile();
-        System.out.println("=== AruviXIDE Environment Settings ===");
+        System.out.println("=== AruviIDE Environment Settings ===");
         envProperties.entrySet().stream()
             .sorted((e1, e2) -> e1.getKey().toString().compareTo(e2.getKey().toString()))
             .forEach(entry -> 

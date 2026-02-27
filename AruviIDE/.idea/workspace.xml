@@ -52,14 +52,14 @@
   <component name="PropertiesComponent"><![CDATA[{
   "keyToString": {
     "Application.CpuIDE.executor": "Debug",
-    "Maven.AruviXIDE [clean].executor": "Run",
-    "Maven.AruviXIDE [compile].executor": "Run",
-    "Maven.AruviXIDE [test].executor": "Run",
+    "Maven.AruviIDE [clean].executor": "Run",
+    "Maven.AruviIDE [compile].executor": "Run",
+    "Maven.AruviIDE [test].executor": "Run",
     "ModuleVcsDetector.initialDetectionPerformed": "true",
     "RunOnceActivity.ShowReadmeOnStart": "true",
     "RunOnceActivity.git.unshallow": "true",
     "git-widget-placeholder": "get-bouncing-rectangle-assembly-working",
-    "last_opened_file_path": "/Users/rajanpanneerselvam/work/AruviXPlatform/AruviXIDE",
+    "last_opened_file_path": "/Users/rajanpanneerselvam/work/AruviXPlatform/AruviIDE",
     "node.js.detected.package.eslint": "true",
     "node.js.detected.package.tslint": "true",
     "node.js.selected.package.eslint": "(autodetect)",

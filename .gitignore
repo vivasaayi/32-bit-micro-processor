@@ -191,7 +191,7 @@ temp
 tools/assembler.dSYM
 *.class
 java_ui/target
-AruviXIDE/target
+AruviIDE/target
 AruviOS/kernel/target
 AruviOS/target
 AruviOS/kernel-rv32/target
