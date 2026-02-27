@@ -50,8 +50,8 @@ jobs:
       uses: softprops/action-gh-release@v1
       with:
         tag_name: ${{ github.event.release.tag_name }}
-        files: |
-          AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar#AruviXPlatform-JAR-Linux.jar
+        files: AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar
+        name: AruviXPlatform-JAR-Linux.jar
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -100,8 +100,8 @@ jobs:
       uses: softprops/action-gh-release@v1
       with:
         tag_name: ${{ github.event.release.tag_name }}
-        files: |
-          AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar#AruviXPlatform-JAR-Windows.jar
+        files: AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar
+        name: AruviXPlatform-JAR-Windows.jar
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -179,8 +179,8 @@ jobs:
       uses: softprops/action-gh-release@v1
       with:
         tag_name: ${{ github.event.release.tag_name }}
-        files: |
-          AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar#AruviXPlatform-JAR-macOS.jar
+        files: AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar
+        name: AruviXPlatform-JAR-macOS.jar
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
