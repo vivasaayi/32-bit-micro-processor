@@ -36,6 +36,27 @@ Each platform produces a JAR with platform-specific binaries. Download the appro
 - Linux/Windows binaries are built in CI and stored in respective directories
 - JAR building uses the appropriate binaries for each platform
 
+#### Releases
+Official releases with pre-built JARs are available through GitHub Releases. To create a release:
+
+1. **Trigger CI Build**: Push changes or create a PR to run the build workflow
+2. **Wait for Artifacts**: Ensure all platform builds (Linux/Windows/macOS) complete successfully
+3. **Create Release Manually**:
+   - Go to GitHub → **Releases** → **Create a new release**
+   - Click **"Choose a tag"** → Enter version tag (e.g., `v1.0.0`)
+   - Click **"Generate release notes"** or write custom notes
+   - Click **"Publish release"**
+
+The release workflow will automatically:
+- Download JARs from the latest successful CI run
+- Attach them to the release with clear platform names
+- Provide download links for each platform
+
+**Download Links**:
+- **Linux**: `AruviXPlatform-JAR-Linux.jar`
+- **Windows**: `AruviXPlatform-JAR-Windows.jar`  
+- **macOS**: `AruviXPlatform-JAR-macOS.jar`
+
 ## Quick Start
 
 ```bash
