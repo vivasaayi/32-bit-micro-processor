@@ -189,6 +189,7 @@ benchmark_*.dat
 # !build.sh
 temp
 tools/assembler.dSYM
+AruviAsm/assembler.dSYM
 *.class
 java_ui/target
 AruviIDE/target

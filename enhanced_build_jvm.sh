@@ -34,7 +34,7 @@ else
     
     # Step 2c: Assemble with original assembler
     echo "Step 2c: Assembling with original assembler..."
-    if ! ./tools/assembler output/jvm_converted.asm output/jvm_converted.hex; then
+    if ! ./AruviAsm/assembler output/jvm_converted.asm output/jvm_converted.hex; then
         echo "Failed to assemble JVM"
         exit 1
     fi
@@ -62,7 +62,7 @@ else
         exit 1
     fi
     
-    if ! ./tools/assembler output/minimal_test.asm output/minimal_test.hex; then
+    if ! ./AruviAsm/assembler output/minimal_test.asm output/minimal_test.hex; then
         echo "Failed to assemble minimal test"
         exit 1
     fi

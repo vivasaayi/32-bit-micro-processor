@@ -93,11 +93,11 @@ install-deps:
 
 # --- QEMU Integration ---
 QEMU_RISCV32 = qemu-system-riscv32
-ASSEMBLER = ./temp/assembler
+ASSEMBLER = ./AruviAsm/assembler
 
 # Compile the assembler if not exists
-$(ASSEMBLER): tools/assembler.c
-	$(MAKE) -C tools
+$(ASSEMBLER): AruviAsm/assembler.c
+	$(MAKE) -C AruviAsm
 
 # Run assembly in QEMU
 # Usage: make qemu-asm ASM=verification/asm/test_alu.asm

@@ -59,7 +59,7 @@ execute_java() {
     
     # Step 4: Assemble to hex
     echo -n "  🔧 Assembling to hex... "
-    if ./tools/assembler test_programs/c/jvm/working_jvm_interpreter.asm $RESULTS_DIR/${basename}_executable.hex >/dev/null 2>&1; then
+    if ./AruviAsm/assembler test_programs/c/jvm/working_jvm_interpreter.asm $RESULTS_DIR/${basename}_executable.hex >/dev/null 2>&1; then
         echo -e "${GREEN}✓${NC}"
     else
         echo -e "${RED}✗ Failed${NC}"

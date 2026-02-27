@@ -334,7 +334,7 @@ else
         exit 1
     fi
     
-    if ! ./tools/assembler output/cli_demo_converted.asm output/cli_demo.hex; then
+    if ! ./AruviAsm/assembler output/cli_demo_converted.asm output/cli_demo.hex; then
         echo "Failed to assemble CLI demo"
         exit 1
     fi
