@@ -197,7 +197,7 @@ jobs:
           --apple-id "$APPLE_ID" \
           --password "$APPLE_APP_PASSWORD" \
           --team-id "$APPLE_TEAM_ID" \
-          --wait | grep "id:" | awk '{print $2}')
+          --wait | grep "id:" | head -1 | awk '{print $2}')
         
         # Check status
         STATUS=$(xcrun notarytool info "$SUBMISSION_ID" \
