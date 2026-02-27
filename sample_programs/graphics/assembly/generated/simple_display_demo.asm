@@ -1,11 +1,11 @@
 .org 0x8000
 
-; Initialize stack pointer
+# Initialize stack pointer
 LOADI R30, #0x000F0000
-; Initialize heap pointer  
+# Initialize heap pointer
 LOADI R29, #0x20000
 
-; Function: main
+# Function: main
 main:
 LOADI R3, #0
 LOADI R3, #0

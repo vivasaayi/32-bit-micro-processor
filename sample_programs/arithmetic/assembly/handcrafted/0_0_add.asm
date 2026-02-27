@@ -1,21 +1,21 @@
-; Add 5 numbers and store the result in r1
+# Add 5 numbers and store the result in x1
 
 start:
-    mov r1, #0       ; r1 = 0 (accumulator)
-    
-    mov r2, #10
-    add r1, r1, r2   ; r1 += 10 
+addi x1, zero, 0 # x1 = 0 (accumulator)
 
-    mov r2, #20
-    add r1, r1, r2   ; r1 += 20
+addi x2, zero, 10
+add x1, x1, x2 # x1 += 10
 
-    mov r2, #30
-    add r1, r1, r2   ; r1 += 30
+addi x2, zero, 20
+add x1, x1, x2 # x1 += 20
 
-    mov r2, #40
-    add r1, r1, r2   ; r1 += 40
+addi x2, zero, 30
+add x1, x1, x2 # x1 += 30
 
-    mov r2, #50
-    add r1, r1, r2   ; r1 += 50
+addi x2, zero, 40
+add x1, x1, x2 # x1 += 40
 
-    halt             ; stop execution
+addi x2, zero, 50
+add x1, x1, x2 # x1 += 50
+
+ebreak # stop execution
