@@ -6,25 +6,25 @@ VVP = vvp
 GTKWAVE = gtkwave
 
 # Directories  
-PROC_DIR = processor
-CPU_DIR = processor/cpu
-MEM_DIR = processor/memory
-IO_DIR = processor/io
-TB_DIR = processor/testbench
+PROC_DIR = AruviCore
+CPU_DIR = AruviCore/cpu
+MEM_DIR = AruviCore/memory
+IO_DIR = AruviCore/io
+TB_DIR = AruviCore/testbench
 
 # Source files
-CPU_SOURCES = processor/cpu/cpu_core.v processor/cpu/alu.v processor/cpu/register_file.v
-MEM_SOURCES = processor/memory/memory_controller.v processor/memory/mmu.v
-IO_SOURCES = processor/io/uart.v processor/io/timer.v processor/io/interrupt_controller.v
-SYSTEM_SOURCES = processor/microprocessor_system.v
+CPU_SOURCES = AruviCore/cpu/cpu_core.v AruviCore/cpu/alu.v AruviCore/cpu/register_file.v
+MEM_SOURCES = AruviCore/memory/memory_controller.v AruviCore/memory/mmu.v
+IO_SOURCES = AruviCore/io/uart.v AruviCore/io/timer.v AruviCore/io/interrupt_controller.v
+SYSTEM_SOURCES = AruviCore/microprocessor_system.v
 ALL_SOURCES = $(CPU_SOURCES) $(MEM_SOURCES) $(IO_SOURCES) $(SYSTEM_SOURCES)
 
 # Testbench files
-TB_SOURCES = processor/testbench/tb_microprocessor_system.v
+TB_SOURCES = AruviCore/testbench/tb_microprocessor_system.v
 
 # Output files
-VVP_FILE = processor/testbench/microprocessor_system.vvp
-VCD_FILE = processor/testbench/microprocessor_system.vcd
+VVP_FILE = AruviCore/testbench/microprocessor_system.vvp
+VCD_FILE = AruviCore/testbench/microprocessor_system.vcd
 
 # Default target - 32-bit simulation
 all: sim

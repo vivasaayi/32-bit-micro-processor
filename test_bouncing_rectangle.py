@@ -211,15 +211,15 @@ endmodule
         "iverilog",
         "-o", str(vvp_file),
         str(testbench_file),
-        str(hdl_root / "processor" / "microprocessor_system.v"),
-        str(hdl_root / "processor" / "cpu" / "cpu_core.v"),
-        str(hdl_root / "processor" / "cpu" / "alu.v"),
-        str(hdl_root / "processor" / "cpu" / "register_file.v"),
-        str(hdl_root / "processor" / "memory" / "memory_controller.v"),
-        str(hdl_root / "processor" / "memory" / "mmu.v"),
-        str(hdl_root / "processor" / "io" / "uart.v"),
-        str(hdl_root / "processor" / "io" / "timer.v"),
-        str(hdl_root / "processor" / "io" / "interrupt_controller.v")
+        str(hdl_root / "AruviCore" / "microprocessor_system.v"),
+        str(hdl_root / "AruviCore" / "cpu" / "cpu_core.v"),
+        str(hdl_root / "AruviCore" / "cpu" / "alu.v"),
+        str(hdl_root / "AruviCore" / "cpu" / "register_file.v"),
+        str(hdl_root / "AruviCore" / "memory" / "memory_controller.v"),
+        str(hdl_root / "AruviCore" / "memory" / "mmu.v"),
+        str(hdl_root / "AruviCore" / "io" / "uart.v"),
+        str(hdl_root / "AruviCore" / "io" / "timer.v"),
+        str(hdl_root / "AruviCore" / "io" / "interrupt_controller.v")
     ]
     
     result = subprocess.run(compile_cmd, capture_output=True, text=True)

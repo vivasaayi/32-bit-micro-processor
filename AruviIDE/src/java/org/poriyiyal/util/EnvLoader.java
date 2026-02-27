@@ -119,7 +119,7 @@ public class EnvLoader {
                 return current;
             }
             // Check for processor directory
-            if (new File(current, "processor").exists() && 
+            if (new File(current, "AruviCore").exists() && 
                 new File(current, "AruviIDE").exists()) {
                 return current;
             }
