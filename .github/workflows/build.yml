@@ -95,9 +95,11 @@ jobs:
 
     - name: Upload JAR to Release (Windows)
       if: github.event_name == 'release'
-      run: |
-        cp AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar AruviXPlatform-JAR-Windows.jar
-        gh release upload ${{ github.event.release.tag_name }} AruviXPlatform-JAR-Windows.jar --clobber
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ github.event.release.tag_name }}
+        files: |
+          AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar#AruviXPlatform-JAR-Windows.jar
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -132,11 +134,20 @@ jobs:
         cd AruviIDE
         mvn clean package -DskipTests
 
+    - name: Sign JAR for macOS
+      run: |
+        # Create a self-signed certificate for development
+        keytool -genkeypair -alias "AruviXPlatform" -keyalg RSA -keysize 2048 -validity 3650 -keystore keystore.jks -storepass password -keypass password -dname "CN=AruviXPlatform, OU=Development, O=AruviXPlatform, L=Unknown, ST=Unknown, C=US"
+        # Sign the JAR
+        jarsigner -keystore keystore.jks -storepass password -keypass password AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar "AruviXPlatform"
+
     - name: Upload JAR to Release (macOS)
       if: github.event_name == 'release'
-      run: |
-        cp AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar AruviXPlatform-JAR-macOS.jar
-        gh release upload ${{ github.event.release.tag_name }} AruviXPlatform-JAR-macOS.jar --clobber
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ github.event.release.tag_name }}
+        files: |
+          AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar#AruviXPlatform-JAR-macOS.jar
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

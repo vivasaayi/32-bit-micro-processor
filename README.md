@@ -55,6 +55,20 @@ Official releases with pre-built JARs are available through GitHub Releases. The
 - **Windows**: `AruviXPlatform-JAR-Windows.jar`  
 - **macOS**: `AruviXPlatform-JAR-macOS.jar`
 
+### Running the JAR
+
+#### macOS Security Notice
+The macOS JAR is code-signed for development use. If you see a security warning:
+
+1. **First try**: Right-click the JAR file and select "Open"
+2. **If still blocked**: Go to **System Settings → Privacy & Security**
+   - Look for the blocked app message
+   - Click "Allow Anyway" or "Open Anyway"
+3. **Alternative**: Run from terminal:
+   ```bash
+   java -jar AruviXPlatform-JAR-macOS.jar
+   ```
+
 ## Quick Start
 
 ```bash
