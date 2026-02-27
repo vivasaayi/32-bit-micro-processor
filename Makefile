@@ -144,26 +144,43 @@ clean-toolchain:
 	rm -rf binaries/macos-arm64/
 
 # Cross-check targets for RISC-V compatibility
-FILE ?= sample_programs/arithmetic/assembly/handcrafted/0_0_add.s
 
 run_assembly_using_riscv_assembler_on_riscv_core:
-	@echo "🔍 Cross-check: RISC-V assembler on RISC-V core (QEMU)"
-	@echo "Assembling RISC-V assembly $(FILE) with standard RISC-V assembler and running on QEMU"
-	mkdir -p temp
-	riscv64-elf-as $(FILE) -o temp/test.o
-	riscv64-elf-ld -T temp/link.ld temp/test.o -o temp/test.elf
-	@echo "Running QEMU with UART output (will show PASS/FAIL if asserted)..."
-	gtimeout 3 qemu-system-riscv32 -nographic -machine virt -bios none -kernel temp/test.elf 2>&1 || true
+	@if [ -z "$(FILE)" ]; then \
+		echo "Running all assembly files..."; \
+		$(MAKE) test-all-asm; \
+	elif [ -d "$(FILE)" ]; then \
+		echo "Running all files in directory $(FILE)..."; \
+		FILES=$$(find $(FILE) -name "*.s" | tr '\n' ' '); \
+		$(MAKE) test-runner FILES="$$FILES"; \
+	else \
+		echo "Running single file $(FILE)..."; \
+		$(MAKE) test-runner FILES="$(FILE)"; \
+	fi
+
+# C program cross-check: AruviCompiler -> AruviAsm -> QEMU
+run_c_cross_check:
+	@if [ -z "$(C_FILE)" ]; then echo "Usage: make run_c_cross_check C_FILE=path/to/test.c"; exit 1; fi
+	@echo "🔍 C Cross-check: AruviCompiler + AruviAsm on QEMU"
+	@echo "Compiling $(C_FILE) with AruviCompiler..."
+	$(MAKE) -C AruviCompiler compile_c C_SRC=$(C_FILE)
+	@echo "Assembling with AruviAsm..."
+	$(MAKE) -C AruviAsm
+	./AruviAsm/assembler AruviCompiler/output.s -o temp/output.bin
+	@echo "Running on QEMU..."
+	qemu-system-riscv32 -M virt -cpu rv32 -bios none -device loader,file=temp/output.bin,addr=0x80000000 -nographic -serial mon:stdio || echo "QEMU execution completed"
 
 run_assembly_using_riscv_assembler_on_aruvi_core:
 	@echo "🔍 Cross-check: RISC-V assembler on Aruvi core"
 	@echo "Assembling RISC-V assembly with standard RISC-V assembler and running on Aruvi HDL simulation"
-	# TODO: Implement - assemble to hex format compatible with Aruvi core
+	# TODO: Implement - convert ELF to hex for Aruvi core
 
 run_assembly_using_aruvi_assembler_on_riscv_core:
 	@echo "🔍 Cross-check: Aruvi assembler on RISC-V core (QEMU)"
 	@echo "Assembling RISC-V assembly with Aruvi assembler and running on QEMU"
-	# TODO: Implement - convert Aruvi hex output to ELF for QEMU
+	$(MAKE) -C AruviAsm
+	./AruviAsm/assembler $(FILE) -o temp/output.bin
+	qemu-system-riscv32 -M virt -cpu rv32 -bios none -device loader,file=temp/output.bin,addr=0x80000000 -nographic -serial mon:stdio || echo "QEMU execution completed"
 
 run_assembly_using_aruvi_assembler_on_aruvi_core:
 	@echo "🔍 Cross-check: Aruvi assembler on Aruvi core"
@@ -173,6 +190,19 @@ run_assembly_using_aruvi_assembler_on_aruvi_core:
 # Test runner using Rust
 test-runner:
 	cd test-runners/riscv_test_runner && cargo build --release
-	./test-runners/riscv_test_runner/target/release/riscv_test_runner riscv-assembler-on-riscv-core --files $(FILES)
+	@if [ -z "$(FILES)" ]; then \
+		./test-runners/riscv_test_runner/target/release/riscv_test_runner riscv-assembler-on-riscv-core; \
+	else \
+		./test-runners/riscv_test_runner/target/release/riscv_test_runner riscv-assembler-on-riscv-core --files $(FILES); \
+	fi
 
-.PHONY: all sim wave clean test-alu test-reg test-all test-comprehensive assemble synth lint docs install-deps qemu-asm qemu-c toolchain clean-toolchain run_assembly_using_riscv_assembler_on_riscv_core run_assembly_using_riscv_assembler_on_aruvi_core run_assembly_using_aruvi_assembler_on_riscv_core run_assembly_using_aruvi_assembler_on_aruvi_core test-runner
+# Run all assembly files
+test-all-asm:
+	$(MAKE) test-runner
+
+# Run single file
+test-asm:
+	@if [ -z "$(FILE)" ]; then echo "Usage: make test-asm FILE=path/to/file.s"; exit 1; fi
+	$(MAKE) test-runner FILES="$(FILE)"
+
+.PHONY: all sim wave clean test-alu test-reg test-all test-comprehensive assemble synth lint docs install-deps qemu-asm qemu-c toolchain clean-toolchain run_c_cross_check run_assembly_using_riscv_assembler_on_riscv_core run_assembly_using_riscv_assembler_on_aruvi_core run_assembly_using_aruvi_assembler_on_riscv_core run_assembly_using_aruvi_assembler_on_aruvi_core test-runner test-all-asm test-asm

@@ -16,7 +16,7 @@ enum Commands {
     /// Run assembly using RISC-V assembler on RISC-V core (QEMU)
     RiscvAssemblerOnRiscvCore {
         /// Assembly file(s) to test (if not specified, runs all)
-        #[arg(short, long)]
+        #[arg(short, long, num_args = 0..)]
         files: Vec<String>,
     },
     /// Run assembly using RISC-V assembler on Aruvi core
