@@ -18,8 +18,8 @@ add x1, x1, x2 # x1 += 40
 addi x2, zero, 50
 add x1, x1, x2 # x1 += 50
 
-# Assert x1 == 155 (5+10+20+30+40+50)
-li t0, 155
+# Assert x1 == 150 (10+20+30+40+50)
+li t0, 150
 beq x1, t0, correct
 
 # failure - print "FAIL\n"
