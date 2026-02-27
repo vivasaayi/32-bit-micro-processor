@@ -175,7 +175,7 @@ fn main() {
             let mut results = Vec::new();
             for file in &test_files {
                 println!("Running test for: {}", file);
-                let result = run_test("run_assembly_using_riscv_assembler_on_riscv_core", file);
+                let result = run_test("run-qemu-asm", file);
                 results.push(result);
             }
 

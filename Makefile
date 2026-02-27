@@ -200,9 +200,15 @@ test-runner:
 test-all-asm:
 	$(MAKE) test-runner
 
-# Run single file
-test-asm:
-	@if [ -z "$(FILE)" ]; then echo "Usage: make test-asm FILE=path/to/file.s"; exit 1; fi
-	$(MAKE) test-runner FILES="$(FILE)"
+# Run QEMU for a single assembly file (used by test runner)
+run-qemu-asm:
+	@if [ -z "$(FILE)" ]; then echo "Usage: make run-qemu-asm FILE=path/to/file.s"; exit 1; fi
+	@echo "🔍 Cross-check: RISC-V assembler on RISC-V core (QEMU)"
+	@echo "Assembling RISC-V assembly $(FILE) with standard RISC-V assembler and running on QEMU"
+	mkdir -p temp
+	riscv64-elf-as $(FILE) -o temp/test.o
+	riscv64-elf-ld -T temp/link.ld temp/test.o -o temp/test.elf
+	@echo "Running QEMU with UART output (will show PASS/FAIL if asserted)..."
+	gtimeout 10 qemu-system-riscv32 -M virt -cpu rv32 -bios none -device loader,file=temp/test.elf,addr=0x80000000 -nographic -serial stdio 2>&1 || true
 
-.PHONY: all sim wave clean test-alu test-reg test-all test-comprehensive assemble synth lint docs install-deps qemu-asm qemu-c toolchain clean-toolchain run_c_cross_check run_assembly_using_riscv_assembler_on_riscv_core run_assembly_using_riscv_assembler_on_aruvi_core run_assembly_using_aruvi_assembler_on_riscv_core run_assembly_using_aruvi_assembler_on_aruvi_core test-runner test-all-asm test-asm
+.PHONY: all sim wave clean test-alu test-reg test-all test-comprehensive assemble synth lint docs install-deps qemu-asm qemu-c toolchain clean-toolchain run_c_cross_check run_assembly_using_riscv_assembler_on_riscv_core run_assembly_using_riscv_assembler_on_aruvi_core run_assembly_using_aruvi_assembler_on_riscv_core run_assembly_using_aruvi_assembler_on_aruvi_core test-runner test-all-asm test-asm run-qemu-asm
