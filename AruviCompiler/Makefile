@@ -15,11 +15,14 @@ $(TARGET): $(OBJECTS)
 clean:
 	rm -f $(OBJECTS) $(TARGET) *.s
 
+compile_c: $(TARGET)
+	./$(TARGET) $(C_SRC) -o output.s
+
 test: $(TARGET)
 	./$(TARGET) test_simple.c -o test_simple.s
 	cat test_simple.s
 
-.PHONY: all clean test riscv-check
+.PHONY: all clean test riscv-check compile_c
 
 
 riscv-check: $(TARGET)

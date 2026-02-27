@@ -93,11 +93,11 @@ install-deps:
 
 # --- QEMU Integration ---
 QEMU_RISCV32 = qemu-system-riscv32
-ASSEMBLER = ./tools/assembler
+ASSEMBLER = ./temp/assembler
 
 # Compile the assembler if not exists
 $(ASSEMBLER): tools/assembler.c
-	$(MAKE) -C tools assembler
+	$(MAKE) -C tools
 
 # Run assembly in QEMU
 # Usage: make qemu-asm ASM=verification/asm/test_alu.asm
@@ -111,8 +111,8 @@ qemu-asm: $(ASSEMBLER)
 # Run C program in QEMU
 qemu-c:
 	@if [ -z "$(C_SRC)" ]; then echo "Usage: make qemu-c C_SRC=path/to/test.c"; exit 1; fi
-	$(MAKE) -C compiler compile_c C_SRC=$(C_SRC)
-	$(ASSEMBLER) compiler/output.s -o output.bin
+	$(MAKE) -C AruviCompiler compile_c C_SRC=$(C_SRC)
+	$(ASSEMBLER) AruviCompiler/output.s -o output.bin
 	$(QEMU_RISCV32) -M virt -cpu rv32 -bios none -device loader,file=output.bin,addr=0x80000000 -nographic -serial mon:stdio
 
 .PHONY: all sim wave clean test-alu test-reg test-all test-comprehensive assemble synth lint docs install-deps qemu-asm qemu-c

@@ -128,7 +128,7 @@ public class CTab extends BaseTab {
             protected Void doInBackground() throws Exception {
                 try {
                     // Build compiler command with file-based naming
-                    String compilerPath = "../compiler/ccompiler";
+                    String compilerPath = "../AruviCompiler/ccompiler";
                     String inputFile = appState.getCurrentFile().getAbsolutePath();
                     
                     // Generate output file name based on input file
