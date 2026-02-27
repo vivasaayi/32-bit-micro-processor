@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>RISC-V Test Report - RISC-V Assembler on RISC-V Core</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .summary { background: #f0f0f0; padding: 10px; border-radius: 5px; margin-bottom: 20px; }
+        .test { border: 1px solid #ccc; margin: 10px 0; padding: 10px; border-radius: 5px; }
+        .passed { background: #d4edda; border-color: #c3e6cb; }
+        .failed { background: #f8d7da; border-color: #f5c6cb; }
+        .output { background: #f8f9fa; padding: 10px; margin-top: 10px; border-radius: 3px; white-space: pre-wrap; font-family: monospace; }
+    </style>
+</head>
+<body>
+    <h1>RISC-V Cross-Check Test Report</h1>
+    <h2>Test: RISC-V Assembler on RISC-V Core</h2>
+    <div class="summary">
+        <h3>Summary</h3>
+        <p>Total Tests: 1</p>
+        <p>Passed: 1 <span style="color: green;">✓</span></p>
+        <p>Failed: 0 <span style="color: red;">✗</span></p>
+    </div>
+
+    <div class="test passed">
+        <h4>File: sample_programs/arithmetic/assembly/handcrafted/0_0_add.s - PASSED</h4>
+        <div class="output">
+            <strong>Output:</strong><br>🔍 Cross-check: RISC-V assembler on RISC-V core (QEMU)
+Assembling RISC-V assembly sample_programs/arithmetic/assembly/handcrafted/0_0_add.s with standard RISC-V assembler and running on QEMU
+mkdir -p temp
+riscv64-elf-as sample_programs/arithmetic/assembly/handcrafted/0_0_add.s -o temp/test.o
+riscv64-elf-ld -T temp/link.ld temp/test.o -o temp/test.elf
+Running QEMU with UART output (will show PASS/FAIL if asserted)...
+gtimeout 3 qemu-system-riscv32 -nographic -machine virt -bios none -kernel temp/test.elf 2>&1 || true
+PASS
+qemu-system-riscv32: terminating on signal 15 from pid 38178 (<unknown process>)
+sample_programs/arithmetic/assembly/handcrafted/0_0_add.s: Assembler messages:
+sample_programs/arithmetic/assembly/handcrafted/0_0_add.s: Warning: end of file not at end of a line; newline inserted
+temp/assert.s: Warning: end of file not at end of a line; newline inserted
+
+        </div>
+        <div class="output">
+            <strong>Error:</strong><br>
+        </div>
+    </div>
+</body></html>

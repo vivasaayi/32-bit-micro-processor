@@ -153,7 +153,7 @@ run_assembly_using_riscv_assembler_on_riscv_core:
 	riscv64-elf-as $(FILE) -o temp/test.o
 	riscv64-elf-ld -T temp/link.ld temp/test.o -o temp/test.elf
 	@echo "Running QEMU with UART output (will show PASS/FAIL if asserted)..."
-	@((qemu-system-riscv32 -nographic -machine virt -bios none -kernel temp/test.elf &) ; sleep 2 ; kill $! 2>/dev/null) || true
+	gtimeout 3 qemu-system-riscv32 -nographic -machine virt -bios none -kernel temp/test.elf 2>&1 || true
 
 run_assembly_using_riscv_assembler_on_aruvi_core:
 	@echo "🔍 Cross-check: RISC-V assembler on Aruvi core"
@@ -170,4 +170,9 @@ run_assembly_using_aruvi_assembler_on_aruvi_core:
 	@echo "Assembling RISC-V assembly with Aruvi assembler and running on Aruvi HDL simulation"
 	$(MAKE) sim  # Current simulation uses Aruvi toolchain
 
-.PHONY: all sim wave clean test-alu test-reg test-all test-comprehensive assemble synth lint docs install-deps qemu-asm qemu-c toolchain clean-toolchain run_assembly_using_riscv_assembler_on_riscv_core run_assembly_using_riscv_assembler_on_aruvi_core run_assembly_using_aruvi_assembler_on_riscv_core run_assembly_using_aruvi_assembler_on_aruvi_core
+# Test runner using Rust
+test-runner:
+	cd test-runners/riscv_test_runner && cargo build --release
+	./test-runners/riscv_test_runner/target/release/riscv_test_runner riscv-assembler-on-riscv-core --files $(FILES)
+
+.PHONY: all sim wave clean test-alu test-reg test-all test-comprehensive assemble synth lint docs install-deps qemu-asm qemu-c toolchain clean-toolchain run_assembly_using_riscv_assembler_on_riscv_core run_assembly_using_riscv_assembler_on_aruvi_core run_assembly_using_aruvi_assembler_on_riscv_core run_assembly_using_aruvi_assembler_on_aruvi_core test-runner
