@@ -119,7 +119,16 @@ make
 # Test with provided examples
 ./ccompiler test_simple.c -o test_simple.s
 ./ccompiler test_function.c -o test_function.s
+
+# Verify RISC-V compatibility for the focused RV32 test suite
+./check_riscv_compat.sh
 ```
+
+### RV32-focused test files
+
+- `test_rv32i_control_flow.c`: branches, loops, compares, bitwise/shift ops
+- `test_rv32m_arithmetic.c`: multiply/divide/remainder instruction coverage
+- `test_rv32_calls_arrays.c`: function calls, pointer/array loads, ternary return
 
 ## 📈 **Performance**
 
