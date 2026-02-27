@@ -2,6 +2,39 @@
 
 A complete hardware description language (HDL) implementation of a custom 32-bit RISC processor with full C toolchain support.
 
+## AruviXPlatform IDE
+
+The project includes a comprehensive Java-based IDE for development, simulation, and visualization of the RISC processor.
+
+### Building the IDE JAR
+
+#### Local Build
+```bash
+# Build all C/Rust components first
+cd AruviAsm && make
+cd ../AruviCompiler && make
+cd ../AruviJVM && make
+cd ../AruviEmulator && cargo build --release
+
+# Then build JAR
+cd ../AruviIDE
+mvn clean package
+java -jar target/AruviIDE-1.0-SNAPSHOT.jar
+```
+
+#### GitHub Actions Build
+The JAR is automatically built on every push to main/master via GitHub Actions. The workflow builds the complete toolchain (C, Rust, Java) and bundles everything into a single executable JAR. Download the artifact from the Actions tab.
+
+The JAR contains the full AruviXPlatform ecosystem:
+- Java IDE with GUI
+- C compiler and assembler
+- Rust emulator
+- JVM interpreter
+- HDL processor files
+- Documentation and examples
+- Test programs and benches
+- OS components
+
 ## Quick Start
 
 ```bash

@@ -44,8 +44,54 @@
                 <targetPath>hdl</targetPath>
             </resource>
             <resource>
-                <directory>../test_programs</directory>
-                <targetPath>test_programs</targetPath>
+                <directory>../AruviJVM</directory>
+                <includes>
+                    <include>bin/aruvijvm</include>
+                </includes>
+                <targetPath>bin</targetPath>
+            </resource>
+            <resource>
+                <directory>../AruviEmulator</directory>
+                <includes>
+                    <include>target/release/aruvi_emulator</include>
+                </includes>
+                <targetPath>bin</targetPath>
+            </resource>
+            <resource>
+                <directory>../docs</directory>
+                <targetPath>docs</targetPath>
+            </resource>
+            <resource>
+                <directory>../include</directory>
+                <targetPath>include</targetPath>
+            </resource>
+            <resource>
+                <directory>../software</directory>
+                <targetPath>software</targetPath>
+            </resource>
+            <resource>
+                <directory>../tools</directory>
+                <targetPath>tools</targetPath>
+            </resource>
+            <resource>
+                <directory>../jvm</directory>
+                <targetPath>jvm</targetPath>
+            </resource>
+            <resource>
+                <directory>../io</directory>
+                <targetPath>io</targetPath>
+            </resource>
+            <resource>
+                <directory>../testbench</directory>
+                <targetPath>testbench</targetPath>
+            </resource>
+            <resource>
+                <directory>../verification</directory>
+                <targetPath>verification</targetPath>
+            </resource>
+            <resource>
+                <directory>../AruviOS</directory>
+                <targetPath>os</targetPath>
             </resource>
         </resources>
         <plugins>
