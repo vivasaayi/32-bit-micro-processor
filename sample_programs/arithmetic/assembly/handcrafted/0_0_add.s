@@ -18,40 +18,7 @@ add x1, x1, x2 # x1 += 40
 addi x2, zero, 50
 add x1, x1, x2 # x1 += 50
 
-# Assert x1 == 150 (10+20+30+40+50)
-li t0, 150
-beq x1, t0, correct
+# Set expected result in x2
+li x2, 150
 
-# failure - print "FAIL\n"
-lui t1, 0x10000  # UART base address
-li t2, 'F'
-sb t2, 0(t1)
-li t2, 'A'
-sb t2, 0(t1)
-li t2, 'I'
-sb t2, 0(t1)
-li t2, 'L'
-sb t2, 0(t1)
-li t2, '\n'
-sb t2, 0(t1)
-j failure_loop
-
-correct:
-# success - print "PASS\n"
-lui t1, 0x10000
-li t2, 'P'
-sb t2, 0(t1)
-li t2, 'A'
-sb t2, 0(t1)
-li t2, 'S'
-sb t2, 0(t1)
-li t2, 'S'
-sb t2, 0(t1)
-li t2, '\n'
-sb t2, 0(t1)
-
-inf_loop:
-    j inf_loop
-
-failure_loop:
-    j failure_loop
+.include "temp/assert.s"

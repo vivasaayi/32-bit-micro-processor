@@ -144,13 +144,15 @@ clean-toolchain:
 	rm -rf binaries/macos-arm64/
 
 # Cross-check targets for RISC-V compatibility
+FILE ?= sample_programs/arithmetic/assembly/handcrafted/0_0_add.s
+
 run_assembly_using_riscv_assembler_on_riscv_core:
 	@echo "🔍 Cross-check: RISC-V assembler on RISC-V core (QEMU)"
-	@echo "Assembling RISC-V assembly with standard RISC-V assembler and running on QEMU"
+	@echo "Assembling RISC-V assembly $(FILE) with standard RISC-V assembler and running on QEMU"
 	mkdir -p temp
-	riscv64-elf-as sample_programs/arithmetic/assembly/handcrafted/0_0_add.s -o temp/test.o
+	riscv64-elf-as $(FILE) -o temp/test.o
 	riscv64-elf-ld -T temp/link.ld temp/test.o -o temp/test.elf
-	@echo "Running QEMU with UART output (will show PASS/FAIL)..."
+	@echo "Running QEMU with UART output (will show PASS/FAIL if asserted)..."
 	@((qemu-system-riscv32 -nographic -machine virt -bios none -kernel temp/test.elf &) ; sleep 2 ; kill $! 2>/dev/null) || true
 
 run_assembly_using_riscv_assembler_on_aruvi_core:

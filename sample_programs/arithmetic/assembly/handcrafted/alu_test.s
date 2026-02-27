@@ -19,22 +19,22 @@ OR R6, R2, R3
 XOR R7, R2, R3
 
 # ADDI: R8 = R2 + 5
-#ADDI R8, R2, 5
+#addi R8, R2, 5
 
 # SUBI: R9 = R3 - 7
-#SUBI R9, R3, 7
+#addi R9, R3, -7
 
 # CMP: Compare R2 and R3 (result in flags)
 CMP R2, R3
 
 # Store results to memory for verification
-STORE R1, 100
-STORE R4, 104
-STORE R5, 108
-STORE R6, 112
-STORE R7, 116
-STORE R8, 120
-STORE R9, 124
+sw R1, 0(100)
+sw R4, 0(104)
+sw R5, 0(108)
+sw R6, 0(112)
+sw R7, 0(116)
+sw R8, 0(120)
+sw R9, 0(124)
 
 # End of test
 HALT

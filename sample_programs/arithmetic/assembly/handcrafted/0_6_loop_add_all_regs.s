@@ -40,43 +40,43 @@ ADD R29, R0, R0
 ADD R30, R0, R0
 
 # Set up loop counter in R31
-LOADI R31, #5
+addi R31, zero, 5
 
 loop_start:
 # Add 2 to each register R1-R30
-ADDI R1, R1, #2
-ADDI R2, R2, #2
-ADDI R3, R3, #2
-ADDI R4, R4, #2
-ADDI R5, R5, #2
-ADDI R6, R6, #2
-ADDI R7, R7, #2
-ADDI R8, R8, #2
-ADDI R9, R9, #2
-ADDI R10, R10, #2
-ADDI R11, R11, #2
-ADDI R12, R12, #2
-ADDI R13, R13, #2
-ADDI R14, R14, #2
-ADDI R15, R15, #2
-ADDI R16, R16, #2
-ADDI R17, R17, #2
-ADDI R18, R18, #2
-ADDI R19, R19, #2
-ADDI R20, R20, #2
-ADDI R21, R21, #2
-ADDI R22, R22, #2
-ADDI R23, R23, #2
-ADDI R24, R24, #2
-ADDI R25, R25, #2
-ADDI R26, R26, #2
-ADDI R27, R27, #2
-ADDI R28, R28, #2
-ADDI R29, R29, #2
-ADDI R30, R30, #2
+addi R1, R1, 2
+addi R2, R2, 2
+addi R3, R3, 2
+addi R4, R4, 2
+addi R5, R5, 2
+addi R6, R6, 2
+addi R7, R7, 2
+addi R8, R8, 2
+addi R9, R9, 2
+addi R10, R10, 2
+addi R11, R11, 2
+addi R12, R12, 2
+addi R13, R13, 2
+addi R14, R14, 2
+addi R15, R15, 2
+addi R16, R16, 2
+addi R17, R17, 2
+addi R18, R18, 2
+addi R19, R19, 2
+addi R20, R20, 2
+addi R21, R21, 2
+addi R22, R22, 2
+addi R23, R23, 2
+addi R24, R24, 2
+addi R25, R25, 2
+addi R26, R26, 2
+addi R27, R27, 2
+addi R28, R28, 2
+addi R29, R29, 2
+addi R30, R30, 2
 
 # Decrement loop counter and branch if not zero (use CMP/JZ/JMP style)
-SUBI R31, R31, #1
+addi R31, R31, -1
 CMP R31, R0
 JZ end_loop
 JMP loop_start
@@ -84,36 +84,36 @@ JMP loop_start
 end_loop:
 # Store results for verification
 # R1-R30 should all be 10
-STORE R1, 0x8001
-STORE R2, 0x8002
-STORE R3, 0x8003
-STORE R4, 0x8004
-STORE R5, 0x8005
-STORE R6, 0x8006
-STORE R7, 0x8007
-STORE R8, 0x8008
-STORE R9, 0x8009
-STORE R10, 0x800A
-STORE R11, 0x800B
-STORE R12, 0x800C
-STORE R13, 0x800D
-STORE R14, 0x800E
-STORE R15, 0x800F
-STORE R16, 0x8010
-STORE R17, 0x8011
-STORE R18, 0x8012
-STORE R19, 0x8013
-STORE R20, 0x8014
-STORE R21, 0x8015
-STORE R22, 0x8016
-STORE R23, 0x8017
-STORE R24, 0x8018
-STORE R25, 0x8019
-STORE R26, 0x801A
-STORE R27, 0x801B
-STORE R28, 0x801C
-STORE R29, 0x801D
-STORE R30, 0x801E
-STORE R31, 0x801F # Store final counter value (should be 0)
+sw R1, 0(0x8001)
+sw R2, 0(0x8002)
+sw R3, 0(0x8003)
+sw R4, 0(0x8004)
+sw R5, 0(0x8005)
+sw R6, 0(0x8006)
+sw R7, 0(0x8007)
+sw R8, 0(0x8008)
+sw R9, 0(0x8009)
+sw R10, 0(0x800A)
+sw R11, 0(0x800B)
+sw R12, 0(0x800C)
+sw R13, 0(0x800D)
+sw R14, 0(0x800E)
+sw R15, 0(0x800F)
+sw R16, 0(0x8010)
+sw R17, 0(0x8011)
+sw R18, 0(0x8012)
+sw R19, 0(0x8013)
+sw R20, 0(0x8014)
+sw R21, 0(0x8015)
+sw R22, 0(0x8016)
+sw R23, 0(0x8017)
+sw R24, 0(0x8018)
+sw R25, 0(0x8019)
+sw R26, 0(0x801A)
+sw R27, 0(0x801B)
+sw R28, 0(0x801C)
+sw R29, 0(0x801D)
+sw R30, 0(0x801E)
+sw R31, 0(0x801F) # Store final counter value (should be 0)
 
 HALT

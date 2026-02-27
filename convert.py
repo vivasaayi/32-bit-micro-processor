@@ -55,14 +55,29 @@ def convert_to_riscv(content):
         # mov rd, #imm -> addi rd, zero, imm
         code = re.sub(r'\bmov\s+(\w+),\s*#([0-9]+)', r'addi \1, zero, \2', code)
         
+        # LOADI rd, #imm -> addi rd, zero, imm
+        code = re.sub(r'\bLOADI\s+(\w+),\s*#([0-9]+)', r'addi \1, zero, \2', code)
+        
+        # ADDI rd, rs, #imm -> addi rd, rs, imm
+        code = re.sub(r'\bADDI\s+(\w+),\s*(\w+),\s*#?(-?\d+)', r'addi \1, \2, \3', code)
+        
+        # SUBI rd, rs, #imm -> addi rd, rs, -imm
+        code = re.sub(r'\bSUBI\s+(\w+),\s*(\w+),\s*#?(\d+)', r'addi \1, \2, -\3', code)
+        
         # add stays
         # sub stays
         
         # load rd, [addr] -> lw rd, 0(addr) if addr is label or number
         code = re.sub(r'\bload\s+(\w+),\s*\[([^\]]+)\]', r'lw \1, 0(\2)', code)
         
+        # LOAD rd, addr -> lw rd, 0(addr)
+        code = re.sub(r'\bLOAD\s+(\w+),\s*([^\s]+)', r'lw \1, 0(\2)', code)
+        
         # store rs, [addr] -> sw rs, 0(addr)
         code = re.sub(r'\bstore\s+(\w+),\s*\[([^\]]+)\]', r'sw \1, 0(\2)', code)
+        
+        # STORE rs, addr -> sw rs, 0(addr)
+        code = re.sub(r'\bSTORE\s+(\w+),\s*([^\s]+)', r'sw \1, 0(\2)', code)
         
         # jmp label -> j label
         code = re.sub(r'\bjmp\s+(\w+)', r'j \1', code)

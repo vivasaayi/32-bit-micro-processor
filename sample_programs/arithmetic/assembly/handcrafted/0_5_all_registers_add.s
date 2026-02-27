@@ -2,40 +2,40 @@
 
 main:
 # Initialize registers with different values (R1 to R31)
-LOADI R1, #1
-LOADI R2, #2
-LOADI R3, #3
-LOADI R4, #4
-LOADI R5, #5
-LOADI R6, #6
-LOADI R7, #7
-LOADI R8, #8
-LOADI R9, #9
-LOADI R10, #10
-LOADI R11, #11
-LOADI R12, #12
-LOADI R13, #13
-LOADI R14, #14
-LOADI R15, #15
-LOADI R16, #16
-LOADI R17, #17
-LOADI R18, #18
-LOADI R19, #19
-LOADI R20, #20
-LOADI R21, #21
-LOADI R22, #22
-LOADI R23, #23
-LOADI R24, #24
-LOADI R25, #25
-LOADI R26, #26
-LOADI R27, #27
-LOADI R28, #28
-LOADI R29, #29
-LOADI R30, #30
-LOADI R31, #31
+addi R1, zero, 1
+addi R2, zero, 2
+addi R3, zero, 3
+addi R4, zero, 4
+addi R5, zero, 5
+addi R6, zero, 6
+addi R7, zero, 7
+addi R8, zero, 8
+addi R9, zero, 9
+addi R10, zero, 10
+addi R11, zero, 11
+addi R12, zero, 12
+addi R13, zero, 13
+addi R14, zero, 14
+addi R15, zero, 15
+addi R16, zero, 16
+addi R17, zero, 17
+addi R18, zero, 18
+addi R19, zero, 19
+addi R20, zero, 20
+addi R21, zero, 21
+addi R22, zero, 22
+addi R23, zero, 23
+addi R24, zero, 24
+addi R25, zero, 25
+addi R26, zero, 26
+addi R27, zero, 27
+addi R28, zero, 28
+addi R29, zero, 29
+addi R30, zero, 30
+addi R31, zero, 31
 
 # Accumulate sum in R30 (skip R0)
-# LOADI R30, #0
+# addi R30, zero, 0
 ADD R30, R30, R1
 ADD R30, R30, R2
 ADD R30, R30, R3
@@ -69,5 +69,5 @@ ADD R30, R30, R29
 ADD R30, R30, R31
 
 # Store result for verification
-STORE R30, 0x8000 # Store sum of 1..31 = 496
+sw R30, 0(0x8000) # Store sum of 1..31 = 496
 HALT
