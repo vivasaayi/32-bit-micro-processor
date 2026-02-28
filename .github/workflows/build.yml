@@ -201,26 +201,40 @@ jobs:
         SUBMISSION_ID=$(xcrun notarytool submit notarize.zip \
           --apple-id "$APPLE_ID" \
           --password "$APPLE_APP_PASSWORD" \
-          --team-id "$APPLE_TEAM_ID" \
-          --wait | grep "id:" | head -1 | awk '{print $2}')
+          --team-id "$APPLE_TEAM_ID" | grep "id:" | head -1 | awk '{print $2}')
+        echo "Submission ID: $SUBMISSION_ID"
         
-        # Check status
-        STATUS=$(xcrun notarytool info "$SUBMISSION_ID" \
-          --apple-id "$APPLE_ID" \
-          --password "$APPLE_APP_PASSWORD" \
-          --team-id "$APPLE_TEAM_ID" | grep "status:" | awk '{print $2}')
-        
-        if [ "$STATUS" = "Accepted" ]; then
-          echo "✅ Notarization successful!"
-          # Staple the ticket
-          xcrun stapler staple AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar
-        else
-          echo "❌ Notarization failed with status: $STATUS"
-          echo "📋 Fetching notarization log..."
-          xcrun notarytool log "$SUBMISSION_ID" \
+        # Poll status with timeout
+        TIMEOUT=7200  # 2 hours in seconds
+        ELAPSED=0
+        while [ $ELAPSED -lt $TIMEOUT ]; do
+          STATUS=$(xcrun notarytool info "$SUBMISSION_ID" \
             --apple-id "$APPLE_ID" \
             --password "$APPLE_APP_PASSWORD" \
-            --team-id "$APPLE_TEAM_ID"
+            --team-id "$APPLE_TEAM_ID" | grep "status:" | awk '{print $2}')
+          echo "Current status: $STATUS (elapsed: ${ELAPSED}s)"
+          
+          if [ "$STATUS" = "Accepted" ]; then
+            echo "✅ Notarization successful!"
+            # Staple the ticket
+            xcrun stapler staple AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar
+            break
+          elif [ "$STATUS" = "Invalid" ]; then
+            echo "❌ Notarization failed with status: $STATUS"
+            echo "📋 Fetching notarization log..."
+            xcrun notarytool log "$SUBMISSION_ID" \
+              --apple-id "$APPLE_ID" \
+              --password "$APPLE_APP_PASSWORD" \
+              --team-id "$APPLE_TEAM_ID"
+            exit 1
+          fi
+          
+          sleep 300  # Wait 5 minutes
+          ELAPSED=$((ELAPSED + 300))
+        done
+        
+        if [ $ELAPSED -ge $TIMEOUT ]; then
+          echo "⏰ Notarization timed out after 2 hours. Check status manually with ID: $SUBMISSION_ID"
           exit 1
         fi
 
