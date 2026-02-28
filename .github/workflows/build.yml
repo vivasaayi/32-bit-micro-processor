@@ -211,7 +211,7 @@ jobs:
           STATUS=$(xcrun notarytool info "$SUBMISSION_ID" \
             --apple-id "$APPLE_ID" \
             --password "$APPLE_APP_PASSWORD" \
-            --team-id "$APPLE_TEAM_ID" | grep "status:" | awk '{print $2}')
+            --team-id "$APPLE_TEAM_ID" | grep "status:" | sed 's/.*status: //')
           echo "Current status: $STATUS (elapsed: ${ELAPSED}s)"
           
           if [ "$STATUS" = "Accepted" ]; then
