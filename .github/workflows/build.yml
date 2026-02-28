@@ -181,7 +181,7 @@ jobs:
     - name: Build JAR
       run: |
         cd AruviIDE
-        mvn clean package -DskipTests -Pmac-sign
+        mvn clean package -DskipTests -Pmac-notarize
 
     - name: Sign and Notarize JAR for macOS
       if: github.event_name == 'release'
@@ -196,9 +196,8 @@ jobs:
         codesign --force --sign "Developer ID Application" --timestamp --options runtime \
           AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar
 
-        # Notarize: zip the JAR and submit to Apple
-        ditto -c -k --keepParent AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar notarize.zip
-        SUBMISSION_ID=$(xcrun notarytool submit notarize.zip \
+        # Notarize: submit the JAR directly
+        SUBMISSION_ID=$(xcrun notarytool submit AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar \
           --apple-id "$APPLE_ID" \
           --password "$APPLE_APP_PASSWORD" \
           --team-id "$APPLE_TEAM_ID" | grep "id:" | head -1 | awk '{print $2}')
