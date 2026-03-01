@@ -183,6 +183,11 @@ jobs:
         cd AruviIDE
         mvn clean package -DskipTests -Pmac-notarize
 
+    - name: Check JAR contents
+      run: |
+        echo "JAR file count: $(jar tf AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar | wc -l)"
+        echo "JAR size: $(ls -lh AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar | awk '{print $5}')"
+
     - name: Sign and Notarize JAR for macOS
       if: github.event_name == 'release'
       env:

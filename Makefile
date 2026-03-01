@@ -146,17 +146,7 @@ clean-toolchain:
 # Cross-check targets for RISC-V compatibility
 
 run_assembly_using_riscv_assembler_on_riscv_core:
-	@if [ -z "$(FILE)" ]; then \
-		echo "Running all assembly files..."; \
-		$(MAKE) test-all-asm; \
-	elif [ -d "$(FILE)" ]; then \
-		echo "Running all files in directory $(FILE)..."; \
-		FILES=$$(find $(FILE) -name "*.s" | tr '\n' ' '); \
-		$(MAKE) test-runner FILES="$$FILES"; \
-	else \
-		echo "Running single file $(FILE)..."; \
-		$(MAKE) test-runner FILES="$(FILE)"; \
-	fi
+	$(MAKE) test-runner FILES="$(FILE)"
 
 # C program cross-check: AruviCompiler -> AruviAsm -> QEMU
 run_c_cross_check:
@@ -190,11 +180,7 @@ run_assembly_using_aruvi_assembler_on_aruvi_core:
 # Test runner using Rust
 test-runner:
 	cd test-runners/riscv_test_runner && cargo build --release
-	@if [ -z "$(FILES)" ]; then \
-		./test-runners/riscv_test_runner/target/release/riscv_test_runner riscv-assembler-on-riscv-core; \
-	else \
-		./test-runners/riscv_test_runner/target/release/riscv_test_runner riscv-assembler-on-riscv-core --files $(FILES); \
-	fi
+	./test-runners/riscv_test_runner/target/release/riscv_test_runner riscv-assembler-on-riscv-core $(FILES)
 
 # Run all assembly files
 test-all-asm:

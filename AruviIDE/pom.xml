@@ -59,6 +59,9 @@
             </resource>
             <resource>
                 <directory>../docs</directory>
+                <excludes>
+                    <exclude>${exclude.docs}</exclude>
+                </excludes>
                 <targetPath>docs</targetPath>
             </resource>
             <resource>
@@ -67,6 +70,9 @@
             </resource>
             <resource>
                 <directory>../software</directory>
+                <excludes>
+                    <exclude>${exclude.software}</exclude>
+                </excludes>
                 <targetPath>software</targetPath>
             </resource>
             <resource>
@@ -83,10 +89,16 @@
             </resource>
             <resource>
                 <directory>../testbench</directory>
+                <excludes>
+                    <exclude>${exclude.testbench}</exclude>
+                </excludes>
                 <targetPath>testbench</targetPath>
             </resource>
             <resource>
                 <directory>../verification</directory>
+                <excludes>
+                    <exclude>${exclude.verification}</exclude>
+                </excludes>
                 <targetPath>verification</targetPath>
             </resource>
             <resource>

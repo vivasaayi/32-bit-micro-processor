@@ -1,42 +1,27 @@
 use clap::{Parser, Subcommand};
-use std::process::{Command, Stdio};
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
 
 #[derive(Parser)]
 #[command(name = "riscv_test_runner")]
 #[command(about = "RISC-V Cross-Check Test Runner")]
 struct Cli {
+    #[arg(short, long, default_value = "test_report.html")]
+    output: String,
     #[command(subcommand)]
     command: Commands,
 }
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Run assembly using RISC-V assembler on RISC-V core (QEMU)
     RiscvAssemblerOnRiscvCore {
-        /// Assembly file(s) to test (if not specified, runs all)
-        #[arg(short, long, num_args = 0..)]
-        files: Vec<String>,
+        #[arg(num_args = 0..)]
+        paths: Vec<String>,
     },
-    /// Run assembly using RISC-V assembler on Aruvi core
-    RiscvAssemblerOnAruviCore {
-        /// Assembly file(s) to test
-        #[arg(short, long)]
-        files: Vec<String>,
-    },
-    /// Run assembly using Aruvi assembler on RISC-V core
-    AruviAssemblerOnRiscvCore {
-        /// Assembly file(s) to test
-        #[arg(short, long)]
-        files: Vec<String>,
-    },
-    /// Run assembly using Aruvi assembler on Aruvi core
-    AruviAssemblerOnAruviCore {
-        /// Assembly file(s) to test
-        #[arg(short, long)]
-        files: Vec<String>,
-    },
+    RiscvAssemblerOnAruviCore { #[arg(num_args = 0..)] paths: Vec<String> },
+    AruviAssemblerOnRiscvCore { #[arg(num_args = 0..)] paths: Vec<String> },
+    AruviAssemblerOnAruviCore { #[arg(num_args = 0..)] paths: Vec<String> },
 }
 
 #[derive(Debug)]
@@ -44,153 +29,178 @@ struct TestResult {
     file: String,
     passed: bool,
     output: String,
-    error: String,
 }
 
-fn run_make_command(make_target: &str, file: Option<&str>) -> Result<String, String> {
-    let mut cmd = Command::new("make");
-    cmd.arg(make_target)
-       .current_dir("/Users/rajanpanneerselvam/work/AruviXPlatform")
-       .stdout(Stdio::piped())
-       .stderr(Stdio::piped());
-
-    if let Some(f) = file {
-        cmd.env("FILE", f);
-    }
-
-    let output = cmd.output().map_err(|e| format!("Failed to run make: {}", e))?;
-
-    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-
-    if output.status.success() {
-        Ok(format!("{}{}", stdout, stderr))
-    } else {
-        Err(format!("Make failed: {}{}", stdout, stderr))
-    }
-}
-
-fn run_test(make_target: &str, file: &str) -> TestResult {
-    let result = run_make_command(make_target, Some(file));
-    let (passed, output, error) = match result {
-        Ok(out) => {
-            let pass = out.contains("PASS");
-            (pass, out, String::new())
+fn collect_asm_files(path: &Path, out: &mut Vec<PathBuf>) {
+    if path.is_file() {
+        if path.extension().and_then(|e| e.to_str()) == Some("s") {
+            out.push(path.to_path_buf());
         }
-        Err(err) => (false, String::new(), err),
-    };
-
-    TestResult {
-        file: file.to_string(),
-        passed,
-        output,
-        error,
+    } else if path.is_dir() {
+        if let Ok(entries) = fs::read_dir(path) {
+            let mut children: Vec<_> = entries.flatten().map(|e| e.path()).collect();
+            children.sort();
+            for child in children {
+                collect_asm_files(&child, out);
+            }
+        }
     }
 }
 
-fn find_assembly_files() -> Vec<String> {
+fn resolve_files(paths: &[String], root: &Path) -> Vec<PathBuf> {
+    let roots: Vec<PathBuf> = if paths.is_empty() {
+        vec![root.join("sample_programs")]
+    } else {
+        paths.iter().map(|p| {
+            let pb = PathBuf::from(p);
+            if pb.is_absolute() { pb } else { root.join(p) }
+        }).collect()
+    };
     let mut files = Vec::new();
-    let patterns = [
-        "sample_programs/arithmetic/assembly/handcrafted/*.s",
-        "sample_programs/graphics/assembly/handcrafted/*.s",
-        "sample_programs/functions/assembly/handcrafted/*.s",
-    ];
+    for r in roots {
+        collect_asm_files(&r, &mut files);
+    }
+    files
+}
 
-    for pattern in &patterns {
-        if let Ok(entries) = glob::glob(&format!("/Users/rajanpanneerselvam/work/AruviXPlatform/{}", pattern)) {
-            for entry in entries {
-                if let Ok(path) = entry {
-                    if let Some(file) = path.to_str() {
-                        files.push(file.to_string());
-                    }
-                }
+fn find_project_root() -> PathBuf {
+    let cwd = std::env::current_dir().expect("cwd");
+    let mut dir = cwd.clone();
+    loop {
+        if dir.join("sample_programs").exists() && dir.join("Makefile").exists() {
+            return dir;
+        }
+        if !dir.pop() {
+            return cwd;
+        }
+    }
+}
+
+fn run_riscv_asm_on_qemu(asm_file: &Path, root: &Path) -> (bool, String) {
+    let tmp = root.join("temp");
+    let _ = fs::create_dir_all(&tmp);
+    let obj = tmp.join("test.o");
+    let elf = tmp.join("test.elf");
+    let ld  = tmp.join("link.ld");
+    let mut log = String::new();
+
+    let r = Command::new("riscv64-elf-as")
+        .arg(asm_file).arg("-o").arg(&obj)
+        .current_dir(root)
+        .stdout(Stdio::piped()).stderr(Stdio::piped())
+        .output();
+    match r {
+        Err(e) => return (false, format!("assembler error: {}", e)),
+        Ok(o) => {
+            log += &String::from_utf8_lossy(&o.stderr);
+            if !o.status.success() {
+                return (false, format!("assemble failed:\n{}", log));
             }
         }
     }
 
-    files
+    let r = Command::new("riscv64-elf-ld")
+        .arg("-T").arg(&ld).arg(&obj).arg("-o").arg(&elf)
+        .current_dir(root)
+        .stdout(Stdio::piped()).stderr(Stdio::piped())
+        .output();
+    match r {
+        Err(e) => return (false, format!("linker error: {}", e)),
+        Ok(o) => {
+            log += &String::from_utf8_lossy(&o.stderr);
+            if !o.status.success() {
+                return (false, format!("link failed:\n{}", log));
+            }
+        }
+    }
+
+    let r = Command::new("gtimeout")
+        .arg("10")
+        .arg("qemu-system-riscv32")
+        .arg("-nographic")
+        .arg("-machine").arg("virt")
+        .arg("-bios").arg("none")
+        .arg("-kernel").arg(&elf)
+        .current_dir(root)
+        .stdout(Stdio::piped()).stderr(Stdio::piped())
+        .output();
+    match r {
+        Err(e) => (false, format!("qemu error: {}", e)),
+        Ok(o) => {
+            let stdout = String::from_utf8_lossy(&o.stdout).to_string();
+            let stderr = String::from_utf8_lossy(&o.stderr).to_string();
+            log += &stdout;
+            log += &stderr;
+            let passed = stdout.contains("PASS") || stderr.contains("PASS");
+            (passed, log)
+        }
+    }
 }
 
-fn generate_html_report(results: &[TestResult], test_name: &str) -> String {
-    let total = results.len();
+fn html_escape(s: &str) -> String {
+    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
+}
+
+fn generate_html_report(results: &[TestResult], title: &str) -> String {
+    let total  = results.len();
     let passed = results.iter().filter(|r| r.passed).count();
     let failed = total - passed;
 
-    let mut html = format!(r#"<!DOCTYPE html>
-<html>
-<head>
-    <title>RISC-V Test Report - {}</title>
-    <style>
-        body {{ font-family: Arial, sans-serif; margin: 20px; }}
-        .summary {{ background: #f0f0f0; padding: 10px; border-radius: 5px; margin-bottom: 20px; }}
-        .test {{ border: 1px solid #ccc; margin: 10px 0; padding: 10px; border-radius: 5px; }}
-        .passed {{ background: #d4edda; border-color: #c3e6cb; }}
-        .failed {{ background: #f8d7da; border-color: #f5c6cb; }}
-        .output {{ background: #f8f9fa; padding: 10px; margin-top: 10px; border-radius: 3px; white-space: pre-wrap; font-family: monospace; }}
-    </style>
-</head>
-<body>
-    <h1>RISC-V Cross-Check Test Report</h1>
-    <h2>Test: {}</h2>
-    <div class="summary">
-        <h3>Summary</h3>
-        <p>Total Tests: {}</p>
-        <p>Passed: {} <span style="color: green;">✓</span></p>
-        <p>Failed: {} <span style="color: red;">✗</span></p>
-    </div>
-"#, test_name, test_name, total, passed, failed);
+    let mut html = format!(
+        "<!DOCTYPE html><html><head><title>RISC-V Test Report</title><style>\
+         body{{font-family:Arial,sans-serif;margin:20px}}\
+         .summary{{background:#f0f0f0;padding:10px;border-radius:5px;margin-bottom:20px}}\
+         .test{{border:1px solid #ccc;margin:8px 0;padding:10px;border-radius:5px}}\
+         .passed{{background:#d4edda;border-color:#c3e6cb}}\
+         .failed{{background:#f8d7da;border-color:#f5c6cb}}\
+         .log{{background:#f8f9fa;padding:8px;margin-top:8px;border-radius:3px;\
+               white-space:pre-wrap;font-family:monospace;font-size:.82em}}\
+         </style></head><body>\
+         <h1>RISC-V Cross-Check</h1><h2>{}</h2>\
+         <div class=\"summary\">Total: <b>{}</b> &nbsp; \
+         <span style=\"color:green\">Passed: {} ✓</span> &nbsp; \
+         <span style=\"color:red\">Failed: {} ✗</span></div>\n",
+        title, total, passed, failed
+    );
 
-    for result in results {
-        let class = if result.passed { "passed" } else { "failed" };
-        let status = if result.passed { "PASSED" } else { "FAILED" };
-
-        html.push_str(&format!(r#"
-    <div class="test {}">
-        <h4>File: {} - {}</h4>
-        <div class="output">
-            <strong>Output:</strong><br>{}
-        </div>
-        <div class="output">
-            <strong>Error:</strong><br>{}
-        </div>
-    </div>
-"#, class, result.file, status, result.output, result.error));
+    for r in results {
+        let cls = if r.passed { "passed" } else { "failed" };
+        let st  = if r.passed { "PASSED" } else { "FAILED" };
+        html += &format!(
+            "<div class=\"test {}\"><b>{}</b> — {}<div class=\"log\">{}</div></div>\n",
+            cls, html_escape(&r.file), st, html_escape(&r.output)
+        );
     }
-
-    html.push_str("</body></html>");
+    html += "</body></html>\n";
     html
 }
 
 fn main() {
-    let cli = Cli::parse();
+    let cli  = Cli::parse();
+    let root = find_project_root();
+    println!("Project root: {}", root.display());
+    let report = root.join(&cli.output);
 
     match cli.command {
-        Commands::RiscvAssemblerOnRiscvCore { files } => {
-            let test_files = if files.is_empty() {
-                find_assembly_files()
-            } else {
-                files
-            };
+        Commands::RiscvAssemblerOnRiscvCore { paths } => {
+            let files = resolve_files(&paths, &root);
+            println!("Found {} assembly file(s)", files.len());
 
-            let mut results = Vec::new();
-            for file in &test_files {
-                println!("Running test for: {}", file);
-                let result = run_test("run-qemu-asm", file);
-                results.push(result);
-            }
+            let results: Vec<TestResult> = files.iter().map(|f| {
+                let label = f.strip_prefix(&root).unwrap_or(f).display().to_string();
+                println!("  Testing: {}", label);
+                let (passed, output) = run_riscv_asm_on_qemu(f, &root);
+                println!("    => {}", if passed { "PASS" } else { "FAIL" });
+                TestResult { file: label, passed, output }
+            }).collect();
 
-            let html = generate_html_report(&results, "RISC-V Assembler on RISC-V Core");
-            fs::write("test_report.html", html).expect("Failed to write report");
-            println!("Report generated: test_report.html");
+            let p = results.iter().filter(|r| r.passed).count();
+            println!("\nResults: {}/{} passed", p, results.len());
+
+            fs::write(&report, generate_html_report(&results, "RISC-V Assembler on RISC-V Core"))
+                .expect("Failed to write report");
+            println!("Report: {}", report.display());
         }
-        Commands::RiscvAssemblerOnAruviCore { files } => {
-            println!("RISC-V Assembler on Aruvi Core test not yet implemented");
-        }
-        Commands::AruviAssemblerOnRiscvCore { files } => {
-            println!("Aruvi Assembler on RISC-V Core test not yet implemented");
-        }
-        Commands::AruviAssemblerOnAruviCore { files } => {
-            println!("Aruvi Assembler on Aruvi Core test not yet implemented");
-        }
+        _ => println!("Not yet implemented"),
     }
 }
