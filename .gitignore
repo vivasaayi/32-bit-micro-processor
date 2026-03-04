@@ -197,3 +197,4 @@ AruviOS/target
 AruviOS/kernel-rv32/target
 AruviEmulator/target
 test-runners/riscv_test_runner/target
+test_report.html

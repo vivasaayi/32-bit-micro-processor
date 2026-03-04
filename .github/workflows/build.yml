@@ -47,11 +47,14 @@ jobs:
 
     - name: Upload JAR to Release (Linux)
       if: github.event_name == 'release'
+      run: cp AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar AruviXPlatform-JAR-Linux.jar
+
+    - name: Upload JAR to GitHub Release (Linux)
+      if: github.event_name == 'release'
       uses: softprops/action-gh-release@v1
       with:
         tag_name: ${{ github.event.release.tag_name }}
-        files: |
-          AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar#AruviXPlatform-JAR-Linux.jar
+        files: AruviXPlatform-JAR-Linux.jar
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -95,13 +98,34 @@ jobs:
         cd AruviIDE
         mvn clean package -DskipTests
 
-    - name: Upload JAR to Release (Windows)
+    - name: Debug JAR before upload
+      if: github.event_name == 'release'
+      run: |
+        Write-Host "🔍 Debug: Checking JAR file before upload..."
+        Get-Location
+        if (Test-Path "AruviIDE/target/") { Get-ChildItem AruviIDE/target/ } else { Write-Host "❌ target directory not found" }
+        if (Test-Path "AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar") {
+          $jar = Get-Item "AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar"
+          Write-Host "✅ JAR exists: $($jar.Name) ($([math]::Round($jar.Length/1KB, 1))KB)"
+          Write-Host "📁 Current directory contents:"
+          Get-ChildItem -Recurse -Filter "*.jar" | Select-Object -First 10 | ForEach-Object { Write-Host $_.FullName }
+        } else {
+          Write-Host "❌ JAR file missing at upload time!"
+          exit 1
+        }
+      shell: pwsh
+
+    - name: Rename JAR for Windows
+      if: github.event_name == 'release'
+      run: Copy-Item AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar AruviXPlatform-JAR-Windows.jar
+      shell: pwsh
+
+    - name: Upload JAR to GitHub Release (Windows)
       if: github.event_name == 'release'
       uses: softprops/action-gh-release@v1
       with:
         tag_name: ${{ github.event.release.tag_name }}
-        files: |
-          AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar#AruviXPlatform-JAR-Windows.jar
+        files: AruviXPlatform-JAR-Windows.jar
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -114,6 +138,7 @@ jobs:
 
   build-macos:
     runs-on: macos-latest
+    environment: AruviRISCV
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -140,24 +165,85 @@ jobs:
         key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
         restore-keys: ${{ runner.os }}-m2
 
+    - name: Import certificate for signing
+      env:
+        BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
+        P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
+      run: |
+        # Import certificate into a temporary keychain
+        echo "$BUILD_CERTIFICATE_BASE64" | base64 --decode > certificate.p12
+        security create-keychain -p "build_keychain_password" build.keychain
+        security default-keychain -s build.keychain
+        security unlock-keychain -p "build_keychain_password" build.keychain
+        security import certificate.p12 -k build.keychain -P "$P12_PASSWORD" -T /usr/bin/codesign
+        security set-key-partition-list -S apple-tool:,apple: -s -k "build_keychain_password" build.keychain
+
     - name: Build JAR
       run: |
         cd AruviIDE
-        mvn clean package -DskipTests
+        mvn clean package -DskipTests -Pmac-notarize
 
-    - name: Sign JAR for macOS
+    - name: Check JAR contents
       run: |
-        # Check if JAR exists before signing
-        if [ ! -f "AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar" ]; then
-          echo "❌ JAR file not found at AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar"
-          ls -la AruviIDE/target/ || echo "target directory not found"
+        echo "JAR file count: $(jar tf AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar | wc -l)"
+        echo "JAR size: $(ls -lh AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar | awk '{print $5}')"
+
+    - name: Sign and Notarize JAR for macOS
+      if: github.event_name == 'release'
+      env:
+        BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
+        P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
+        APPLE_ID: ${{ secrets.APPLE_ID }}
+        APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      run: |
+        # Sign the JAR
+        codesign --force --sign "Developer ID Application" --timestamp --options runtime \
+          AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar
+
+        # Notarize: submit the JAR directly
+        SUBMISSION_ID=$(xcrun notarytool submit AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar \
+          --apple-id "$APPLE_ID" \
+          --password "$APPLE_APP_PASSWORD" \
+          --team-id "$APPLE_TEAM_ID" | grep "id:" | head -1 | awk '{print $2}')
+        echo "Submission ID: $SUBMISSION_ID"
+        
+        # Poll status with timeout
+        TIMEOUT=7200  # 2 hours in seconds
+        ELAPSED=0
+        while [ $ELAPSED -lt $TIMEOUT ]; do
+          STATUS=$(xcrun notarytool info "$SUBMISSION_ID" \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_APP_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" | grep "status:" | sed 's/.*status: //')
+          echo "Current status: $STATUS (elapsed: ${ELAPSED}s)"
+          
+          if [ "$STATUS" = "Accepted" ]; then
+            echo "✅ Notarization successful!"
+            # Staple the ticket
+            xcrun stapler staple AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar
+            break
+          elif [ "$STATUS" = "Invalid" ]; then
+            echo "❌ Notarization failed with status: $STATUS"
+            echo "📋 Fetching notarization log..."
+            xcrun notarytool log "$SUBMISSION_ID" \
+              --apple-id "$APPLE_ID" \
+              --password "$APPLE_APP_PASSWORD" \
+              --team-id "$APPLE_TEAM_ID"
+            exit 1
+          fi
+          
+          sleep 300  # Wait 5 minutes
+          ELAPSED=$((ELAPSED + 300))
+        done
+        
+        if [ $ELAPSED -ge $TIMEOUT ]; then
+          echo "⏰ Notarization timed out after 2 hours. Check status manually with ID: $SUBMISSION_ID"
           exit 1
         fi
-        echo "✅ JAR file found, proceeding with signing..."
-        # Create a self-signed certificate for development
-        keytool -genkeypair -alias "AruviXPlatform" -keyalg RSA -keysize 2048 -validity 3650 -keystore keystore.jks -storepass password -keypass password -dname "CN=AruviXPlatform, OU=Development, O=AruviXPlatform, L=Unknown, ST=Unknown, C=US"
-        # Sign the JAR
-        jarsigner -keystore keystore.jks -storepass password -keypass password AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar "AruviXPlatform"
+
+        # Clean up keychain
+        security delete-keychain build.keychain
 
     - name: Debug JAR before upload
       if: github.event_name == 'release'
@@ -176,11 +262,14 @@ jobs:
 
     - name: Upload JAR to Release (macOS)
       if: github.event_name == 'release'
+      run: cp AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar AruviXPlatform-JAR-macOS.jar
+
+    - name: Upload JAR to GitHub Release (macOS)
+      if: github.event_name == 'release'
       uses: softprops/action-gh-release@v1
       with:
         tag_name: ${{ github.event.release.tag_name }}
-        files: |
-          AruviIDE/target/AruviIDE-1.0-SNAPSHOT.jar#AruviXPlatform-JAR-macOS.jar
+        files: AruviXPlatform-JAR-macOS.jar
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

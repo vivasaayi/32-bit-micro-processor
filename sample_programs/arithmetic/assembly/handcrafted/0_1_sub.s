@@ -18,4 +18,7 @@ sub x1, x1, x2 # r1 -= 40
 addi x2, zero, 50
 sub x1, x1, x2 # r1 -= 50
 
-ebreak # stop execution
+# Set expected result in x2
+li x2, 150
+
+.include "temp/assert.s"

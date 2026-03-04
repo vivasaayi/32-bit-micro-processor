@@ -1,6 +1,6 @@
 # Add 5 numbers and store the result in x1
 
-start:
+_start:
 addi x1, zero, 0 # x1 = 0 (accumulator)
 
 addi x2, zero, 10
